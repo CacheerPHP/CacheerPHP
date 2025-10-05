@@ -3,6 +3,7 @@
 namespace Silviooosilva\CacheerPhp\Service;
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
@@ -16,6 +17,11 @@ class CacheMutator
     * @var Cacheer
     */
     private Cacheer $cacheer;
+
+    /**
+     * @var int
+     */
+    private int $foreverTTL = CacheTimeConstants::CACHE_FOREVER_TTL->value;
 
     /**
     * CacheMutator constructor.
@@ -93,7 +99,7 @@ class CacheMutator
     }
 
     /**
-     * Checks if a cache item exists.
+    * Stores a cache item forever.
      *
      * @param string $cacheKey
      * @param mixed $cacheData
@@ -101,7 +107,7 @@ class CacheMutator
      */
     public function forever(string $cacheKey, mixed $cacheData): bool
     {
-        $this->putCache($cacheKey, $cacheData, ttl: 31536000 * 1000);
+        $this->putCache($cacheKey, $cacheData, ttl: $this->foreverTTL);
         $this->cacheer->setInternalState($this->cacheer->getMessage(), $this->cacheer->isSuccess());
 
         return $this->cacheer->isSuccess();
@@ -121,7 +127,7 @@ class CacheMutator
     }
 
     /**
-     * Gets a cache item by its key.
+    * Increments a numeric cache item by a specified amount.
      *
      * @param string $cacheKey
      * @param int $amount
@@ -142,7 +148,7 @@ class CacheMutator
     }
 
     /**
-     * Gets a cache item by its key.
+     * Puts a cache item into the cache store.
      *
      * @param string $cacheKey
      * @param mixed $cacheData

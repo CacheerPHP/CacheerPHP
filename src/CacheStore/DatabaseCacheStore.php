@@ -9,6 +9,7 @@ use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\GenericFlusher;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
+use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
 use Silviooosilva\CacheerPhp\Core\Connect;
 use Silviooosilva\CacheerPhp\Core\MigrationManager;
 
@@ -65,7 +66,7 @@ class DatabaseCacheStore implements CacheerInterface
             $this->defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
 
-        $lastFlushFile = FlushHelper::pathFor('db', $table);
+        $lastFlushFile = FlushHelper::pathFor(CacheStoreType::DATABASE, $table);
         $this->flusher = new GenericFlusher($lastFlushFile, function () {
             $this->flushCache();
         });

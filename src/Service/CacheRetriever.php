@@ -4,9 +4,10 @@ namespace Silviooosilva\CacheerPhp\Service;
 
 use Closure;
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
+use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
+use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 
 /**
 * Class CacheRetriever
@@ -19,6 +20,11 @@ class CacheRetriever
     * @var Cacheer
     */
     private Cacheer $cacheer;
+
+    /**
+    * @var int
+    */
+    private int $foreverTTL = CacheTimeConstants::CACHE_FOREVER_TTL->value;
 
     /**
     * CacheRetriever constructor.
@@ -132,7 +138,7 @@ class CacheRetriever
      */
     public function rememberForever(string $cacheKey, Closure $callback): mixed
     {
-        return $this->remember($cacheKey, 31536000 * 1000, $callback);
+        return $this->remember($cacheKey, $this->foreverTTL, $callback);
     }
 
     /**
@@ -152,6 +158,8 @@ class CacheRetriever
     }
 
     /**
+     * Processes cached data for retrieval.
+     * 
      * @param mixed $cachedData
      * @return mixed|CacheDataFormatter
      */

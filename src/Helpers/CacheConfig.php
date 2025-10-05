@@ -7,6 +7,7 @@ use Silviooosilva\CacheerPhp\CacheStore\ArrayCacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\FileCacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\RedisCacheStore;
 use Silviooosilva\CacheerPhp\Core\Connect;
+use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 use Silviooosilva\CacheerPhp\Exceptions\ConnectionException;
 use Silviooosilva\CacheerPhp\Utils\CacheDriver;
 
@@ -89,11 +90,11 @@ class CacheConfig
     /**
      * Sets the database connection type for the application.
      *
-     * @param string $driver
+     * @param DatabaseDriver|string $driver
      * @return void
      * @throws ConnectionException
      */
-    public function setDatabaseConnection(string $driver): void
+    public function setDatabaseConnection(DatabaseDriver|string $driver): void
     {
         Connect::setConnection($driver);
     }

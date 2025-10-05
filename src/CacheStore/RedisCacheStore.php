@@ -12,6 +12,7 @@ use Silviooosilva\CacheerPhp\CacheStore\CacheManager\RedisCacheManager;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\GenericFlusher;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
+use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
 
 /**
  * Class RedisCacheStore
@@ -70,7 +71,7 @@ class RedisCacheStore implements CacheerInterface
         }
 
         // Auto-flush support
-        $lastFlushFile = FlushHelper::pathFor('redis', $this->namespace ?: 'default');
+        $lastFlushFile = FlushHelper::pathFor(CacheStoreType::REDIS, $this->namespace ?: 'default');
         $this->flusher = new GenericFlusher($lastFlushFile, function () {
             $this->flushCache();
         });

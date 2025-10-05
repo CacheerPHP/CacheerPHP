@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Core;
 
 use PDO;
 use PDOException;
+use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 use Silviooosilva\CacheerPhp\Exceptions\ConnectionException;
 
 /**
@@ -14,12 +15,9 @@ use Silviooosilva\CacheerPhp\Exceptions\ConnectionException;
 class Connect
 {
     /**
-    * The default connection type.
-    * Currently, it supports 'mysql', 'sqlite', and 'pgsql'.
-    *
-    * @var string
+    * Active database driver for new connections.
     */
-    public static string $connection = 'sqlite';
+    public static DatabaseDriver $connection = DatabaseDriver::SQLITE;
 
     /**
     * Holds the last error encountered during connection attempts.
@@ -48,25 +46,30 @@ class Connect
     /**
      * Sets the connection type for the database.
      *
-     * @param string $connection
+     * @param DatabaseDriver|string $connection
      * @return void
      * @throws ConnectionException
      */
-    public static function setConnection(string $connection): void
+    public static function setConnection(DatabaseDriver|string $connection): void
     {
-        $drivers = ['mysql', 'sqlite', 'pgsql'];
-        if (!in_array($connection, $drivers)) {
-            throw ConnectionException::create("Only ['MySQL(mysql)', 'SQLite(sqlite)', 'PgSQL(pgsql)'] are available at the moment...");
+        $driver = $connection instanceof DatabaseDriver
+            ? $connection
+            : DatabaseDriver::tryFrom(strtolower($connection));
+
+        if ($driver === null) {
+            $labels = DatabaseDriver::labels();
+            throw ConnectionException::create('Only [' . implode(', ', $labels) . '] are available at the moment...');
         }
-        self::$connection = $connection;
+
+        self::$connection = $driver;
     }
 
     /**
     * Gets the current connection type.
     *
-    * @return string
-    */
-    public static function getConnection(): string
+    * @return DatabaseDriver
+     */
+    public static function getConnection(): DatabaseDriver
     {
         return self::$connection;
     }

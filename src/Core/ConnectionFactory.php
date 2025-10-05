@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Core;
 
 use PDO;
 use PDOException;
+use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 use Silviooosilva\CacheerPhp\Exceptions\ConnectionException;
 
 /**
@@ -23,14 +24,27 @@ class ConnectionFactory
      */
     public static function createConnection(?array $database = null): ?PDO
     {
-        $dbConf = $database ?? CACHEER_DATABASE_CONFIG[Connect::getConnection()];
+        $connection = Connect::getConnection();
+        $dbConf = $database ?? CACHEER_DATABASE_CONFIG[$connection->value];
 
-        if ($dbConf['driver'] === 'sqlite') {
+        $driver = null;
+        if (isset($dbConf['adapter'])) {
+            $driver = DatabaseDriver::tryFrom($dbConf['adapter']);
+        }
+        if ($driver === null && isset($dbConf['driver'])) {
+            $driver = DatabaseDriver::tryFrom($dbConf['driver']);
+        }
+        $driver ??= $connection;
+
+        $dsnDriver = $driver->dsnName();
+        $dbConf['driver'] = $dsnDriver;
+
+        if ($driver === DatabaseDriver::SQLITE) {
             $dbName = $dbConf['dbname'];
-            $dbDsn = $dbConf['driver'] . ':' . $dbName;
+            $dbDsn = $dsnDriver . ':' . $dbName;
         } else {
-            $dbName = "{$dbConf['driver']}-{$dbConf['dbname']}@{$dbConf['host']}";
-            $dbDsn = "{$dbConf['driver']}:host={$dbConf['host']};dbname={$dbConf['dbname']};port={$dbConf['port']}";
+            $dbName = "{$dsnDriver}-{$dbConf['dbname']}@{$dbConf['host']}";
+            $dbDsn = "{$dsnDriver}:host={$dbConf['host']};dbname={$dbConf['dbname']};port={$dbConf['port']}";
         }
 
         try {
