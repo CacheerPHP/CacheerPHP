@@ -2,6 +2,7 @@
 
 use Dotenv\Dotenv;
 use Silviooosilva\CacheerPhp\Core\Connect;
+use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 use Silviooosilva\CacheerPhp\Helpers\SqliteHelper;
 
@@ -10,8 +11,8 @@ $rootPath = EnvHelper::getRootPath();
 $dotenv = Dotenv::createImmutable($rootPath);
 $dotenv->load();
 
-
-$Connection = $_ENV['DB_CONNECTION'] ?? 'mysql';
+$connectionValue = strtolower($_ENV['DB_CONNECTION'] ?? DatabaseDriver::MYSQL->value);
+$connectionDriver = DatabaseDriver::tryFrom($connectionValue) ?? DatabaseDriver::MYSQL;
 $Host       = $_ENV['DB_HOST'] ?? 'localhost';
 $Port       = $_ENV['DB_PORT'] ?? '3306';
 $DBName     = $_ENV['DB_DATABASE'] ?? 'cacheer_db';
@@ -26,45 +27,51 @@ $redisPort      = $_ENV['REDIS_PORT'] ?? '6379';
 $redisNamespace = $_ENV['REDIS_NAMESPACE'] ?? '';
 $cacheTable     = $_ENV['CACHEER_TABLE'] ?? 'cacheer_table';
 
-Connect::setConnection($Connection);
+Connect::setConnection($connectionDriver);
+
+$commonPdoOptions = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
+    PDO::ATTR_CASE               => PDO::CASE_NATURAL,
+];
+
+$mysqlConfig = [
+    'adapter'  => DatabaseDriver::MYSQL->value,
+    'driver'   => DatabaseDriver::MYSQL->dsnName(),
+    'host'     => $Host,
+    'port'     => $Port,
+    'dbname'   => $DBName,
+    'username' => $User,
+    'passwd'   => $Password,
+    'options'  => array_replace(
+        [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8'],
+        $commonPdoOptions
+    ),
+];
+
+$mariaDbConfig = $mysqlConfig;
+$mariaDbConfig['adapter'] = DatabaseDriver::MARIADB->value;
+$mariaDbConfig['driver']  = DatabaseDriver::MARIADB->dsnName();
 
 // Database configuration array
 define('CACHEER_DATABASE_CONFIG', [
-    "mysql" => [
-        "driver"  => $Connection,
-        "host"    => $Host,
-        "port"    => $Port,
-        "dbname"  => $DBName,
-        "username"=> $User,
-        "passwd"  => $Password,
-        "options" => [
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8",
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
-            PDO::ATTR_CASE               => PDO::CASE_NATURAL
-        ]
+    DatabaseDriver::MYSQL->value   => $mysqlConfig,
+    DatabaseDriver::MARIADB->value => $mariaDbConfig,
+    DatabaseDriver::SQLITE->value  => [
+        'adapter' => DatabaseDriver::SQLITE->value,
+        'driver'  => DatabaseDriver::SQLITE->dsnName(),
+        'dbname'  => SqliteHelper::database(),
+        'options' => $commonPdoOptions,
     ],
-    "sqlite" => [
-        "driver"  => $Connection,
-        "dbname"  => SqliteHelper::database(),
-        "options" => [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
-            PDO::ATTR_CASE               => PDO::CASE_NATURAL
-        ]
-    ],
-    "pgsql" => [
-        "driver"  => $Connection,
-        "host"    => $Host,
-        "port"    => $Port,
-        "dbname"  => $DBName,
-        "username"=> $User,
-        "passwd"  => $Password,
-        "options" => [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ,
-            PDO::ATTR_CASE               => PDO::CASE_NATURAL
-        ]
+    DatabaseDriver::PGSQL->value   => [
+        'adapter'  => DatabaseDriver::PGSQL->value,
+        'driver'   => DatabaseDriver::PGSQL->dsnName(),
+        'host'     => $Host,
+        'port'     => $Port,
+        'dbname'   => $DBName,
+        'username' => $User,
+        'passwd'   => $Password,
+        'options'  => $commonPdoOptions,
     ],
 ]);
 

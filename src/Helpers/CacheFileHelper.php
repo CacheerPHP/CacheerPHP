@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Helpers;
 
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
+use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 
 /**
  * Class CacheFileHelper
@@ -23,13 +24,13 @@ class CacheFileHelper
     public static function convertExpirationToSeconds(string $expiration): float|int
     {
         $units = [
-            'second' => 1,
-            'minute' => 60,
-            'hour'   => 3600,
-            'day'    => 86400,
-            'week'   => 604800,
-            'month'  => 2592000,
-            'year'   => 31536000,
+            'second' => CacheTimeConstants::SECOND->value,
+            'minute' => CacheTimeConstants::MINUTE->value,
+            'hour'   => CacheTimeConstants::HOUR->value,
+            'day'    => CacheTimeConstants::DAY->value,
+            'week'   => CacheTimeConstants::WEEK->value,
+            'month'  => CacheTimeConstants::MONTH->value,
+            'year'   => CacheTimeConstants::YEAR->value,
         ];
         foreach ($units as $unit => $value) {
             if (str_contains($expiration, $unit)) {

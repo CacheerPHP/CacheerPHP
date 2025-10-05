@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Core;
 
 use PDO;
 use PDOException;
+use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 
 /**
  * Class MigrationManager
@@ -41,9 +42,9 @@ class MigrationManager
      */
     private static function prepareDatabase(PDO $connection): void
     {
-        $driver = $connection->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver !== 'sqlite') {
-            $dbname = CACHEER_DATABASE_CONFIG[Connect::getConnection()]['dbname'];
+        $driver = DatabaseDriver::tryFrom($connection->getAttribute(PDO::ATTR_DRIVER_NAME));
+        if ($driver !== DatabaseDriver::SQLITE) {
+            $dbname = CACHEER_DATABASE_CONFIG[Connect::getConnection()->value]['dbname'];
             $connection->exec("USE $dbname");
         }
     }
@@ -56,11 +57,11 @@ class MigrationManager
      */
     private static function getMigrationQueries(PDO $connection, ?string $tableName = null): array
     {
-        $driver = $connection->getAttribute(PDO::ATTR_DRIVER_NAME);
-        $createdAtDefault = ($driver === 'pgsql') ? 'DEFAULT NOW()' : 'DEFAULT CURRENT_TIMESTAMP';
+        $driver = DatabaseDriver::tryFrom($connection->getAttribute(PDO::ATTR_DRIVER_NAME));
+        $createdAtDefault = ($driver === DatabaseDriver::PGSQL) ? 'DEFAULT NOW()' : 'DEFAULT CURRENT_TIMESTAMP';
         $table = $tableName ?: (defined('CACHEER_TABLE') ? CACHEER_TABLE : 'cacheer_table');
 
-        if ($driver === 'sqlite') {
+        if ($driver === DatabaseDriver::SQLITE) {
             $query = "
                 CREATE TABLE IF NOT EXISTS {$table} (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +77,7 @@ class MigrationManager
                 CREATE INDEX IF NOT EXISTS idx_{$table}_expirationTime ON {$table} (expirationTime);
                 CREATE INDEX IF NOT EXISTS idx_{$table}_key_namespace ON {$table} (cacheKey, cacheNamespace);
             ";
-        } elseif ($driver === 'pgsql') {
+        } elseif ($driver === DatabaseDriver::PGSQL) {
             $query = "
                 CREATE TABLE IF NOT EXISTS {$table} (
                     id SERIAL PRIMARY KEY,

@@ -2,6 +2,8 @@
 
 namespace Silviooosilva\CacheerPhp\Helpers;
 
+use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
+
 /**
  * Class FlushHelper
  * 
@@ -14,19 +16,19 @@ class FlushHelper
 {
     /**
      * Returns a path to store a last-flush timestamp.
-     * @param string $storeType e.g., 'redis' or 'db'
+     * @param CacheStoreType|string $storeType e.g., 'redis' or 'db'
      * @param string $identifier e.g., namespace or table name
      * @return string
      */
-    public static function pathFor(string $storeType, string $identifier): string
+    public static function pathFor(CacheStoreType|string $storeType, string $identifier): string
     {
+        $store = $storeType instanceof CacheStoreType ? $storeType->value : $storeType;
         $root = EnvHelper::getRootPath();
         $dir = $root . DIRECTORY_SEPARATOR . 'CacheerPHP' . DIRECTORY_SEPARATOR . 'Flush';
         if (!is_dir($dir)) {
             @mkdir($dir, 0755, true);
         }
         $safeId = preg_replace('/[^a-zA-Z0-9_-]+/', '_', $identifier);
-        return $dir . DIRECTORY_SEPARATOR . $storeType . '_' . $safeId . '.time';
+        return $dir . DIRECTORY_SEPARATOR . $store . '_' . $safeId . '.time';
     }
 }
-

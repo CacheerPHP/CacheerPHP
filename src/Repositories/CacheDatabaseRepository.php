@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Repositories;
 
 use PDO;
 use Silviooosilva\CacheerPhp\Core\Connect;
+use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 
 /**
  * Class CacheDatabaseRepository
@@ -72,7 +73,7 @@ class CacheDatabaseRepository
      */
     public function retrieve(string $cacheKey, string $namespace = ''): mixed
     {
-        $driver = $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
+        $driver = $this->getDriver();
         $nowFunction = $this->getCurrentDateTime($driver);
 
         $stmt = $this->connection->prepare(
@@ -95,7 +96,7 @@ class CacheDatabaseRepository
      */
     public function getAll(string $namespace = ''): array
     {
-        $driver = $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
+        $driver = $this->getDriver();
         $nowFunction = $this->getCurrentDateTime($driver);
 
         $stmt = $this->connection->prepare(
@@ -119,8 +120,8 @@ class CacheDatabaseRepository
     */
     private function getUpdateQueryWithDriver(): string
     {
-        $driver = $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'mysql' || $driver === 'mariadb') {
+        $driver = $this->getDriver();
+        if ($driver?->isMysqlFamily()) {
             return "UPDATE {$this->table} SET cacheData = :cacheData, cacheNamespace = :namespace WHERE cacheKey = :cacheKey LIMIT 1";
         }
         return "UPDATE {$this->table} SET cacheData = :cacheData, cacheNamespace = :namespace WHERE cacheKey = :cacheKey";
@@ -133,8 +134,8 @@ class CacheDatabaseRepository
     */
     private function getDeleteQueryWithDriver(): string
     {
-        $driver = $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'mysql' || $driver === 'mariadb') {
+        $driver = $this->getDriver();
+        if ($driver?->isMysqlFamily()) {
             return "DELETE FROM {$this->table} WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace LIMIT 1";
         }
         return "DELETE FROM {$this->table} WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace";
@@ -185,8 +186,8 @@ class CacheDatabaseRepository
     */
     private function getRenewExpirationQueryWithDriver(): string
     {
-        $driver = $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'sqlite') {
+        $driver = $this->getDriver();
+        if ($driver === DatabaseDriver::SQLITE) {
             return "UPDATE {$this->table}
                     SET expirationTime = DATETIME(expirationTime, '+' || :ttl || ' seconds')
                     WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > :currentTime";
@@ -272,8 +273,17 @@ class CacheDatabaseRepository
     * @param string $driver
     * @return string
     */
-    private function getCurrentDateTime(string $driver): string
+    private function getCurrentDateTime(?DatabaseDriver $driver): string
     {
-        return ($driver === 'sqlite') ? "DATETIME('now', 'localtime')" : "NOW()";
+        return ($driver === DatabaseDriver::SQLITE) ? "DATETIME('now', 'localtime')" : "NOW()";
+    }
+
+    /**
+     * Resolve the current PDO driver as an enum instance when possible.
+     */
+    private function getDriver(): ?DatabaseDriver
+    {
+        $driverName = $this->connection->getAttribute(PDO::ATTR_DRIVER_NAME);
+        return is_string($driverName) ? DatabaseDriver::tryFrom($driverName) : null;
     }
 }
