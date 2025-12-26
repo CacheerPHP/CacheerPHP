@@ -30,7 +30,7 @@ class MigrationManagerDynamicTableTest extends TestCase
     MigrationManager::migrate($this->pdo, $this->table);
 
     // Verify table exists (SQLite check)
-    $stmt = $this->pdo->prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = :t");
+    $stmt = $this->pdo?->prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = :t");
     $stmt->bindValue(':t', $this->table);
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -38,14 +38,14 @@ class MigrationManagerDynamicTableTest extends TestCase
 
     // Verify basic insert/select using PDO
     $expiration = date('Y-m-d H:i:s', time() + 60);
-    $stmt = $this->pdo->prepare("INSERT INTO {$this->table} (cacheKey, cacheData, cacheNamespace, expirationTime, created_at) VALUES (:k, :d, '', :e, :c)");
+    $stmt = $this->pdo?->prepare("INSERT INTO {$this->table} (cacheKey, cacheData, cacheNamespace, expirationTime, created_at) VALUES (:k, :d, '', :e, :c)");
     $stmt->bindValue(':k', 'mk');
     $stmt->bindValue(':d', serialize(['a' => 1]));
     $stmt->bindValue(':e', $expiration);
     $stmt->bindValue(':c', date('Y-m-d H:i:s'));
     $this->assertTrue($stmt->execute());
 
-    $stmt = $this->pdo->prepare("SELECT cacheData FROM {$this->table} WHERE cacheKey = :k LIMIT 1");
+    $stmt = $this->pdo?->prepare("SELECT cacheData FROM {$this->table} WHERE cacheKey = :k LIMIT 1");
     $stmt->bindValue(':k', 'mk');
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -55,7 +55,7 @@ class MigrationManagerDynamicTableTest extends TestCase
   public function test_default_constant_table_exists()
   {
     // With boot autoload, the default CACHEER_TABLE should be created via Connect::getInstance()
-    $stmt = $this->pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name = 'cacheer_table'");
+    $stmt = $this->pdo?->query("SELECT name FROM sqlite_master WHERE type='table' AND name = 'cacheer_table'");
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     $this->assertNotFalse($row);
   }

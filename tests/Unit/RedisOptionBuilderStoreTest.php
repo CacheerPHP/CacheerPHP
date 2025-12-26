@@ -51,7 +51,7 @@ class RedisOptionBuilderStoreTest extends TestCase
     $this->assertTrue($cache->isSuccess());
 
     // Should be stored with prefix 'app:'
-    $this->assertTrue((bool)$this->client->exists('app:' . $key));
+    $this->assertTrue((bool)$this->client?->exists('app:' . $key));
 
     $read = $cache->getCache($key);
     $this->assertEquals($data, $read);

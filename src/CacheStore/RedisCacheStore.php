@@ -4,49 +4,50 @@ namespace Silviooosilva\CacheerPhp\CacheStore;
 
 use Exception;
 use Predis\Response\Status;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
 use Silviooosilva\CacheerPhp\Helpers\CacheRedisHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Interface\CacheReadStoreInterface;
+use Silviooosilva\CacheerPhp\Interface\CacheWriteStoreInterface;
+use Silviooosilva\CacheerPhp\Interface\TaggableCacheStoreInterface;
 use Silviooosilva\CacheerPhp\Exceptions\CacheRedisException;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\RedisCacheManager;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\GenericFlusher;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
 use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
+use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
+use Silviooosilva\CacheerPhp\CacheStore\Support\RedisBatchWriter;
+use Silviooosilva\CacheerPhp\CacheStore\Support\RedisKeyspace;
+use Silviooosilva\CacheerPhp\CacheStore\Support\RedisTagIndex;
+use Silviooosilva\CacheerPhp\Utils\CacheLogger;
 
 /**
  * Class RedisCacheStore
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class RedisCacheStore implements CacheerInterface
+class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, CacheWriteStoreInterface, TaggableCacheStoreInterface
 {
     /** @var */
     private $redis;
 
-    /** @param string $namespace */
-    private string $namespace = '';
+    /**
+     * Handles namespace/key formatting and TTL decisions.
+     */
+    private RedisKeyspace $keyspace;
 
     /**
-     * @var ?CacheLogger
+     * Tracks state and logging.
      */
-    private ?CacheLogger $logger = null;
-
-    /**
-     * @var string
-     */
-    private string $message = '';
-
-    /**
-     * @var boolean
-     */
-    private bool $success = false;
-
-    /** @var int|null */
-    private ?int $defaultTTL = null;
+    private OperationStatus $status;
 
     /** @var GenericFlusher|null */
     private ?GenericFlusher $flusher = null;
+
+    /**
+     * Manages tag membership.
+     */
+    private RedisTagIndex $tagIndex;
 
 
     /**
@@ -58,20 +59,21 @@ class RedisCacheStore implements CacheerInterface
     public function __construct(string $logPath, array $options = [])
     {
         $this->redis = RedisCacheManager::connect();
-        $this->logger = new CacheLogger($logPath);
-        
-        // OptionBuilder support
-        if (!empty($options['namespace'])) {
-            $this->namespace = (string) $options['namespace'];
+        $logger = new CacheLogger($logPath);
+
+        $namespace = !empty($options['namespace']) ? (string) $options['namespace'] : '';
+        $defaultTTL = null;
+
+        if (!empty($options['expirationTime'])) {
+            $defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
 
-        // Default TTL from options
-        if (!empty($options['expirationTime'])) {
-            $this->defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
-        }
+        $this->keyspace = new RedisKeyspace($namespace, $defaultTTL);
+        $this->status = new OperationStatus($logger);
+        $this->tagIndex = new RedisTagIndex($this->redis, $this->keyspace, $this->status);
 
         // Auto-flush support
-        $lastFlushFile = FlushHelper::pathFor(CacheStoreType::REDIS, $this->namespace ?: 'default');
+        $lastFlushFile = FlushHelper::pathFor(CacheStoreType::REDIS, $namespace ?: 'default');
         $this->flusher = new GenericFlusher($lastFlushFile, function () {
             $this->flushCache();
         });
@@ -89,19 +91,17 @@ class RedisCacheStore implements CacheerInterface
     public function appendCache(string $cacheKey, mixed $cacheData, string $namespace = ''): void
     {
         $cacheFullKey = $this->buildKey($cacheKey, $namespace);
-        $existingData = $this->getCache($cacheFullKey);
+        $existingData = $this->getCache($cacheKey, $namespace);
 
         $mergedCacheData = CacheRedisHelper::arrayIdentifier($existingData, $cacheData);
 
         $serializedData = CacheRedisHelper::serialize($mergedCacheData);
 
         if ($this->redis->set($cacheFullKey, $serializedData)) {
-            $this->setMessage("Cache appended successfully", true);
+            $this->status->record("Cache appended successfully", true);
         } else {
-            $this->setMessage("Something went wrong. Please, try again.", false);
+            $this->status->record("Something went wrong. Please, try again.", false);
         }
-
-        $this->logger->debug("{$this->getMessage()} from redis driver.");
     }
 
     /**
@@ -113,7 +113,7 @@ class RedisCacheStore implements CacheerInterface
      */
     private function buildKey(string $key, string $namespace): string
     {
-        return $this->namespace . ($namespace ? $namespace . ':' : '') . $key;
+        return $this->keyspace->build($key, $namespace);
     }
 
     /**
@@ -128,12 +128,10 @@ class RedisCacheStore implements CacheerInterface
         $cacheFullKey = $this->buildKey($cacheKey, $namespace);
 
         if ($this->redis->del($cacheFullKey) > 0) {
-            $this->setMessage("Cache cleared successfully", true);
+            $this->status->record("Cache cleared successfully", true);
         } else {
-            $this->setMessage("Something went wrong. Please, try again.", false);
+            $this->status->record("Something went wrong. Please, try again.", false);
         }
-
-        $this->logger->debug("{$this->getMessage()} from redis driver.");
     }
 
     /**
@@ -144,12 +142,10 @@ class RedisCacheStore implements CacheerInterface
     public function flushCache(): void
     {
         if ($this->redis->flushall()) {
-            $this->setMessage("Cache flushed successfully", true);
+            $this->status->record("Cache flushed successfully", true);
         } else {
-            $this->setMessage("Something went wrong. Please, try again.", false);
+            $this->status->record("Something went wrong. Please, try again.", false);
         }
-
-        $this->logger->debug("{$this->getMessage()} from redis driver.");
     }
 
     /**
@@ -161,15 +157,7 @@ class RedisCacheStore implements CacheerInterface
      */
     public function tag(string $tag, string ...$keys): bool
     {
-        $setKey = "tag:" . $tag;
-        $added = 0;
-        foreach ($keys as $key) {
-            // Accept either raw key or "namespace:key"
-            $added += (int) $this->redis->sadd($setKey, [$key]);
-        }
-        $this->setMessage("Tagged successfully", true);
-        $this->logger->debug("{$this->getMessage()} from redis driver.");
-        return $added >= 0;
+        return $this->tagIndex->tag($tag, ...$keys);
     }
 
     /**
@@ -180,19 +168,9 @@ class RedisCacheStore implements CacheerInterface
      */
     public function flushTag(string $tag): void
     {
-        $setKey = "tag:" . $tag;
-        $members = $this->redis->smembers($setKey) ?? [];
-        foreach ($members as $key) {
-            if (str_contains($key, ':')) {
-                [$np, $k] = explode(':', $key, 2);
-                $this->clearCache($k, $np);
-            } else {
-                $this->clearCache($key, '');
-            }
-        }
-        $this->redis->del($setKey);
-        $this->setMessage("Tag flushed successfully", true);
-        $this->logger->debug("{$this->getMessage()} from redis driver.");
+        $this->tagIndex->flush($tag, function (string $cacheKey, string $namespace): void {
+            $this->clearCache($cacheKey, $namespace);
+        });
     }
 
     /**
@@ -209,13 +187,11 @@ class RedisCacheStore implements CacheerInterface
         $cacheData = $this->redis->get($fullCacheKey);
 
         if ($cacheData) {
-            $this->setMessage("Cache retrieved successfully", true);
-            $this->logger->debug("{$this->getMessage()} from redis driver.");
+            $this->status->record("Cache retrieved successfully", true);
             return CacheRedisHelper::serialize($cacheData, false);
         }
 
-        $this->setMessage("CacheData not found, does not exists or expired", false);
-        $this->logger->info("{$this->getMessage()} from redis driver.");
+        $this->status->record("CacheData not found, does not exists or expired", false, 'info');
         return null;
     }
 
@@ -242,9 +218,9 @@ class RedisCacheStore implements CacheerInterface
         }
 
         if (empty($results)) {
-            $this->setMessage("No cache data found in the namespace", false);
+            $this->status->record("No cache data found in the namespace", false);
         } else {
-            $this->setMessage("Cache data retrieved successfully", true);
+            $this->status->record("Cache data retrieved successfully", true);
         }
 
         return $results;
@@ -262,17 +238,16 @@ class RedisCacheStore implements CacheerInterface
     {
         $results = [];
         foreach ($cacheKeys as $cacheKey) {
-            $fullCacheKey = $this->buildKey($cacheKey, $namespace);
-            $cacheData = $this->getCache($fullCacheKey, $namespace, $ttl);
+            $cacheData = $this->getCache($cacheKey, $namespace, $ttl);
             if ($cacheData !== null) {
                 $results[$cacheKey] = $cacheData;
             }
         }
 
         if (empty($results)) {
-            $this->setMessage("No cache data found for the provided keys", false);
+            $this->status->record("No cache data found for the provided keys", false);
         } else {
-            $this->setMessage("Cache data retrieved successfully", true);
+            $this->status->record("Cache data retrieved successfully", true);
         }
 
         return $results;
@@ -285,7 +260,7 @@ class RedisCacheStore implements CacheerInterface
      */
     public function getMessage(): string
     {
-        return $this->message;
+        return $this->status->getMessage();
     }
 
     /**
@@ -311,13 +286,11 @@ class RedisCacheStore implements CacheerInterface
         $cacheFullKey = $this->buildKey($cacheKey, $namespace);
 
         if ($this->redis->exists($cacheFullKey) > 0) {
-            $this->setMessage("Cache Key: {$cacheKey} exists!", true);
-            $this->logger->debug("{$this->getMessage()} from redis driver.");
+            $this->status->record("Cache Key: {$cacheKey} exists!", true);
             return true;
         }
 
-        $this->setMessage("Cache Key: {$cacheKey} does not exists!", false);
-        $this->logger->debug("{$this->getMessage()} from redis driver.");
+        $this->status->record("Cache Key: {$cacheKey} does not exists!", false);
         return false;
     }
 
@@ -328,25 +301,7 @@ class RedisCacheStore implements CacheerInterface
      */
     public function isSuccess(): bool
     {
-        return $this->success;
-    }
-
-    /**
-     * Processes a batch of cache items and stores them in Redis.
-     * 
-     * @param array  $batchItems
-     * @param string $namespace
-     * @return void
-     */
-    private function processBatchItems(array $batchItems, string $namespace): void
-    {
-        foreach ($batchItems as $item) {
-            CacheRedisHelper::validateCacheItem($item);
-            $cacheKey = $item['cacheKey'];
-            $cacheData = $item['cacheData'];
-            $mergedData = CacheRedisHelper::mergeCacheData($cacheData);
-            $this->putCache($cacheKey, $mergedData, $namespace);
-        }
+        return $this->status->isSuccess();
     }
 
     /**
@@ -358,30 +313,22 @@ class RedisCacheStore implements CacheerInterface
      * @param string|int|null $ttl
      * @return Status|null
      */
-    public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', string|int|null $ttl = null): ?Status
+    public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', string|int $ttl = 3600): ?Status
     {
         $cacheFullKey = $this->buildKey($cacheKey, $namespace);
         $serializedData = CacheRedisHelper::serialize($cacheData);
 
-        // Resolve TTL with OptionBuilder default when applicable
-        $ttlToUse = $ttl;
-        if ($this->defaultTTL !== null && ($ttl === null || (int)$ttl === 3600)) {
-            $ttlToUse = $this->defaultTTL;
-        }
-        if (is_string($ttlToUse)) {
-            $ttlToUse = (int) CacheFileHelper::convertExpirationToSeconds($ttlToUse);
-        }
+        $ttlToUse = $this->keyspace->resolveTTL($ttl);
 
         $result = $ttlToUse ? $this->redis->setex($cacheFullKey, (int) $ttlToUse, $serializedData)
                             : $this->redis->set($cacheFullKey, $serializedData);
 
         if ($result) {
-            $this->setMessage("Cache stored successfully", true);
+            $this->status->record("Cache stored successfully", true);
         } else {
-            $this->setMessage("Failed to store cache", false);
+            $this->status->record("Failed to store cache", false);
         }
 
-        $this->logger->debug("{$this->getMessage()} from Redis driver.");
         return $result;
     }
 
@@ -395,14 +342,10 @@ class RedisCacheStore implements CacheerInterface
      */
     public function putMany(array $items, string $namespace = '', int $batchSize = 100): void
     {
-        $processedCount = 0;
-        $itemCount = count($items);
-
-        while ($processedCount < $itemCount) {
-            $batchItems = array_slice($items, $processedCount, $batchSize);
-            $this->processBatchItems($batchItems, $namespace);
-            $processedCount += count($batchItems);
-        }
+        $writer = new RedisBatchWriter($batchSize);
+        $writer->write($items, $namespace, function (string $cacheKey, mixed $cacheData, string $ns): void {
+            $this->putCache($cacheKey, $cacheData, $ns);
+        });
     }
 
     /**
@@ -420,19 +363,16 @@ class RedisCacheStore implements CacheerInterface
         $dump = $this->getDump($cacheFullKey);
 
         if (!$dump) {
-            $this->setMessage("Cache Key: {$cacheKey} not found.", false);
-            $this->logger->warning("{$this->getMessage()} from Redis driver.");
+            $this->status->record("Cache Key: {$cacheKey} not found.", false, 'warning');
             return;
         }
 
-        $this->clearCache($cacheFullKey);
+        $this->clearCache($cacheKey, $namespace);
 
         if ($this->restoreKey($cacheFullKey, $ttl, $dump)) {
-            $this->setMessage("Cache Key: {$cacheKey} renewed successfully.", true);
-            $this->logger->debug("{$this->getMessage()} from Redis driver.");
+            $this->status->record("Cache Key: {$cacheKey} renewed successfully.", true);
         } else {
-            $this->setMessage("Failed to renew cache key: {$cacheKey}.", false);
-            $this->logger->error("{$this->getMessage()} from Redis driver.");
+            $this->status->record("Failed to renew cache key: {$cacheKey}.", false, 'error');
         }
     }
 
@@ -455,16 +395,4 @@ class RedisCacheStore implements CacheerInterface
         }
     }
 
-    /**
-     * Sets a message and its success status.
-     * 
-     * @param string  $message
-     * @param boolean $success
-     * @return void
-     */
-    private function setMessage(string $message, bool $success): void
-    {
-        $this->message = $message;
-        $this->success = $success;
-    }
 }

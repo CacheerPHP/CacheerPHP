@@ -55,7 +55,8 @@ class DatabaseCacheStore implements CacheerInterface
     public function __construct(string $logPath, array $options = [])
     {
         $this->logger = new CacheLogger($logPath);
-        $table = $options['table'] ?? 'cacheer_table';
+        $tableOption = $options['table'] ?? 'cacheer_table';
+        $table = is_string($tableOption) && $tableOption !== '' ? $tableOption : 'cacheer_table';
         $this->cacheRepository = new CacheDatabaseRepository($table);
 
         // Ensure the custom table exists by running a targeted migration

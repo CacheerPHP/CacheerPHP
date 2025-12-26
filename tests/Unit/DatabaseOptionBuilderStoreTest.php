@@ -56,7 +56,7 @@ class DatabaseOptionBuilderStoreTest extends TestCase
 
     // Validate via direct SQL against the custom table
     $nowFunction = "DATETIME('now', 'localtime')";
-    $stmt = $this->pdo->prepare("SELECT cacheData FROM {$this->table} WHERE cacheKey = :k AND cacheNamespace = '' AND expirationTime > $nowFunction LIMIT 1");
+    $stmt = $this->pdo?->prepare("SELECT cacheData FROM {$this->table} WHERE cacheKey = :k AND cacheNamespace = '' AND expirationTime > $nowFunction LIMIT 1");
     $stmt->bindValue(':k', $key);
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
