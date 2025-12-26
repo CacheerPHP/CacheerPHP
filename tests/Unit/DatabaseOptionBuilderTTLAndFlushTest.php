@@ -56,7 +56,6 @@ class DatabaseOptionBuilderTTLAndFlushTest extends TestCase
     $this->assertTrue($cache->isSuccess());
 
     $pdo = Silviooosilva\CacheerPhp\Core\Connect::getInstance();
-    $nowFunction = "DATETIME('now', 'localtime')";
     $stmt = $pdo->prepare("SELECT expirationTime FROM {$this->table} WHERE cacheKey = :k LIMIT 1");
     $stmt->bindValue(':k', $key);
     $stmt->execute();

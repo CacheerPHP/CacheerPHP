@@ -70,6 +70,6 @@ class RedisOptionBuilderTTLAndFlushTest extends TestCase
     // new instance should auto-flush on init
     $cache = new Cacheer($options);
     $cache->setDriver()->useRedisDriver();
-    $this->assertFalse((bool)$this->client->exists('app:to_be_flushed'));
+    $this->assertFalse((bool)$this->client?->exists('app:to_be_flushed'));
   }
 }

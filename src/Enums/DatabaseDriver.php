@@ -11,6 +11,8 @@ enum DatabaseDriver: string
 
     /**
      * Human friendly label for error/help messages.
+     * 
+     * @return string
      */
     public function label(): string
     {
@@ -24,6 +26,8 @@ enum DatabaseDriver: string
 
     /**
      * PDO DSN identifier for the driver.
+     * 
+     * @return string
      */
     public function dsnName(): string
     {
@@ -35,6 +39,8 @@ enum DatabaseDriver: string
 
     /**
      * Whether the driver behaves like MySQL for SQL syntax decisions.
+     * 
+     * @return bool
      */
     public function isMysqlFamily(): bool
     {

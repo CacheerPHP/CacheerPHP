@@ -7,6 +7,7 @@ use Silviooosilva\CacheerPhp\CacheStore\DatabaseCacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\FileCacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\RedisCacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\ArrayCacheStore;
+use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Helpers\CacheConfig;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
 use Silviooosilva\CacheerPhp\Utils\CacheDriver;
@@ -96,9 +97,9 @@ final class Cacheer
     private ?string $encryptionKey = null;
 
     /**
-    * @var FileCacheStore|DatabaseCacheStore|RedisCacheStore|ArrayCacheStore
+    * @var CacheerInterface
     */
-    public RedisCacheStore|DatabaseCacheStore|ArrayCacheStore|FileCacheStore $cacheStore;
+    public CacheerInterface $cacheStore;
 
     /**
     * @var array

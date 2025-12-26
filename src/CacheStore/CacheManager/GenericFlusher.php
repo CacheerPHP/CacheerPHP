@@ -37,7 +37,7 @@ class GenericFlusher
     public function flushCache(): void
     {
         ($this->flushCallback)();
-        @file_put_contents($this->lastFlushTimeFile, (string) time());
+        $this->writeTimestamp(time());
     }
 
     /**
@@ -62,7 +62,7 @@ class GenericFlusher
         $flushAfterSeconds = (int) CacheFileHelper::convertExpirationToSeconds($flushAfter);
 
         if (!file_exists($this->lastFlushTimeFile)) {
-            @file_put_contents($this->lastFlushTimeFile, (string) time());
+            $this->writeTimestamp(time());
             return;
         }
 
@@ -70,8 +70,21 @@ class GenericFlusher
 
         if ((time() - $lastFlushTime) >= $flushAfterSeconds) {
             $this->flushCache();
-            @file_put_contents($this->lastFlushTimeFile, (string) time());
+            $this->writeTimestamp(time());
+        }
+    }
+
+    /**
+     * Persist the last flush timestamp, throwing on failure to avoid silent state drift.
+     * 
+     * @param int $timestamp
+     * @return void
+     */
+    private function writeTimestamp(int $timestamp): void
+    {
+        $result = @file_put_contents($this->lastFlushTimeFile, (string) $timestamp, LOCK_EX);
+        if ($result === false) {
+            throw new \RuntimeException("Failed to write flush timestamp to {$this->lastFlushTimeFile}");
         }
     }
 }
-

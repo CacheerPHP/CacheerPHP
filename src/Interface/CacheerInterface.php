@@ -7,7 +7,7 @@ namespace Silviooosilva\CacheerPhp\Interface;
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-interface CacheerInterface
+interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInterface, TaggableCacheStoreInterface
 {
     
     /**
@@ -42,7 +42,7 @@ interface CacheerInterface
      * @param string $namespace Namespace for organization
      * @return CacheDataFormatter|mixed Returns a formatter with all items in the namespace
      */
-    public function getAll(string $namespace);
+    public function getAll(string $namespace = '');
 
     /**
      * Retrieves a single cache item.
@@ -62,7 +62,7 @@ interface CacheerInterface
      * @param string|int $ttl Lifetime in seconds (default: 3600)
      * @return CacheDataFormatter|mixed Returns a formatter with the retrieved items
      */
-    public function getMany(array $cacheKeys, string $namespace, string|int $ttl = 3600);
+    public function getMany(array $cacheKeys, string $namespace = '', string|int $ttl = 3600);
 
     /**
      * Checks if a cache item exists.
