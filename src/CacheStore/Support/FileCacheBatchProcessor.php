@@ -41,4 +41,25 @@ class FileCacheBatchProcessor
             $this->store->putCache($cacheKey, $mergedData, $namespace);
         }
     }
+
+    /**
+     * Processes items in batches and stores them.
+     *
+     * @param array $items
+     * @param string $namespace
+     * @param int $batchSize
+     * @return void
+     * @throws CacheFileException
+     */
+    public function processBatches(array $items, string $namespace, int $batchSize = 100): void
+    {
+        $processedCount = 0;
+        $itemCount = count($items);
+
+        while ($processedCount < $itemCount) {
+            $batchItems = array_slice($items, $processedCount, $batchSize);
+            $this->process($batchItems, $namespace);
+            $processedCount += count($batchItems);
+        }
+    }
 }

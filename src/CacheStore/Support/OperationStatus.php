@@ -18,12 +18,17 @@ final class OperationStatus
     /** @var CacheLogger */
     private CacheLogger $logger;
 
+    /** @var string */
+    private string $driverLabel;
+
     /**
      * @param CacheLogger $logger
+     * @param string $driverLabel
      */
-    public function __construct(CacheLogger $logger)
+    public function __construct(CacheLogger $logger, string $driverLabel = 'redis')
     {
         $this->logger = $logger;
+        $this->driverLabel = $driverLabel;
     }
 
     /**
@@ -38,10 +43,16 @@ final class OperationStatus
         $this->message = $message;
         $this->success = $success;
 
+        $suffix = '';
+        if ($this->driverLabel !== '') {
+            $needle = "from {$this->driverLabel} driver";
+            $suffix = str_contains($message, $needle) ? '' : " from {$this->driverLabel} driver.";
+        }
+
         if (method_exists($this->logger, $level)) {
-            $this->logger->{$level}("{$message} from redis driver.");
+            $this->logger->{$level}("{$message}{$suffix}");
         } else {
-            $this->logger->debug("{$message} from redis driver.");
+            $this->logger->debug("{$message}{$suffix}");
         }
     }
 

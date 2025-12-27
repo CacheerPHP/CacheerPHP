@@ -12,6 +12,10 @@ use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
 use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
 use Silviooosilva\CacheerPhp\Core\Connect;
 use Silviooosilva\CacheerPhp\Core\MigrationManager;
+use Silviooosilva\CacheerPhp\CacheStore\Support\DatabaseBatchWriter;
+use Silviooosilva\CacheerPhp\CacheStore\Support\DatabaseCacheTagIndex;
+use Silviooosilva\CacheerPhp\CacheStore\Support\DatabaseTtlResolver;
+use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
 
 /**
  * Class DatabaseCacheStore
@@ -21,27 +25,29 @@ use Silviooosilva\CacheerPhp\Core\MigrationManager;
 class DatabaseCacheStore implements CacheerInterface
 {
     /**
-     * @var boolean
+     * @var OperationStatus
      */
-    private bool $success = false;
-
-    /**
-     * @var string
-     */
-    private string $message = '';
-
-    /**
-     * @var ?CacheLogger
-     */
-    private ?CacheLogger $logger = null;
+    private OperationStatus $status;
 
     /**
      * @var CacheDatabaseRepository
      */
     private CacheDatabaseRepository $cacheRepository;
 
-    /** @var int|null */
-    private ?int $defaultTTL = null;
+    /**
+     * @var DatabaseCacheTagIndex
+     */
+    private DatabaseCacheTagIndex $tagIndex;
+
+    /**
+     * @var DatabaseBatchWriter
+     */
+    private DatabaseBatchWriter $batchWriter;
+
+    /**
+     * @var DatabaseTtlResolver
+     */
+    private DatabaseTtlResolver $ttlResolver;
 
     /** @var GenericFlusher|null */
     private ?GenericFlusher $flusher = null;
@@ -54,7 +60,8 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function __construct(string $logPath, array $options = [])
     {
-        $this->logger = new CacheLogger($logPath);
+        $logger = new CacheLogger($logPath);
+        $this->status = new OperationStatus($logger, 'database');
         $tableOption = $options['table'] ?? 'cacheer_table';
         $table = is_string($tableOption) && $tableOption !== '' ? $tableOption : 'cacheer_table';
         $this->cacheRepository = new CacheDatabaseRepository($table);
@@ -63,9 +70,14 @@ class DatabaseCacheStore implements CacheerInterface
         $pdo = Connect::getInstance();
         MigrationManager::migrate($pdo, $table);
 
+        $defaultTTL = null;
         if (!empty($options['expirationTime'])) {
-            $this->defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
+            $defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
+
+        $this->ttlResolver = new DatabaseTtlResolver($defaultTTL);
+        $this->batchWriter = new DatabaseBatchWriter();
+        $this->tagIndex = new DatabaseCacheTagIndex($this->cacheRepository, $this->status);
 
         $lastFlushFile = FlushHelper::pathFor(CacheStoreType::DATABASE, $table);
         $this->flusher = new GenericFlusher($lastFlushFile, function () {
@@ -87,12 +99,13 @@ class DatabaseCacheStore implements CacheerInterface
         $currentCacheData = $this->getCache($cacheKey, $namespace);
         $mergedCacheData = CacheDatabaseHelper::arrayIdentifier($currentCacheData, $cacheData);
 
-        if ($this->updateCache($cacheKey, $mergedCacheData, $namespace)) {
-            $this->logger?->debug("{$this->getMessage()} from database driver.");
+        $updated = $this->cacheRepository->update($cacheKey, $mergedCacheData, $namespace);
+        if ($updated) {
+            $this->status->record("Cache updated successfully.", true);
             return true;
         }
 
-        $this->logger?->error("{$this->getMessage()} from database driver.");
+        $this->status->record("Cache does not exist or update failed!", false, 'error');
         return false;
     }
 
@@ -105,14 +118,8 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function clearCache(string $cacheKey, string $namespace = ''): void
     {
-        $data = $this->cacheRepository->clear($cacheKey, $namespace);
-        if($data) {
-            $this->setMessage("Cache deleted successfully!", true);
-        } else {
-            $this->setMessage("Cache does not exists!", false);
-        }
-
-        $this->logger->debug("{$this->getMessage()} from database driver.");
+        $deleted = $this->cacheRepository->clear($cacheKey, $namespace);
+        $this->status->record($deleted ? "Cache deleted successfully!" : "Cache does not exists!", $deleted);
     }
 
     /**
@@ -122,14 +129,12 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function flushCache(): void
     {
-        if($this->cacheRepository->flush()){
-            $this->setMessage("Flush finished successfully", true);
-        } else {
-            $this->setMessage("Something went wrong. Please, try again.", false);
+        if ($this->cacheRepository->flush()) {
+            $this->status->record("Flush finished successfully", true, 'info');
+            return;
         }
 
-        $this->logger->info("{$this->getMessage()} from database driver.");
-
+        $this->status->record("Something went wrong. Please, try again.", false, 'info');
     }
 
     /**
@@ -141,20 +146,7 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function tag(string $tag, string ...$keys): bool
     {
-        $indexKey = "tag:" . $tag;
-        $namespace = '__tags__';
-        $existing = $this->cacheRepository->retrieve($indexKey, $namespace) ?? [];
-        if (!is_array($existing)) {
-            $existing = [];
-        }
-        foreach ($keys as $key) {
-            // Store either raw key or "namespace:key"
-            $existing[$key] = true;
-        }
-        $ok = $this->cacheRepository->store($indexKey, $existing, $namespace, 31536000);
-        $this->setMessage($ok ? "Tagged successfully" : "Failed to tag keys", $ok);
-        $this->logger->debug("{$this->getMessage()} from database driver.");
-        return $ok;
+        return $this->tagIndex->tag($tag, ...$keys);
     }
 
     /**
@@ -165,22 +157,9 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function flushTag(string $tag): void
     {
-        $indexKey = "tag:" . $tag;
-        $namespace = '__tags__';
-        $existing = $this->cacheRepository->retrieve($indexKey, $namespace) ?? [];
-        if (is_array($existing)) {
-            foreach (array_keys($existing) as $key) {
-                if (str_contains($key, ':')) {
-                    [$np, $k] = explode(':', $key, 2);
-                    $this->clearCache($k, $np);
-                } else {
-                    $this->clearCache($key, '');
-                }
-            }
-        }
-        $this->cacheRepository->clear($indexKey, $namespace);
-        $this->setMessage("Tag flushed successfully", true);
-        $this->logger->debug("{$this->getMessage()} from database driver.");
+        $this->tagIndex->flush($tag, function (string $cacheKey, string $namespace): void {
+            $this->clearCache($cacheKey, $namespace);
+        });
     }
 
     /**
@@ -193,14 +172,12 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600): mixed
     {
-        $cacheData = $this->retrieveCache($cacheKey, $namespace);
-        if ($cacheData) {
-            $this->setMessage("Cache retrieved successfully", true);
-            $this->logger->debug("{$this->getMessage()} from database driver.");
+        $cacheData = $this->cacheRepository->retrieve($cacheKey, $namespace);
+        if ($cacheData !== null) {
+            $this->status->record("Cache retrieved successfully", true);
             return $cacheData;
         }
-        $this->setMessage("CacheData not found, does not exists or expired", false);
-        $this->logger->info("{$this->getMessage()} from database driver.");
+        $this->status->record("CacheData not found, does not exists or expired", false, 'info');
         return null;
     }
 
@@ -213,13 +190,11 @@ class DatabaseCacheStore implements CacheerInterface
     public function getAll(string $namespace = ''): array
     {
         $cacheData = $this->cacheRepository->getAll($namespace);
-        if ($cacheData) {
-            $this->setMessage("Cache retrieved successfully", true);
-            $this->logger->debug("{$this->getMessage()} from database driver.");
+        if (!empty($cacheData)) {
+            $this->status->record("Cache retrieved successfully", true);
             return $cacheData;
         }
-        $this->setMessage("No cache data found for the provided namespace", false);
-        $this->logger->info("{$this->getMessage()} from database driver.");
+        $this->status->record("No cache data found for the provided namespace", false, 'info');
         return [];
     }
 
@@ -236,28 +211,26 @@ class DatabaseCacheStore implements CacheerInterface
         $cacheData = [];
         foreach ($cacheKeys as $cacheKey) {
             $data = $this->getCache($cacheKey, $namespace, $ttl);
-            if ($data) {
+            if ($data !== null) {
                 $cacheData[$cacheKey] = $data;
             }
         }
         if (!empty($cacheData)) {
-            $this->setMessage("Cache retrieved successfully", true);
-            $this->logger->debug("{$this->getMessage()} from database driver.");
+            $this->status->record("Cache retrieved successfully", true);
             return $cacheData;
         }
-        $this->setMessage("No cache data found for the provided keys", false);
-        $this->logger->info("{$this->getMessage()} from database driver.");
+        $this->status->record("No cache data found for the provided keys", false, 'info');
         return [];
     }
 
     /**
-     * Checks if a cache item exists.
-     * 
+     * Gets the last message.
+     *
      * @return string
      */
     public function getMessage(): string
     {
-        return $this->message;
+        return $this->status->getMessage();
     }
 
     /**
@@ -271,14 +244,12 @@ class DatabaseCacheStore implements CacheerInterface
     {
         $cacheData = $this->getCache($cacheKey, $namespace);
 
-        if ($cacheData) {
-            $this->setMessage("Cache key: {$cacheKey} exists and it's available from database driver.", true);
-            $this->logger->debug("{$this->getMessage()}");
+        if ($cacheData !== null) {
+            $this->status->record("Cache key: {$cacheKey} exists and it's available from database driver.", true);
             return true;
         }
 
-        $this->setMessage("Cache key: {$cacheKey} does not exist or it's expired from database driver.", false);
-        $this->logger->debug("{$this->getMessage()}");
+        $this->status->record("Cache key: {$cacheKey} does not exist or it's expired from database driver.", false);
 
         return false;
     }
@@ -290,7 +261,7 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function isSuccess(): bool
     {
-        return $this->success;
+        return $this->status->isSuccess();
     }
 
     /**
@@ -303,13 +274,10 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function putMany(array $items, string $namespace = '', int $batchSize = 100): void
     {
-        $processedCount = 0;
-        $itemCount = count($items);
-        while ($processedCount < $itemCount) {
-            $batchItems = array_slice($items, $processedCount, $batchSize);
-            $this->processBatchItems($batchItems, $namespace);
-            $processedCount += count($batchItems);
-        }
+        $writer = $batchSize === 100 ? $this->batchWriter : new DatabaseBatchWriter($batchSize);
+        $writer->write($items, $namespace, function (string $cacheKey, mixed $cacheData, string $namespace): void {
+            $this->putCache($cacheKey, $cacheData, $namespace);
+        });
     }
 
     /**
@@ -323,19 +291,15 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', string|int $ttl = 3600): bool
     {
-        $ttlToUse = $ttl;
-        if ($this->defaultTTL !== null && ($ttl === null || (int)$ttl === 3600)) {
-            $ttlToUse = $this->defaultTTL;
-        }
-        if (is_string($ttlToUse)) {
-            $ttlToUse = (int) CacheFileHelper::convertExpirationToSeconds($ttlToUse);
-        }
+        $ttlToUse = $this->ttlResolver->resolve($ttl);
+        $stored = $this->cacheRepository->store($cacheKey, $cacheData, $namespace, $ttlToUse);
 
-        if($this->storeCache($cacheKey, $cacheData, $namespace, $ttlToUse)){
-            $this->logger->debug("{$this->getMessage()} from database driver.");
+        if ($stored) {
+            $this->status->record("Cache Stored Successfully", true);
             return true;
         }
-        $this->logger->error("{$this->getMessage()} from database driver.");
+
+        $this->status->record("Already exists a cache with this key...", false, 'error');
         return false;
     }
 
@@ -349,115 +313,14 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function renewCache(string $cacheKey, int | string $ttl, string $namespace = ''): void
     {
-        $cacheData = $this->getCache($cacheKey, $namespace);
-        if ($cacheData) {
-            $this->renew($cacheKey, $ttl, $namespace);
-            $this->setMessage("Cache with key {$cacheKey} renewed successfully", true);
-            $this->logger->debug("{$this->getMessage()} from database driver.");
+        $ttlToUse = $this->ttlResolver->resolve($ttl);
+        $renewed = $this->cacheRepository->renew($cacheKey, $ttlToUse, $namespace);
+
+        if ($renewed) {
+            $this->status->record("Cache with key {$cacheKey} renewed successfully", true);
+            return;
         }
-    }
 
-    /**
-     * Processes a batch of cache items.
-     * 
-     * @param array  $batchItems
-     * @param string $namespace
-     * @return void
-     */
-    private function processBatchItems(array $batchItems, string $namespace): void
-    {
-        foreach($batchItems as $item) {
-            CacheDatabaseHelper::validateCacheItem($item);
-            $cacheKey = $item['cacheKey'];
-            $cacheData = $item['cacheData'];
-            $mergedData = CacheDatabaseHelper::mergeCacheData($cacheData);
-            $this->putCache($cacheKey, $mergedData, $namespace);
-        }
-    }
-
-    /**
-     * Renews the expiration time of a cache item.
-     * 
-     * @param string $cacheKey
-     * @param string|int $ttl
-     * @param string $namespace
-     * @return bool
-     */
-    private function renew(string $cacheKey, string|int $ttl = 3600, string $namespace = ''): bool
-    {
-        $cacheData = $this->getCache($cacheKey, $namespace);
-        if ($cacheData) {
-            $renewedCache = $this->cacheRepository->renew($cacheKey, $ttl, $namespace);
-            if ($renewedCache) {
-                $this->setMessage("Cache with key {$cacheKey} renewed successfully", true);
-                $this->logger->debug("{$this->getMessage()} from database driver.");
-                return true;
-            }
-            return false;
-        }
-        return false;
-    }
-
-    /**
-     * Sets a message and its success status.
-     * 
-     * @param string  $message
-     * @param boolean $success
-     * @return void
-     */
-    private function setMessage(string $message, bool $success): void
-    {
-        $this->message = $message;
-        $this->success = $success;
-    }
-
-    /**
-     * Retrieves a cache item by its key.
-     * @param string $cacheKey
-     * @param string $namespace
-     * @return mixed
-     */
-    private function retrieveCache(string $cacheKey, string $namespace = ''): mixed
-    {
-        return $this->cacheRepository->retrieve($cacheKey, $namespace);
-    }
-
-    /**
-     * Stores a cache item.
-     *
-     * @param string $cacheKey
-     * @param mixed $cacheData
-     * @param string $namespace
-     * @param string|int $ttl
-     * @return bool
-     */
-    private function storeCache(string $cacheKey, mixed $cacheData, string $namespace = '', string|int $ttl = 3600): bool
-    {
-        $data = $this->cacheRepository->store($cacheKey, $cacheData, $namespace, $ttl);
-        if($data) {
-            $this->setMessage("Cache Stored Successfully", true);
-            return true;
-        }
-        $this->setMessage("Already exists a cache with this key...", false);
-        return false;
-    }
-
-    /**
-     * Updates an existing cache item.
-     * 
-     * @param string $cacheKey
-     * @param mixed  $cacheData
-     * @param string $namespace
-     * @return bool
-     */
-    private function updateCache(string $cacheKey, mixed $cacheData, string $namespace = ''): bool
-    {
-        $data = $this->cacheRepository->update($cacheKey, $cacheData, $namespace);
-        if($data) {
-            $this->setMessage("Cache updated successfully.", true);
-            return true;
-        }
-        $this->setMessage("Cache does not exist or update failed!", false);
-        return false;
+        $this->status->record("Failed to renew Cache with key {$cacheKey}", false, 'info');
     }
 }
