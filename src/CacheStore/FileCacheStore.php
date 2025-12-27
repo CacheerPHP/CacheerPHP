@@ -10,6 +10,8 @@ use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Utils\CacheLogger;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCachePathBuilder;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheBatchProcessor;
+use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheTagIndex;
+use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
 
 /**
  * Class FileCacheStore
@@ -22,16 +24,6 @@ class FileCacheStore implements CacheerInterface
      * @param string $cacheDir
      */
     private string $cacheDir;
-
-    /**
-     * @param array $options
-     */
-    private array $options = [];
-
-    /**
-     * @param string $message
-     */
-    private string $message = '';
 
     /**
      * @var FileCachePathBuilder
@@ -48,15 +40,9 @@ class FileCacheStore implements CacheerInterface
     private int $defaultTTL = 3600; // 1 hour default TTL
 
     /**
-     * @param boolean $success
+     * @var OperationStatus
      */
-    private bool $success = false;
-
-
-    /**
-    * @var CacheLogger
-    */
-    private $logger = null;
+    private OperationStatus $status;
 
     /**
     * @var FileCacheManager
@@ -68,6 +54,11 @@ class FileCacheStore implements CacheerInterface
     */
     private FileCacheFlusher $flusher;
 
+    /**
+     * @var FileCacheTagIndex
+     */
+    private FileCacheTagIndex $tagIndex;
+
 
     /**
      * FileCacheStore constructor.
@@ -76,29 +67,20 @@ class FileCacheStore implements CacheerInterface
      */
     public function __construct(array $options = [])
     {
-        $this->validateOptions($options);
         $this->fileManager = new FileCacheManager();
+        $loggerPath = $options['loggerPath'] ?? 'cacheer.log';
+        $this->status = new OperationStatus(new CacheLogger($loggerPath), 'file');
+
+        $this->validateOptions($options);
         $this->initializeCacheDir($options['cacheDir']);
         $this->pathBuilder = new FileCachePathBuilder($this->fileManager, $this->cacheDir);
         $this->batchProcessor = new FileCacheBatchProcessor($this);
         $this->flusher = new FileCacheFlusher($this->fileManager, $this->cacheDir);
-        $this->defaultTTL = $this->getExpirationTime($options);
-        $this->flusher->handleAutoFlush($options);
-        $this->logger = new CacheLogger($options['loggerPath']);
-    }
-
-    /**
-     * Returns the path for a tag index file.
-     * @param string $tag
-     * @return string
-     */
-    private function getTagIndexPath(string $tag): string
-    {
-        $tagDir = rtrim($this->cacheDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '_tags';
-        if (!$this->fileManager->directoryExists($tagDir)) {
-            $this->fileManager->createDirectory($tagDir);
+        $this->tagIndex = new FileCacheTagIndex($this->fileManager, $this->cacheDir, $this->status);
+        if (isset($options['expirationTime'])) {
+            $this->defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
-        return $tagDir . DIRECTORY_SEPARATOR . $tag . '.json';
+        $this->flusher->handleAutoFlush($options);
     }
 
     /**
@@ -107,15 +89,15 @@ class FileCacheStore implements CacheerInterface
      * @param string $cacheKey
      * @param mixed $cacheData
      * @param string $namespace
-     * @return string|void
+     * @return bool
      * @throws CacheFileException
      */
-    public function appendCache(string $cacheKey, mixed $cacheData, string $namespace = '')
+    public function appendCache(string $cacheKey, mixed $cacheData, string $namespace = ''): bool
     {
         $currentCacheFileData = $this->getCache($cacheKey, $namespace);
 
         if (!$this->isSuccess()) {
-            return $this->getMessage();
+            return false;
         }
 
         $mergedCacheData = CacheFileHelper::arrayIdentifier($currentCacheFileData, $cacheData);
@@ -123,21 +105,11 @@ class FileCacheStore implements CacheerInterface
 
         $this->putCache($cacheKey, $mergedCacheData, $namespace);
         if ($this->isSuccess()) {
-            $this->setMessage("Cache updated successfully", true);
-            $this->logger->debug("{$this->getMessage()} from file driver.");
+            $this->status->record("Cache updated successfully", true);
+            return true;
         }
-    }
 
-    /**
-     * Builds the cache file path based on the cache key and namespace.
-     * 
-     * @param string $cacheKey
-     * @param string $namespace
-     * @return string
-     */
-    private function buildCacheFilePath(string $cacheKey, string $namespace): string
-    {
-        return $this->pathBuilder->build($cacheKey, $namespace);
+        return false;
     }
 
     /**
@@ -145,19 +117,18 @@ class FileCacheStore implements CacheerInterface
      *
      * @param string $cacheKey
      * @param string $namespace
-     * @return bool
+     * @return void
      * @throws CacheFileException
      */
     public function clearCache(string $cacheKey, string $namespace = ''): void
     {
-        $cacheFile = $this->buildCacheFilePath($cacheKey, $namespace);
-        if ($this->fileManager->readFile($cacheFile)) {
+        $cacheFile = $this->pathBuilder->build($cacheKey, $namespace);
+        if ($this->fileManager->fileExists($cacheFile)) {
             $this->fileManager->removeFile($cacheFile);
-            $this->setMessage("Cache file deleted successfully!", true);
+            $this->status->record("Cache file deleted successfully!", true);
         } else {
-            $this->setMessage("Cache file does not exist!", false);
+            $this->status->record("Cache file does not exist!", false);
         }
-        $this->logger->debug("{$this->getMessage()} from file driver.");
     }
 
     /**
@@ -168,6 +139,7 @@ class FileCacheStore implements CacheerInterface
     public function flushCache(): void
     {
         $this->flusher->flushCache();
+        $this->status->record("Cache flushed successfully", true);
     }
 
     /**
@@ -179,23 +151,7 @@ class FileCacheStore implements CacheerInterface
      */
     public function tag(string $tag, string ...$keys): bool
     {
-        $path = $this->getTagIndexPath($tag);
-        $current = [];
-        if ($this->fileManager->fileExists($path)) {
-            $json = $this->fileManager->readFile($path);
-            $decoded = json_decode($json, true);
-            if (is_array($decoded)) {
-                $current = $decoded;
-            }
-        }
-        foreach ($keys as $key) {
-            // Store either raw key or "namespace:key"
-            $current[$key] = true;
-        }
-        $this->fileManager->writeFile($path, json_encode($current));
-        $this->setMessage("Tagged successfully", true);
-        $this->logger->debug("{$this->getMessage()} from file driver.");
-        return true;
+        return $this->tagIndex->tag($tag, ...$keys);
     }
 
     /**
@@ -206,39 +162,9 @@ class FileCacheStore implements CacheerInterface
      */
     public function flushTag(string $tag): void
     {
-        $path = $this->getTagIndexPath($tag);
-        $current = [];
-        if ($this->fileManager->fileExists($path)) {
-            $json = $this->fileManager->readFile($path);
-            $current = json_decode($json, true) ?: [];
-        }
-        foreach (array_keys($current) as $key) {
-            if (str_contains($key, ':')) {
-                [$np, $k] = explode(':', $key, 2);
-                $this->clearCache($k, $np);
-            } else {
-                $this->clearCache($key, '');
-            }
-        }
-        if ($this->fileManager->fileExists($path)) {
-            $this->fileManager->removeFile($path);
-        }
-        $this->setMessage("Tag flushed successfully", true);
-        $this->logger->debug("{$this->getMessage()} from file driver.");
-    }
-
-    /**
-     * Retrieves the expiration time from options or uses the default TTL.
-     *
-     * @param array $options
-     * @return integer
-     * @throws CacheFileException
-     */
-    private function getExpirationTime(array $options): int
-    {
-        return isset($options['expirationTime'])
-            ? CacheFileHelper::convertExpirationToSeconds($options['expirationTime'])
-            : $this->defaultTTL;
+        $this->tagIndex->flush($tag, function (string $cacheKey, string $namespace): void {
+            $this->clearCache($cacheKey, $namespace);
+        });
     }
 
     /**
@@ -248,7 +174,7 @@ class FileCacheStore implements CacheerInterface
      */
     public function getMessage(): string
     {
-        return $this->message;
+        return $this->status->getMessage();
     }
 
     /**
@@ -258,23 +184,22 @@ class FileCacheStore implements CacheerInterface
      * @param string $namespace
      * @param string|int $ttl
      * @return mixed
-     * @throws CacheFileException return string|void
+     * @throws CacheFileException
      */
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600): mixed
     {
-       
-        $ttl = CacheFileHelper::ttl($ttl, $this->defaultTTL);
-        $cacheFile = $this->buildCacheFilePath($cacheKey, $namespace);
-        if ($this->isCacheValid($cacheFile, $ttl)) {
-            $cacheData = $this->fileManager->serialize($this->fileManager->readFile($cacheFile), false);
+        $ttlSeconds = CacheFileHelper::ttl($ttl, $this->defaultTTL);
+        $cacheFile = $this->pathBuilder->build($cacheKey, $namespace);
+        $valid = $this->fileManager->fileExists($cacheFile)
+            && filemtime($cacheFile) > (time() - $ttlSeconds);
 
-            $this->setMessage("Cache retrieved successfully", true);
-            $this->logger->debug("{$this->getMessage()} from file driver.");
+        if ($valid) {
+            $cacheData = $this->fileManager->serialize($this->fileManager->readFile($cacheFile), false);
+            $this->status->record("Cache retrieved successfully", true);
             return $cacheData;
         }
 
-        $this->setMessage("cacheFile not found, does not exists or expired", false);
-        $this->logger->info("{$this->getMessage()} from file driver.");
+        $this->status->record("cacheFile not found, does not exists or expired", false, 'info');
         return null;
     }
 
@@ -285,47 +210,13 @@ class FileCacheStore implements CacheerInterface
      */
     public function getAll(string $namespace = ''): array
     {
-        $cacheDir = $this->getNamespaceCacheDir($namespace);
+        $cacheDir = $this->pathBuilder->namespaceDir($namespace);
 
         if (!$this->fileManager->directoryExists($cacheDir)) {
-            $this->setMessage("Cache directory does not exist", false);
-            $this->logger->info("{$this->getMessage()} from file driver.");
+            $this->status->record("Cache directory does not exist", false, 'info');
             return [];
         }
 
-        $results = $this->getAllCacheFiles($cacheDir);
-
-        if (!empty($results)) {
-            $this->setMessage("Cache retrieved successfully", true);
-            $this->logger->debug("{$this->getMessage()} from file driver.");
-            return $results;
-        }
-
-        $this->setMessage("No cache data found for the provided namespace", false);
-        $this->logger->info("{$this->getMessage()} from file driver.");
-        return [];
-    }
-
-    /**
-     * Return the cache directory for the given namespace.
-     * 
-     * @param string $namespace
-     * @return string
-     */
-    private function getNamespaceCacheDir(string $namespace): string
-    {
-        return $this->pathBuilder->namespaceDir($namespace);
-    }
-
-    /**
-     * Return all valid cache files from the specified directory.
-     *
-     * @param string $cacheDir
-     * @return array
-     * @throws CacheFileException
-     */
-    private function getAllCacheFiles(string $cacheDir): array
-    {
         $files = $this->fileManager->getFilesInDirectory($cacheDir);
         $results = [];
 
@@ -336,7 +227,14 @@ class FileCacheStore implements CacheerInterface
                 $results[$cacheKey] = $cacheData;
             }
         }
-        return $results;
+
+        if (!empty($results)) {
+            $this->status->record("Cache retrieved successfully", true);
+            return $results;
+        }
+
+        $this->status->record("No cache data found for the provided namespace", false, 'info');
+        return [];
     }
 
     /**
@@ -375,14 +273,7 @@ class FileCacheStore implements CacheerInterface
      */
     public function putMany(array $items, string $namespace = '', int $batchSize = 100): void
     {
-        $processedCount = 0;
-        $itemCount = count($items);
-
-        while ($processedCount < $itemCount) {
-            $batchItems = array_slice($items, $processedCount, $batchSize);
-            $this->processBatchItems($batchItems, $namespace);
-            $processedCount += count($batchItems);
-        }
+        $this->batchProcessor->processBatches($items, $namespace, $batchSize);
     }
 
     /**
@@ -392,19 +283,18 @@ class FileCacheStore implements CacheerInterface
      * @param mixed $cacheData
      * @param string $namespace
      * @param string|int $ttl
-     * @return void
+     * @return bool
      * @throws CacheFileException
      */
-    public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', string|int $ttl = 3600): void
+    public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', string|int $ttl = 3600): bool
     {
-        $cacheFile = $this->buildCacheFilePath($cacheKey, $namespace);
+        $cacheFile = $this->pathBuilder->build($cacheKey, $namespace);
         $data = $this->fileManager->serialize($cacheData);
 
         $this->fileManager->writeFile($cacheFile, $data);
-        $this->setMessage("Cache file created successfully", true);
-
-    $this->logger->debug("{$this->getMessage()} from file driver.");
-}
+        $this->status->record("Cache file created successfully", true);
+        return true;
+    }
 
     /**
      * Checks if a cache key exists.
@@ -419,11 +309,11 @@ class FileCacheStore implements CacheerInterface
         $this->getCache($cacheKey, $namespace);
 
         if ($this->isSuccess()) {
-            $this->setMessage("Cache key: {$cacheKey} exists and it's available! from file driver", true);
+            $this->status->record("Cache key: {$cacheKey} exists and it's available! from file driver", true);
             return true;
         }
 
-        $this->setMessage("Cache key: {$cacheKey} does not exists or it's expired! from file driver", false);
+        $this->status->record("Cache key: {$cacheKey} does not exists or it's expired! from file driver", false);
         return false;
     }
 
@@ -439,26 +329,12 @@ class FileCacheStore implements CacheerInterface
     public function renewCache(string $cacheKey, string|int $ttl, string $namespace = ''): void
     {
         $cacheData = $this->getCache($cacheKey, $namespace);
-        if ($cacheData) {
+        if ($cacheData !== null) {
             $this->putCache($cacheKey, $cacheData, $namespace, $ttl);
-            $this->setMessage("Cache with key {$cacheKey} renewed successfully", true);
-            $this->logger->debug("{$this->getMessage()} from file driver.");
+            $this->status->record("Cache with key {$cacheKey} renewed successfully", true);
             return;
         }
-        $this->setMessage("Failed to renew Cache with key {$cacheKey}", false);
-        $this->logger->debug("{$this->getMessage()} from file driver.");
-    }
-
-    /**
-     * Processes a batch of cache items.
-     * 
-     * @param array  $batchItems
-     * @param string $namespace
-     * @return void
-     */
-    private function processBatchItems(array $batchItems, string $namespace): void
-    {
-        $this->batchProcessor->process($batchItems, $namespace);
+        $this->status->record("Failed to renew Cache with key {$cacheKey}", false);
     }
 
     /**
@@ -468,20 +344,7 @@ class FileCacheStore implements CacheerInterface
      */
     public function isSuccess(): bool
     {
-        return $this->success;
-    }
-
-    /**
-     * Sets a message indicating the status of the last operation.
-     * 
-     * @param string  $message
-     * @param boolean $success
-     * @return void
-     */
-    private function setMessage(string $message, bool $success): void
-    {
-        $this->message = $message;
-        $this->success = $success;
+        return $this->status->isSuccess();
     }
 
     /**
@@ -493,11 +356,10 @@ class FileCacheStore implements CacheerInterface
      */
     private function validateOptions(array $options): void
     {
-        if (!isset($options['cacheDir']) && $options['drive'] === 'file') {
-            $this->logger->debug("The 'cacheDir' option is required from file driver.");
+        if (!isset($options['cacheDir']) && ($options['drive'] ?? null) === 'file') {
+            $this->status->record("The 'cacheDir' option is required from file driver.", false);
             throw CacheFileException::create("The 'cacheDir' option is required.");
         }
-        $this->options = $options;
     }
 
     /**
@@ -509,21 +371,7 @@ class FileCacheStore implements CacheerInterface
      */
     private function initializeCacheDir(string $cacheDir): void
     {
-        $this->cacheDir = realpath($cacheDir) ?: "";
         $this->fileManager->createDirectory($cacheDir);
-    }
-
-
-
-    /**
-     * Checks if the cache file is valid based on its existence and modification time.
-     * 
-     * @param string  $cacheFile
-     * @param integer $ttl
-     * @return boolean
-     */
-    private function isCacheValid(string $cacheFile, int $ttl): bool
-    {
-        return file_exists($cacheFile) && (filemtime($cacheFile) > (time() - $ttl));
+        $this->cacheDir = realpath($cacheDir) ?: $cacheDir;
     }
 }
