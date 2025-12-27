@@ -43,7 +43,6 @@ class ConnectionFactory
             $dbName = $dbConf['dbname'];
             $dbDsn = $dsnDriver . ':' . $dbName;
         } else {
-            $dbName = "{$dsnDriver}-{$dbConf['dbname']}@{$dbConf['host']}";
             $dbDsn = "{$dsnDriver}:host={$dbConf['host']};dbname={$dbConf['dbname']};port={$dbConf['port']}";
         }
 
