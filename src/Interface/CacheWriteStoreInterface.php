@@ -10,7 +10,7 @@ interface CacheWriteStoreInterface
      * @param string $cacheKey
      * @param mixed $cacheData
      * @param string $namespace
-     * @return void
+     * @return mixed
      */
     public function appendCache(string $cacheKey, mixed $cacheData, string $namespace = '');
 

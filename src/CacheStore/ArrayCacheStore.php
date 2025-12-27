@@ -62,7 +62,7 @@ class ArrayCacheStore implements CacheerInterface
 
       if (!$this->has($cacheKey, $namespace)) {
           $this->setMessage("cacheData can't be appended, because doesn't exist or expired", false);
-          $this->logger->debug("{$this->getMessage()} from array driver.");
+          $this->logger?->debug("{$this->getMessage()} from array driver.");
           return false;
       }
 

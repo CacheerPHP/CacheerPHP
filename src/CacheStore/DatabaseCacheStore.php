@@ -88,11 +88,11 @@ class DatabaseCacheStore implements CacheerInterface
         $mergedCacheData = CacheDatabaseHelper::arrayIdentifier($currentCacheData, $cacheData);
 
         if ($this->updateCache($cacheKey, $mergedCacheData, $namespace)) {
-            $this->logger->debug("{$this->getMessage()} from database driver.");
+            $this->logger?->debug("{$this->getMessage()} from database driver.");
             return true;
         }
 
-        $this->logger->error("{$this->getMessage()} from database driver.");
+        $this->logger?->error("{$this->getMessage()} from database driver.");
         return false;
     }
 
