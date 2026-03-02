@@ -9,7 +9,7 @@ interface TaggableCacheStoreInterface
      * 
      * @param string $tag
      * @param string ...$keys
-     * @return mixed
+     * @return bool
      */
     public function tag(string $tag, string ...$keys);
 

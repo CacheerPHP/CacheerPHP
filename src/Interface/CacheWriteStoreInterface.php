@@ -10,7 +10,7 @@ interface CacheWriteStoreInterface
      * @param string $cacheKey
      * @param mixed $cacheData
      * @param string $namespace
-     * @return mixed
+     * @return bool
      */
     public function appendCache(string $cacheKey, mixed $cacheData, string $namespace = '');
 
@@ -37,7 +37,7 @@ interface CacheWriteStoreInterface
      * @param mixed $cacheData
      * @param string $namespace
      * @param int|string $ttl
-     * @return mixed
+     * @return bool
      */
     public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', int|string $ttl = 3600);
 
@@ -57,7 +57,7 @@ interface CacheWriteStoreInterface
      * @param string $cacheKey
      * @param int|string $ttl
      * @param string $namespace
-     * @return mixed
+     * @return void
      */
     public function renewCache(string $cacheKey, int|string $ttl, string $namespace = '');
 

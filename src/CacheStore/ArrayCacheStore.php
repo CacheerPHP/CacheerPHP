@@ -146,13 +146,13 @@ class ArrayCacheStore implements CacheerInterface
 
         if ($cacheData === null) {
             $this->status->record("cacheData not found, does not exists or expired", false);
-            return false;
+            return null;
         }
 
         if ($this->keyspace->isExpired($cacheData)) {
             $this->clearCache($cacheKey, $namespace);
             $this->status->record("cacheKey: {$cacheKey} has expired.", false);
-            return false;
+            return null;
         }
 
         $this->status->record("Cache retrieved successfully", true);
@@ -173,6 +173,11 @@ class ArrayCacheStore implements CacheerInterface
                 $results[$key] = $this->codec->decode($data['cacheData']);
             }
         }
+        if (!empty($results)) {
+            $this->status->record("Cache retrieved successfully", true);
+            return $results;
+        }
+        $this->status->record("No cache data found for the provided namespace", false, 'info');
         return $results;
     }
 
@@ -187,9 +192,19 @@ class ArrayCacheStore implements CacheerInterface
     public function getMany(array $cacheKeys, string $namespace = '', string|int $ttl = 3600): array
     {
         $results = [];
+        $hasData = false;
         foreach ($cacheKeys as $cacheKey) {
-            $results[$cacheKey] = $this->getCache($cacheKey, $namespace, $ttl);
+            $data = $this->getCache($cacheKey, $namespace, $ttl);
+            $results[$cacheKey] = $data;
+            if ($data !== null) {
+                $hasData = true;
+            }
         }
+        if ($hasData) {
+            $this->status->record("Cache retrieved successfully", true);
+            return $results;
+        }
+        $this->status->record("No cache data found for the provided keys", false, 'info');
         return $results;
     }
 
