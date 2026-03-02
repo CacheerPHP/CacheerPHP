@@ -10,30 +10,23 @@
 [![Quality Score](https://img.shields.io/scrutinizer/g/silviooosilva/CacheerPHP.svg?style=for-the-badge&color=blue)](https://scrutinizer-ci.com/g/silviooosilva/CacheerPHP)
 ![Packagist Downloads](https://img.shields.io/packagist/dt/silviooosilva/cacheer-php?style=for-the-badge&color=blue)
 
-CacheerPHP is a minimalist PHP caching library. Version 4 brings a more robust API, optional compression and encryption and support for multiple backends including files, databases and Redis.
-
----
+CacheerPHP is a minimalist PHP caching library with multiple backends (file, database, Redis and array), optional compression/encryption and a small but complete API.
 
 ## Features
 
-- **Multiple storage drivers:** file system, databases (MySQL, PostgreSQL, SQLite), Redis and in-memory arrays.
-- **Customizable expiration:** define precise TTL (Time To Live) values.
-- **Automatic and manual flushing:** clean cache directories with `flushAfter` or on demand.
-- **Namespaces:** group entries by category for easier management.
-- **Flexible output formatting:** return cached data as JSON, arrays, strings or objects.
-- **Compression & encryption:** reduce storage footprint and secure cache contents.
-- **OptionBuilder:** fluent builders to configure File, Redis and Database drivers without typos (supports default TTL via `expirationTime` and auto-flush via `flushAfter`).
-- **Advanced logging and statistics:** monitor hits/misses and average times (*coming soon*).
+- Multiple storage drivers: file system, databases (MySQL, PostgreSQL, SQLite), Redis and in-memory arrays.
+- TTL, namespaces and tags for organization and invalidation.
+- Auto-flush support with `flushAfter`.
+- Optional compression and encryption.
+- Formatter helper for JSON/array/object output.
 
 ## Requirements
 
 - PHP 8.0+
-- Optional extensions: PDO drivers for MySQL, PostgreSQL or SQLite
-- Redis server and `predis/predis` if using the Redis driver
+- PDO drivers for database backends
+- Redis server when using the Redis driver
 
 ## Installation
-
-Install via [Composer](https://getcomposer.org):
 
 ```sh
 composer require silviooosilva/cacheer-php
@@ -41,13 +34,30 @@ composer require silviooosilva/cacheer-php
 
 ## Configuration
 
-Copy the example environment file and adjust the settings for your environment:
+Copy the example environment file and adjust as needed:
 
 ```sh
 cp .env.example .env
 ```
 
-Environment variables control database and Redis connections. See [Configuration](https://github.com/CacheerPHP/docs/blob/main/en/guides/configuration.md) for the full list.
+Minimum variables:
+
+```env
+DB_CONNECTION=sqlite
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+```
+
+For MySQL/PostgreSQL:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=cacheer_db
+DB_USERNAME=root
+DB_PASSWORD=secret
+```
 
 ## Quick start
 
@@ -56,56 +66,64 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
 
-$key   = 'user_profile_1234';
-$value = ['id' => 123, 'name' => 'John Doe'];
-
-// Configure cache and driver statically
 Cacheer::setConfig()->setTimeZone('UTC');
 Cacheer::setDriver()->useArrayDriver();
 
-// Static usage with boolean return
-Cacheer::putCache($key, $value);
-if (Cacheer::has($key)) {
-    $cached = Cacheer::getCache($key);
-    var_dump($cached);
+Cacheer::putCache('user:1', ['id' => 1, 'name' => 'John']);
+if (Cacheer::has('user:1')) {
+    $user = Cacheer::getCache('user:1');
 }
+```
 
-// Dynamic usage and isSuccess()
+File driver with options:
+
+```php
 $cache = new Cacheer([
     'cacheDir' => __DIR__ . '/cache',
+    'loggerPath' => __DIR__ . '/cacheer.log',
+    'expirationTime' => '1 hour',
+    'flushAfter' => '1 day',
 ]);
-$cache->has($key);
-if ($cache->isSuccess()) {
-    $cached = $cache->getCache($key);
-    var_dump($cached);
-} else {
-    echo $cache->getMessage();
-}
+```
 
-// Alternatively, check the state via isSuccess()
-$cache->has($key);
-if ($cache->isSuccess()) {
-    $cached = $cache->getCache($key);
-    var_dump($cached);
-}
+## Drivers
+
+```php
+Cacheer::setDriver()->useFileDriver();
+Cacheer::setDriver()->useDatabaseDriver();
+Cacheer::setDriver()->useRedisDriver();
+Cacheer::setDriver()->useArrayDriver();
+```
+
+## Return contract
+
+- `putCache`, `appendCache`, `clearCache`, `flushCache`, `renewCache`, `putMany`, `tag`, `flushTag` return `bool`.
+- `has` returns `bool`.
+- `getCache` returns `mixed|null` (or `CacheDataFormatter` when formatter is enabled).
+- `getMany` returns `array` (or `CacheDataFormatter` when formatter is enabled).
+- `getAll` returns `array` (or `CacheDataFormatter` when formatter is enabled).
+- `getMessage` returns `string`; `isSuccess` returns `bool`.
+
+Formatter usage:
+
+```php
+$cache->useFormatter();
+$json = $cache->getCache('user:1')->toJson();
+```
+
+## Testing
+
+```sh
+vendor/bin/phpunit
 ```
 
 ## Documentation
 
 Full documentation is available at [CacheerPHP Documentation](https://github.com/CacheerPHP/docs).
 
-
-## Testing
-
-After installing dependencies, run the test suite with:
-
-```sh
-vendor/bin/phpunit
-```
-
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request on GitHub.
+Contributions are welcome. Please open an issue or submit a pull request.
 
 ## License
 

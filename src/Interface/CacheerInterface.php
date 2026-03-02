@@ -16,7 +16,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      * @param string $cacheKey Unique item key
      * @param mixed $cacheData Data to be appended (serializable)
      * @param string $namespace Namespace for organization
-     * @return mixed True on success, false on failure
+     * @return bool True on success, false on failure
      */
     public function appendCache(string $cacheKey, mixed $cacheData, string $namespace = '');
     
@@ -40,7 +40,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      * Gets all items in a specific namespace.
      *
      * @param string $namespace Namespace for organization
-     * @return CacheDataFormatter|mixed Returns a formatter with all items in the namespace
+     * @return array Returns all items in the namespace
      */
     public function getAll(string $namespace = '');
 
@@ -50,7 +50,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      * @param string $cacheKey Unique item key
      * @param string $namespace Namespace for organization
      * @param string|int $ttl Lifetime in seconds (default: 3600)
-     * @return mixed Returns the cached data or null if not found
+     * @return mixed|null Returns the cached data or null if not found
      */
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600);
 
@@ -60,7 +60,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      * @param array $cacheKeys Array of item keys
      * @param string $namespace Namespace for organization
      * @param string|int $ttl Lifetime in seconds (default: 3600)
-     * @return CacheDataFormatter|mixed Returns a formatter with the retrieved items
+     * @return array Returns the retrieved items
      */
     public function getMany(array $cacheKeys, string $namespace = '', string|int $ttl = 3600);
 
@@ -90,7 +90,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      * @param array $items Array of items to be stored, where keys are cache keys and values are cache data
      * @param string $namespace Namespace for organization
      * @param int $batchSize Number of items to store in each batch (default: 100)
-     * @return bool True on success, false on failure
+     * @return void
      */
     public function putMany(array $items, string $namespace = '', int $batchSize = 100);
 
@@ -100,7 +100,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      * @param string $cacheKey Unique item key
      * @param int|string $ttl Lifetime in seconds (default: 3600)
      * @param string $namespace Namespace for organization
-     * @return bool True on success, false on failure
+     * @return void
      */
     public function renewCache(string $cacheKey, int | string $ttl, string $namespace = '');
 
@@ -109,7 +109,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      *
      * @param string $tag
      * @param string ...$keys One or more cache keys
-     * @return mixed
+     * @return bool
      */
     public function tag(string $tag, string ...$keys);
 
@@ -117,7 +117,7 @@ interface CacheerInterface extends CacheReadStoreInterface, CacheWriteStoreInter
      * Flushes all cache items associated with a tag.
      *
      * @param string $tag
-     * @return mixed
+     * @return void
      */
     public function flushTag(string $tag);
 }

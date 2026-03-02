@@ -10,7 +10,7 @@ interface CacheReadStoreInterface
      * @param string $cacheKey
      * @param string $namespace
      * @param string|int $ttl
-     * @return mixed
+     * @return mixed|null
      */
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600);
 
@@ -20,7 +20,7 @@ interface CacheReadStoreInterface
      * @param array $cacheKeys
      * @param string $namespace
      * @param string|int $ttl
-     * @return mixed
+     * @return array
      */
     public function getMany(array $cacheKeys, string $namespace = '', string|int $ttl = 3600);
 
@@ -28,7 +28,7 @@ interface CacheReadStoreInterface
      * Gets all items in a specific namespace.
      * 
      * @param string $namespace
-     * @return mixed
+     * @return array
      */
     public function getAll(string $namespace = '');
 
