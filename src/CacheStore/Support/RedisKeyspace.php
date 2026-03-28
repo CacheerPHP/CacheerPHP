@@ -8,17 +8,21 @@ use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
  * Handles namespacing and TTL resolution for Redis cache keys.
  */
 final class RedisKeyspace
-{   
-    /** @var string */
+{
+    /**
+     * @var string
+     */
     private string $namespace;
 
-    /** @var int|null */
+    /**
+     * @var int|null
+     */
     private ?int $defaultTTL;
 
     /**
      * @param string $namespace
      * @param int|null $defaultTTL
-     * 
+     *
      * @return void
      */
     public function __construct(string $namespace = '', ?int $defaultTTL = null)
@@ -30,7 +34,7 @@ final class RedisKeyspace
     /**
      * @param string $key
      * @param string $namespace
-     * 
+     *
      * @return string
      */
     public function build(string $key, string $namespace = ''): string
@@ -40,7 +44,7 @@ final class RedisKeyspace
 
     /**
      * @param string $tag
-     * 
+     *
      * @return string
      */
     public function tagKey(string $tag): string
@@ -50,7 +54,7 @@ final class RedisKeyspace
 
     /**
      * @param string|int|null $ttl
-     * 
+     *
      * @return int|null
      */
     public function resolveTTL(string|int|null $ttl): ?int

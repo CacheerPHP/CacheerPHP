@@ -9,16 +9,24 @@ use Silviooosilva\CacheerPhp\Utils\CacheLogger;
  */
 final class OperationStatus
 {
-    /** @var string */
+    /**
+     * @var string
+     */
     private string $message = '';
 
-    /** @var bool */
+    /**
+     * @var bool
+     */
     private bool $success = false;
 
-    /** @var CacheLogger */
+    /**
+     * @var CacheLogger
+     */
     private CacheLogger $logger;
 
-    /** @var string */
+    /**
+     * @var string
+     */
     private string $driverLabel;
 
     /**
@@ -35,7 +43,7 @@ final class OperationStatus
      * @param string $message
      * @param bool $success
      * @param string $level
-     * 
+     *
      * @return void
      */
     public function record(string $message, bool $success, string $level = 'debug'): void
@@ -59,7 +67,7 @@ final class OperationStatus
     /**
      * @param string $message
      * @param bool $success
-     * 
+     *
      * @return void
      */
     public function setState(string $message, bool $success): void

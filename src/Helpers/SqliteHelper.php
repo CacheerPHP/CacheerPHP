@@ -1,7 +1,6 @@
 <?php
 
 namespace Silviooosilva\CacheerPhp\Helpers;
-use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 
 /**
  * Class SqliteHelper
@@ -10,10 +9,9 @@ use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
  */
 class SqliteHelper
 {
-
     /**
     * Gets the path to the SQLite database file.
-    *  
+    *
     * @param string $database
     * @param ?string $path
     * @return string
@@ -35,20 +33,20 @@ class SqliteHelper
         $rootPath = EnvHelper::getRootPath();
         $databaseDir = is_null($path) ? $rootPath . '/database' : $rootPath . '/' . $path;
         $dbFile = $databaseDir . '/' . self::checkExtension($database);
-        
+
         if (!is_dir($databaseDir)) {
             self::createDatabaseDir($databaseDir);
         }
         if (!file_exists($dbFile)) {
             self::createDatabaseFile($dbFile);
         }
-        
+
         return $dbFile;
     }
 
     /**
     * Creates the database directory if it does not exist.
-    * 
+    *
     * @param string $databaseDir
     * @return void
     */

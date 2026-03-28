@@ -43,8 +43,9 @@ class Psr16CacheAdapter implements CacheInterface
      */
     public function __construct(
         private readonly Cacheer $cache,
-        private readonly string $namespace = ''
-    ) {}
+        private readonly string $namespace = '',
+    ) {
+    }
 
     /**
      * Fetches a value from the cache.
@@ -141,8 +142,8 @@ class Psr16CacheAdapter implements CacheInterface
 
         foreach ($keys as $key) {
             $this->validateKey($key);
-            $value          = $this->cache->getCache($key, $this->namespace);
-            $results[$key]  = $this->cache->isSuccess() ? $value : $default;
+            $value = $this->cache->getCache($key, $this->namespace);
+            $results[$key] = $this->cache->isSuccess() ? $value : $default;
         }
 
         return $results;
@@ -159,7 +160,7 @@ class Psr16CacheAdapter implements CacheInterface
     public function setMultiple(iterable $values, int|DateInterval|null $ttl = null): bool
     {
         $ttlSeconds = $this->normalizeTtl($ttl);
-        $success    = true;
+        $success = true;
 
         foreach ($values as $key => $value) {
             $this->validateKey($key);
@@ -226,7 +227,7 @@ class Psr16CacheAdapter implements CacheInterface
         }
 
         if ($ttl instanceof DateInterval) {
-            $now    = new DateTimeImmutable();
+            $now = new DateTimeImmutable();
             $future = $now->add($ttl);
             return max(0, $future->getTimestamp() - $now->getTimestamp());
         }

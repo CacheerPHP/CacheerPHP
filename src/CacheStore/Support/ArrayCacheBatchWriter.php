@@ -7,7 +7,9 @@ namespace Silviooosilva\CacheerPhp\CacheStore\Support;
  */
 final class ArrayCacheBatchWriter
 {
-    /** @var int */
+    /**
+     * @var int
+     */
     private int $batchSize;
 
     /**

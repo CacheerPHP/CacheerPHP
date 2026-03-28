@@ -18,7 +18,6 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  */
 class CacheConfig
 {
-
     /**
      * @var Cacheer
      */
@@ -37,7 +36,7 @@ class CacheConfig
 
     /**
      * Sets the default timezone for the application.
-     * 
+     *
      * @param string $timezone
      * @return $this
      */
@@ -51,7 +50,7 @@ class CacheConfig
 
     /**
      * Sets the cache driver for the application.
-     * 
+     *
      * @return CacheDriver
      */
     public function setDriver(): CacheDriver
@@ -61,23 +60,23 @@ class CacheConfig
 
     /**
      * Sets the logger path for the cache driver.
-     * 
+     *
      * @param string $path
      * @return Cacheer
      */
     public function setLoggerPath(string $path): Cacheer
     {
-        
+
         $cacheDriver = $this->setDriver();
         $cacheDriver->logPath = $path;
 
         $cacheDriverInstance = $this->cacheer->getCacheStore();
 
         return match (get_class($cacheDriverInstance)) {
-            FileCacheStore::class => $cacheDriver->useFileDriver(),
+            FileCacheStore::class  => $cacheDriver->useFileDriver(),
             RedisCacheStore::class => $cacheDriver->useRedisDriver(),
             ArrayCacheStore::class => $cacheDriver->useArrayDriver(),
-            default => $cacheDriver->useDatabaseDriver(),
+            default                => $cacheDriver->useDatabaseDriver(),
         };
     }
 

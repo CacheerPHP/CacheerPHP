@@ -259,7 +259,7 @@ class CacheMutator
         }
 
         if ($ttl instanceof DateInterval) {
-            $now    = new \DateTimeImmutable();
+            $now = new \DateTimeImmutable();
             $future = $now->add($ttl);
             return max(0, $future->getTimestamp() - $now->getTimestamp());
         }

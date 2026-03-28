@@ -14,7 +14,6 @@ use Silviooosilva\CacheerPhp\Exceptions\ConnectionException;
  */
 class ConnectionFactory
 {
-
     /**
      * Creates a new PDO instance based on the specified database configuration.
      *

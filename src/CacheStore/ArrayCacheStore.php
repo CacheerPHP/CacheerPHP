@@ -2,14 +2,14 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore;
 
-use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
-use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
 use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheBatchWriter;
 use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheCodec;
 use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheKeyspace;
 use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
+use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
+use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Utils\CacheLogger;
 
 /**
  * Class ArrayCacheStore
@@ -29,16 +29,24 @@ class ArrayCacheStore implements CacheerInterface
      */
     private array $arrayStore = [];
 
-    /** @var OperationStatus */
+    /**
+     * @var OperationStatus
+     */
     private OperationStatus $status;
 
-    /** @var ArrayCacheKeyspace */
+    /**
+     * @var ArrayCacheKeyspace
+     */
     private ArrayCacheKeyspace $keyspace;
 
-    /** @var ArrayCacheCodec */
+    /**
+     * @var ArrayCacheCodec
+     */
     private ArrayCacheCodec $codec;
 
-    /** @var ArrayCacheTagIndex */
+    /**
+     * @var ArrayCacheTagIndex
+     */
     private ArrayCacheTagIndex $tagIndex;
 
     /**
@@ -49,9 +57,9 @@ class ArrayCacheStore implements CacheerInterface
     public function __construct(string $logPath)
     {
         $logger = new CacheLogger($logPath);
-        $this->status   = new OperationStatus($logger, 'array');
+        $this->status = new OperationStatus($logger, 'array');
         $this->keyspace = new ArrayCacheKeyspace();
-        $this->codec    = new ArrayCacheCodec();
+        $this->codec = new ArrayCacheCodec();
         $this->tagIndex = new ArrayCacheTagIndex($this->keyspace, $this->status);
     }
 
@@ -77,7 +85,7 @@ class ArrayCacheStore implements CacheerInterface
         }
 
         $this->arrayStore[$arrayStoreKey]['cacheData'] = $this->codec->encode($cacheData);
-        $this->status->record("Cache appended successfully", true);
+        $this->status->record('Cache appended successfully', true);
         return true;
     }
 
@@ -92,7 +100,7 @@ class ArrayCacheStore implements CacheerInterface
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
         unset($this->arrayStore[$arrayStoreKey]);
-        $this->status->record("Cache cleared successfully", true);
+        $this->status->record('Cache cleared successfully', true);
     }
 
     /**
@@ -117,7 +125,7 @@ class ArrayCacheStore implements CacheerInterface
     {
         $this->arrayStore = [];
         $this->tagIndex->reset();
-        $this->status->record("Cache flushed successfully", true);
+        $this->status->record('Cache flushed successfully', true);
     }
 
     /**
@@ -149,10 +157,10 @@ class ArrayCacheStore implements CacheerInterface
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600): mixed
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
-        $cacheData     = $this->arrayStore[$arrayStoreKey] ?? null;
+        $cacheData = $this->arrayStore[$arrayStoreKey] ?? null;
 
         if ($cacheData === null) {
-            $this->status->record("cacheData not found, does not exist or has expired.", false);
+            $this->status->record('cacheData not found, does not exist or has expired.', false);
             return null;
         }
 
@@ -162,7 +170,7 @@ class ArrayCacheStore implements CacheerInterface
             return null;
         }
 
-        $this->status->record("Cache retrieved successfully", true);
+        $this->status->record('Cache retrieved successfully', true);
         return $this->codec->decode($cacheData['cacheData']);
     }
 
@@ -181,10 +189,10 @@ class ArrayCacheStore implements CacheerInterface
             }
         }
         if (!empty($results)) {
-            $this->status->record("Cache retrieved successfully", true);
+            $this->status->record('Cache retrieved successfully', true);
             return $results;
         }
-        $this->status->record("No cache data found for the provided namespace", false, 'info');
+        $this->status->record('No cache data found for the provided namespace', false, 'info');
         return $results;
     }
 
@@ -208,10 +216,10 @@ class ArrayCacheStore implements CacheerInterface
             }
         }
         if ($hasData) {
-            $this->status->record("Cache retrieved successfully", true);
+            $this->status->record('Cache retrieved successfully', true);
             return $results;
         }
-        $this->status->record("No cache data found for the provided keys", false, 'info');
+        $this->status->record('No cache data found for the provided keys', false, 'info');
         return $results;
     }
 
@@ -225,14 +233,14 @@ class ArrayCacheStore implements CacheerInterface
     public function has(string $cacheKey, string $namespace = ''): bool
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
-        $entry  = $this->arrayStore[$arrayStoreKey] ?? null;
+        $entry = $this->arrayStore[$arrayStoreKey] ?? null;
         $exists = $entry !== null && !$this->keyspace->isExpired($entry);
 
         $this->status->record(
             $exists
                 ? "Cache key: {$cacheKey} exists and it's available!"
                 : "Cache key: {$cacheKey} does not exist or it's expired!",
-            $exists
+            $exists,
         );
 
         return $exists;
@@ -299,7 +307,7 @@ class ArrayCacheStore implements CacheerInterface
             'expirationTime' => time() + (int) $ttl,
         ];
 
-        $this->status->record("Cache stored successfully", true);
+        $this->status->record('Cache stored successfully', true);
         return true;
     }
 

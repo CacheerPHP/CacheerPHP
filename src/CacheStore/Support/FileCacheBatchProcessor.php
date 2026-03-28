@@ -13,7 +13,6 @@ use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
  */
 class FileCacheBatchProcessor
 {
-
     /**
      * FileCacheBatchProcessor constructor.
      *

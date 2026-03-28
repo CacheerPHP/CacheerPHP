@@ -13,7 +13,6 @@ use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
  */
 class FileCacheManager
 {
-
     /**
      * @param string $dir
      * @return void
@@ -80,7 +79,7 @@ class FileCacheManager
     {
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
+            RecursiveIteratorIterator::CHILD_FIRST,
         );
         foreach ($iterator as $file) {
             $path = $file->getPathname();
@@ -95,7 +94,7 @@ class FileCacheManager
      */
     public function serialize(mixed $data, bool $serialize = true): mixed
     {
-        if($serialize) {
+        if ($serialize) {
             return serialize($data);
         }
         return unserialize($data);
@@ -114,7 +113,7 @@ class FileCacheManager
 
         $files = [];
         $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS)
+            new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
         );
 
         foreach ($iterator as $file) {

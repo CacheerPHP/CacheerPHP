@@ -2,7 +2,6 @@
 
 namespace Silviooosilva\CacheerPhp\Helpers;
 
-use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Exceptions\CacheDatabaseException;
 
 /**
@@ -14,7 +13,7 @@ class CacheDatabaseHelper
 {
     /**
      * Validates a cache item.
-     * 
+     *
      * @param array $item
      * @return void
      */
@@ -22,7 +21,7 @@ class CacheDatabaseHelper
     {
         CacheerHelper::validateCacheItem(
             $item,
-            fn($msg) => CacheDatabaseException::create($msg)
+            fn ($msg) => CacheDatabaseException::create($msg),
         );
     }
 
@@ -39,7 +38,7 @@ class CacheDatabaseHelper
 
     /**
      * Generates an array identifier for cache data.
-     * 
+     *
      * @param mixed $currentCacheData
      * @param mixed $cacheData
      * @return array
@@ -49,4 +48,3 @@ class CacheDatabaseHelper
         return CacheerHelper::arrayIdentifier($currentCacheData, $cacheData);
     }
 }
-

@@ -98,34 +98,33 @@ class FileCacheStoreTest extends TestCase
         $this->assertFileDoesNotExist($cacheFile2);
     }
 
-
-        private function removeDirectoryRecursively($dir)
-        {
+    private function removeDirectoryRecursively($dir)
+    {
         if (!is_dir($dir)) {
             return;
         }
         $items = scandir($dir);
         foreach ($items as $item) {
             if ($item === '.' || $item === '..') {
-            continue;
+                continue;
             }
             $path = $dir . DIRECTORY_SEPARATOR . $item;
             if (is_dir($path)) {
-            $this->removeDirectoryRecursively($path);
+                $this->removeDirectoryRecursively($path);
             } else {
-            unlink($path);
+                unlink($path);
             }
         }
         rmdir($dir);
-        }
+    }
 
-        public function testUseDefaultDriverCreatesCacheDirInProjectRoot()
-        {
+    public function testUseDefaultDriverCreatesCacheDirInProjectRoot()
+    {
         $cacheer = new Cacheer();
         $driver = new CacheDriver($cacheer);
 
         $projectRoot = EnvHelper::getRootPath();
-        $expectedCacheDir = $projectRoot . DIRECTORY_SEPARATOR . "CacheerPHP" . DIRECTORY_SEPARATOR . "Cache";
+        $expectedCacheDir = $projectRoot . DIRECTORY_SEPARATOR . 'CacheerPHP' . DIRECTORY_SEPARATOR . 'Cache';
 
         if (is_dir($expectedCacheDir)) {
             $this->removeDirectoryRecursively($expectedCacheDir);
@@ -138,10 +137,10 @@ class FileCacheStoreTest extends TestCase
         if (is_dir($expectedCacheDir)) {
             $this->removeDirectoryRecursively($expectedCacheDir);
         }
-        }
+    }
 
-        public function testPutCacheWithNamespace()
-        {
+    public function testPutCacheWithNamespace()
+    {
         $cacheKey = 'namespace_key';
         $data = 'namespace_data';
         $namespace = 'my_namespace';
@@ -151,10 +150,10 @@ class FileCacheStoreTest extends TestCase
 
         $cachedData = $this->cache->getCache($cacheKey, $namespace);
         $this->assertEquals($data, $cachedData);
-        }
+    }
 
-        public function testClearCacheWithNamespace()
-        {
+    public function testClearCacheWithNamespace()
+    {
         $cacheKey = 'namespace_key_clear';
         $data = 'namespace_data_clear';
         $namespace = 'clear_namespace';
@@ -168,10 +167,10 @@ class FileCacheStoreTest extends TestCase
         $cachedData = $this->cache->getCache($cacheKey, $namespace);
         $this->assertFalse($this->cache->isSuccess());
         $this->assertNull($cachedData);
-        }
+    }
 
-        public function testFlushCacheRemovesNamespacedFiles()
-        {
+    public function testFlushCacheRemovesNamespacedFiles()
+    {
         $cacheKey = 'ns_flush_key';
         $data = 'ns_flush_data';
         $namespace = 'flush_namespace';
@@ -184,10 +183,10 @@ class FileCacheStoreTest extends TestCase
         $cachedData = $this->cache->getCache($cacheKey, $namespace);
         $this->assertFalse($this->cache->isSuccess());
         $this->assertNull($cachedData);
-        }
+    }
 
-        public function testAppendCacheWithDifferentTypes()
-        {
+    public function testAppendCacheWithDifferentTypes()
+    {
         $cacheKey = 'append_type_key';
         $initialData = ['a' => 1];
         $additionalData = ['b' => 2];
@@ -200,10 +199,10 @@ class FileCacheStoreTest extends TestCase
         $this->cache->appendCache($cacheKey, ['c' => 'string']);
         $expectedData['c'] = 'string';
         $this->assertEquals($expectedData, $this->cache->getCache($cacheKey));
-        }
+    }
 
-        public function test_tag_and_flush_tag_in_file_driver()
-        {
+    public function test_tag_and_flush_tag_in_file_driver()
+    {
         $k1 = 'tag_key_1';
         $k2 = 'tag_key_2';
         $this->cache->putCache($k1, 'v1');
@@ -218,10 +217,10 @@ class FileCacheStoreTest extends TestCase
 
         $this->assertNull($this->cache->getCache($k1));
         $this->assertNull($this->cache->getCache($k2));
-        }
+    }
 
-        public function test_tag_with_namespace_and_flush_tag_in_file_driver()
-        {
+    public function test_tag_with_namespace_and_flush_tag_in_file_driver()
+    {
         $ns = 'nsA';
         $k1 = 'k1';
         $k2 = 'k2';
@@ -234,6 +233,6 @@ class FileCacheStoreTest extends TestCase
         $this->cache->flushTag('groupNS');
         $this->assertNull($this->cache->getCache($k1, $ns));
         $this->assertNull($this->cache->getCache($k2, $ns));
-        }
+    }
 
 }

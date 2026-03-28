@@ -8,8 +8,10 @@ use Silviooosilva\CacheerPhp\Helpers\CacheRedisHelper;
  * Handles chunked writes to Redis for large batches.
  */
 final class RedisBatchWriter
-{   
-    /** @var int */
+{
+    /**
+     * @var int
+     */
     private int $batchSize;
 
     /**
@@ -24,7 +26,7 @@ final class RedisBatchWriter
      * @param callable $putItem
      * @param array $items
      * @param string $namespace
-     * 
+     *
      * @return void
      */
     public function write(array $items, string $namespace, callable $putItem): void
@@ -45,7 +47,7 @@ final class RedisBatchWriter
      * @param array $item
      * @param string $namespace
      * @param callable $putItem
-     * 
+     *
      * @return void
      */
     private function processItem(array $item, string $namespace, callable $putItem): void

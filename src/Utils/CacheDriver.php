@@ -2,12 +2,11 @@
 
 namespace Silviooosilva\CacheerPhp\Utils;
 
-use Exception;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\CacheStore\ArrayCacheStore;
+use Silviooosilva\CacheerPhp\CacheStore\DatabaseCacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\FileCacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\RedisCacheStore;
-use Silviooosilva\CacheerPhp\CacheStore\DatabaseCacheStore;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 
@@ -21,7 +20,6 @@ use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
  */
 class CacheDriver
 {
-
     /**
     * @var Cacheer
     */
@@ -107,11 +105,11 @@ class CacheDriver
 
         if (!isset($option)) {
             $projectRoot = EnvHelper::getRootPath();
-            $cacheDir = $projectRoot . DIRECTORY_SEPARATOR . "CacheerPHP" . DIRECTORY_SEPARATOR . "Cache";
+            $cacheDir = $projectRoot . DIRECTORY_SEPARATOR . 'CacheerPHP' . DIRECTORY_SEPARATOR . 'Cache';
             if ($this->isDir($cacheDir)) {
                 $this->cacheer->setOption('cacheDir', $cacheDir);
             } else {
-                throw CacheFileException::create("Failed to create cache directory: " . $cacheDir);
+                throw CacheFileException::create('Failed to create cache directory: ' . $cacheDir);
             }
         }
         $this->useFileDriver();
@@ -126,9 +124,9 @@ class CacheDriver
     */
     private function isDir(mixed $dirName): bool
     {
-      if (is_dir($dirName)) {
-          return true;
-      }
-      return mkdir($dirName, 0755, true);
+        if (is_dir($dirName)) {
+            return true;
+        }
+        return mkdir($dirName, 0755, true);
     }
 }

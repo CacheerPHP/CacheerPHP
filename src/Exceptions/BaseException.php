@@ -9,81 +9,81 @@ use JsonSerializable;
 
 class BaseException extends Exception implements JsonSerializable
 {
-    /** 
+    /**
      * Details about the exception.
-     * 
-     * @var array 
+     *
+     * @var array
      **/
     protected array $details;
 
-    public function __construct(string $message = "", int $code = 0, ?Exception $previous = null, array $details = [])
+    public function __construct(string $message = '', int $code = 0, ?Exception $previous = null, array $details = [])
     {
         parent::__construct($message, $code, $previous);
         $this->details = $details;
     }
 
-    /** 
+    /**
      * Get the details of the exception.
-     * 
-     * @return array 
+     *
+     * @return array
      **/
     public function getDetails()
     {
         return $this->details;
     }
 
-    /** 
+    /**
      * Set the details of the exception.
-     * 
-     * @param array $details 
+     *
+     * @param array $details
      * */
     public function setDetails(array $details)
     {
         $this->details = $details;
     }
 
-    /** 
+    /**
      * Convert the exception to an array representation.
-     * 
-     * @return array 
+     *
+     * @return array
      * */
     public function toArray()
     {
         return [
-            'type' => static::class,
+            'type'    => static::class,
             'message' => $this->getMessage(),
-            'code' => $this->getCode(),
+            'code'    => $this->getCode(),
             'details' => $this->getDetails(),
-            'file' => $this->getFile(),
-            'line' => $this->getLine(),
-            'trace' => $this->getTrace()
+            'file'    => $this->getFile(),
+            'line'    => $this->getLine(),
+            'trace'   => $this->getTrace(),
         ];
     }
 
-    /** 
+    /**
      * Convert the exception to a JSON serializable format.
-     * 
-     * @return array 
+     *
+     * @return array
      * */
     public function jsonSerialize(): array
     {
         return $this->toArray();
     }
 
-    /** 
+    /**
      * Convert the exception to a JSON string.
-     * 
-     * @return string 
+     *
+     * @return string
      * */
     public function toJson(int $options = 0)
     {
         return json_encode($this->toArray(), $options | JSON_THROW_ON_ERROR);
     }
 
-    /** 
+    /**
      * Convert the exception to a string representation.
-     * 
-     * @return string 
+     *
+     * @return string
      * */
     public function __toString()
     {
@@ -93,7 +93,7 @@ class BaseException extends Exception implements JsonSerializable
             $this->getMessage(),
             $this->getFile(),
             $this->getLine(),
-            json_encode($this->getDetails(), JSON_PRETTY_PRINT)
+            json_encode($this->getDetails(), JSON_PRETTY_PRINT),
         );
     }
 }

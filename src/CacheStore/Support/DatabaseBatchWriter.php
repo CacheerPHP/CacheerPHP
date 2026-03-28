@@ -9,7 +9,9 @@ use Silviooosilva\CacheerPhp\Helpers\CacheDatabaseHelper;
  */
 final class DatabaseBatchWriter
 {
-    /** @var int */
+    /**
+     * @var int
+     */
     private int $batchSize;
 
     /**

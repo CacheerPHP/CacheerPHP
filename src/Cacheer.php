@@ -2,16 +2,15 @@
 
 namespace Silviooosilva\CacheerPhp;
 
+use BadMethodCallException;
 use Closure;
-use DateInterval;
-use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use RuntimeException;
 use Silviooosilva\CacheerPhp\Helpers\CacheConfig;
+use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Service\CacheMutator;
+use Silviooosilva\CacheerPhp\Service\CacheRetriever;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
 use Silviooosilva\CacheerPhp\Utils\CacheDriver;
-use RuntimeException;
-use Silviooosilva\CacheerPhp\Service\CacheRetriever;
-use Silviooosilva\CacheerPhp\Service\CacheMutator;
-use BadMethodCallException;
 
 /**
  * Class Cacheer
@@ -73,13 +72,19 @@ final class Cacheer
     private string $message;
     private bool $success;
 
-    /** @var bool Whether the formatter is enabled for output. */
+    /**
+     * @var bool Whether the formatter is enabled for output.
+     */
     private bool $formatted = false;
 
-    /** @var bool Whether gzip compression is applied to stored values. */
+    /**
+     * @var bool Whether gzip compression is applied to stored values.
+     */
     private bool $compression = false;
 
-    /** @var string|null AES-256-CBC encryption key, or null if disabled. */
+    /**
+     * @var string|null AES-256-CBC encryption key, or null if disabled.
+     */
     private ?string $encryptionKey = null;
 
     /**
@@ -122,10 +127,10 @@ final class Cacheer
     public function __construct(array $options = [], bool $formatted = false)
     {
         $this->formatted = $formatted;
-        $this->options   = $options;
+        $this->options = $options;
         $this->retriever = new CacheRetriever($this);
-        $this->mutator   = new CacheMutator($this);
-        $this->config    = new CacheConfig($this);
+        $this->mutator = new CacheMutator($this);
+        $this->config = new CacheConfig($this);
         $this->setDriver()->useDefaultDriver();
     }
 

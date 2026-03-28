@@ -40,7 +40,7 @@ class DatabaseCacheStoreTest extends TestCase
         $cacheData = ['name' => 'Jane Doe', 'email' => 'jane@example.com'];
 
         $this->cache->putCache($cacheKey, $cacheData, '', 3600);
-        $this->assertEquals("Cache Stored Successfully", $this->cache->getMessage());
+        $this->assertEquals('Cache Stored Successfully', $this->cache->getMessage());
 
         $result = $this->cache->getCache($cacheKey);
 
@@ -54,7 +54,7 @@ class DatabaseCacheStoreTest extends TestCase
         $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
 
         $this->cache->putCache($cacheKey, $cacheData, '', -3600);
-        $this->assertEquals("Cache Stored Successfully", $this->cache->getMessage());
+        $this->assertEquals('Cache Stored Successfully', $this->cache->getMessage());
 
         $this->assertEmpty($this->cache->getCache($cacheKey));
         $this->assertFalse($this->cache->isSuccess());
@@ -68,9 +68,8 @@ class DatabaseCacheStoreTest extends TestCase
 
         $expirationTime = date('Y-m-d H:i:s', time() + 3600);
 
-
         $db = Connect::getInstance();
-        $query = $db->prepare("INSERT INTO cacheer_table (cacheKey, cacheData, cacheNamespace, expirationTime) VALUES (?, ?, ?, ?)");
+        $query = $db->prepare('INSERT INTO cacheer_table (cacheKey, cacheData, cacheNamespace, expirationTime) VALUES (?, ?, ?, ?)');
         $query->bindValue(1, $cacheKey);
         $query->bindValue(2, serialize($initialCacheData));
         $query->bindValue(3, '');
@@ -79,10 +78,10 @@ class DatabaseCacheStoreTest extends TestCase
         $this->assertTrue($query->execute());
 
         $this->cache->appendCache($cacheKey, $newCacheData);
-        $this->assertEquals("Cache updated successfully.", $this->cache->getMessage());
+        $this->assertEquals('Cache updated successfully.', $this->cache->getMessage());
 
         $driver = Connect::getInstance()->getAttribute(PDO::ATTR_DRIVER_NAME);
-        $nowFunction = ($driver === 'sqlite') ? "DATETIME('now', 'localtime')" : "NOW()";
+        $nowFunction = ($driver === 'sqlite') ? "DATETIME('now', 'localtime')" : 'NOW()';
 
         $query = $db->prepare("SELECT cacheData FROM cacheer_table WHERE cacheKey = ? AND cacheNamespace = ? AND expirationTime > $nowFunction");
         $query->bindValue(1, $cacheKey);
@@ -100,23 +99,23 @@ class DatabaseCacheStoreTest extends TestCase
 
         $items = [
             [
-                'cacheKey' => 'user_1_profile',
+                'cacheKey'  => 'user_1_profile',
                 'cacheData' => [
                     ['name' => 'John Doe', 'email' => 'john@example.com'],
                     ['name' => 'John Doe', 'email' => 'john@example.com'],
                     ['name' => 'John Doe', 'email' => 'john@example.com'],
-                    ['name' => 'John Doe', 'email' => 'john@example.com']
-                ]
+                    ['name' => 'John Doe', 'email' => 'john@example.com'],
+                ],
             ],
             [
-                'cacheKey' => 'user_2_profile',
+                'cacheKey'  => 'user_2_profile',
                 'cacheData' => [
                     ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
                     ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
                     ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
-                    ['name' => 'Jane Doe', 'email' => 'jane@example.com']
-                ]
-            ]
+                    ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
+                ],
+            ],
         ];
 
         $this->cache->putMany($items);
@@ -153,8 +152,8 @@ class DatabaseCacheStoreTest extends TestCase
     {
         $this->cache->useFormatter();
 
-        $cacheKey = "key_json";
-        $cacheData = "data_json";
+        $cacheKey = 'key_json';
+        $cacheData = 'data_json';
 
         $this->cache->putCache($cacheKey, $cacheData);
         $this->assertTrue($this->cache->isSuccess());
@@ -169,8 +168,8 @@ class DatabaseCacheStoreTest extends TestCase
 
         $this->cache->useFormatter();
 
-        $cacheKey = "key_array";
-        $cacheData = "data_array";
+        $cacheKey = 'key_array';
+        $cacheData = 'data_array';
 
         $this->cache->putCache($cacheKey, $cacheData);
         $this->assertTrue($this->cache->isSuccess());
@@ -184,8 +183,8 @@ class DatabaseCacheStoreTest extends TestCase
     {
         $this->cache->useFormatter();
 
-        $cacheKey = "key_object";
-        $cacheData = ["id" => 123];
+        $cacheKey = 'key_object';
+        $cacheData = ['id' => 123];
 
         $this->cache->putCache($cacheKey, $cacheData);
         $this->assertTrue($this->cache->isSuccess());
@@ -195,22 +194,20 @@ class DatabaseCacheStoreTest extends TestCase
         $this->assertIsObject($cacheOutput);
     }
 
-
     public function testClearCacheDataFromDatabase(): void
     {
         $cacheKey = 'test_key';
         $data = 'test_data';
 
         $this->cache->putCache($cacheKey, $data);
-        $this->assertEquals("Cache Stored Successfully", $this->cache->getMessage());
+        $this->assertEquals('Cache Stored Successfully', $this->cache->getMessage());
 
         $this->cache->clearCache($cacheKey);
         $this->assertTrue($this->cache->isSuccess());
-        $this->assertEquals("Cache deleted successfully!", $this->cache->getMessage());
+        $this->assertEquals('Cache deleted successfully!', $this->cache->getMessage());
 
         $this->assertEmpty($this->cache->getCache($cacheKey));
     }
-
 
     public function testFlushCacheDataFromDatabase(): void
     {
@@ -227,7 +224,7 @@ class DatabaseCacheStoreTest extends TestCase
 
         $this->cache->flushCache();
         $this->assertTrue($this->cache->isSuccess());
-        $this->assertEquals("Flush finished successfully", $this->cache->getMessage());
+        $this->assertEquals('Flush finished successfully', $this->cache->getMessage());
     }
 
     public function test_remember_saves_and_recover_values()
@@ -238,10 +235,9 @@ class DatabaseCacheStoreTest extends TestCase
 
         $this->assertEquals('valor_teste', $value);
 
-        $cachedValue = $this->cache->remember('remember_test_key', 60, function (){
+        $cachedValue = $this->cache->remember('remember_test_key', 60, function () {
             return 'novo_valor';
         });
-
 
         $this->assertEquals('valor_teste', $cachedValue);
     }
@@ -261,7 +257,7 @@ class DatabaseCacheStoreTest extends TestCase
         $this->assertEquals('valor_eterno', $cachedValue);
     }
 
-        public function test_get_and_forget()
+    public function test_get_and_forget()
     {
         $cacheKey = 'cache_key_test';
         $this->cache->putCache($cacheKey, 10);
@@ -284,7 +280,7 @@ class DatabaseCacheStoreTest extends TestCase
 
     public function test_store_if_not_present_with_add_function()
     {
-        $existentKey    = 'cache_key_test';
+        $existentKey = 'cache_key_test';
         $nonExistentKey = 'non_existent_key';
 
         $this->cache->putCache($existentKey, 'existent_data');
@@ -301,8 +297,8 @@ class DatabaseCacheStoreTest extends TestCase
         $this->assertTrue($this->cache->isSuccess());
     }
 
-
-        public function test_increment_function() {
+    public function test_increment_function()
+    {
 
         $cacheKey = 'test_increment';
         $cacheData = 2025;
@@ -320,7 +316,8 @@ class DatabaseCacheStoreTest extends TestCase
 
     }
 
-        public function test_decrement_function() {
+    public function test_decrement_function()
+    {
 
         $cacheKey = 'test_decrement';
         $cacheData = 2027;
@@ -343,7 +340,7 @@ class DatabaseCacheStoreTest extends TestCase
         $cacheItems = [
             'key1' => 'value1',
             'key2' => 'value2',
-            'key3' => 'value3'
+            'key3' => 'value3',
         ];
         foreach ($cacheItems as $key => $value) {
             $this->cache->putCache($key, $value);

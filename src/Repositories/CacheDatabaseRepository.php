@@ -13,18 +13,19 @@ use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
  */
 class CacheDatabaseRepository
 {
-
-    /** @var ?PDO */
+    /**
+     * @var ?PDO
+     */
     private ?PDO $connection = null;
 
-    /** @var string */
+    /**
+     * @var string
+     */
     private string $table = 'cacheer_table';
 
-   
     /**
      * CacheDatabaseRepository constructor.
      * Initializes the database connection using the Connect class.
-     * 
      */
     public function __construct(string $table = 'cacheer_table')
     {
@@ -32,10 +33,9 @@ class CacheDatabaseRepository
         $this->table = $table ?: 'cacheer_table';
     }
 
-
     /**
      * Stores cache data in the database.
-     * 
+     *
      * @param string $cacheKey
      * @param mixed  $cacheData
      * @param string $namespace
@@ -49,13 +49,13 @@ class CacheDatabaseRepository
         }
 
         // Guard against PHP_INT_MAX (forever) overflowing the integer add.
-        $expiresAt      = (int) $ttl >= PHP_INT_MAX ? PHP_INT_MAX : (time() + (int) $ttl);
+        $expiresAt = (int) $ttl >= PHP_INT_MAX ? PHP_INT_MAX : (time() + (int) $ttl);
         $expirationTime = $expiresAt === PHP_INT_MAX ? '9999-12-31 23:59:59' : date('Y-m-d H:i:s', $expiresAt);
         $createdAt = date('Y-m-d H:i:s');
 
         $stmt = $this->connection->prepare(
             "INSERT INTO {$this->table} (cacheKey, cacheData, cacheNamespace, expirationTime, created_at) 
-            VALUES (:cacheKey, :cacheData, :namespace, :expirationTime, :createdAt)"
+            VALUES (:cacheKey, :cacheData, :namespace, :expirationTime, :createdAt)",
         );
         $stmt->bindValue(':cacheKey', $cacheKey);
         $stmt->bindValue(':cacheData', $this->serialize($cacheData));
@@ -68,7 +68,7 @@ class CacheDatabaseRepository
 
     /**
     * Retrieves cache data from the database.
-    * 
+    *
     * @param string $cacheKey
     * @param string $namespace
     * @return mixed
@@ -81,7 +81,7 @@ class CacheDatabaseRepository
         $stmt = $this->connection->prepare(
             "SELECT cacheData FROM {$this->table} 
             WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > $nowFunction
-            LIMIT 1"
+            LIMIT 1",
         );
         $stmt->bindValue(':cacheKey', $cacheKey);
         $stmt->bindValue(':namespace', $namespace);
@@ -103,7 +103,7 @@ class CacheDatabaseRepository
 
         $stmt = $this->connection->prepare(
             "SELECT cacheKey, cacheData FROM {$this->table} 
-            WHERE cacheNamespace = :namespace AND expirationTime > $nowFunction"
+            WHERE cacheNamespace = :namespace AND expirationTime > $nowFunction",
         );
         $stmt->bindValue(':namespace', $namespace);
         $stmt->execute();
@@ -131,7 +131,7 @@ class CacheDatabaseRepository
 
     /**
     * Get Delete query based on the database driver.
-    * 
+    *
     * @return string
     */
     private function getDeleteQueryWithDriver(): string
@@ -145,7 +145,7 @@ class CacheDatabaseRepository
 
     /**
     * Updates an existing cache item in the database.
-    * 
+    *
     * @param string $cacheKey
     * @param mixed  $cacheData
     * @param string $namespace
@@ -165,7 +165,7 @@ class CacheDatabaseRepository
 
     /**
     * Clears a specific cache item from the database.
-    * 
+    *
     * @param string $cacheKey
     * @param string $namespace
     * @return bool
@@ -183,7 +183,7 @@ class CacheDatabaseRepository
 
     /**
     * Gets the query to renew the expiration time of a cache item based on the database driver.
-    *  
+    *
     * @return string
     */
     private function getRenewExpirationQueryWithDriver(): string
@@ -201,7 +201,7 @@ class CacheDatabaseRepository
 
     /**
     * Checks if a cache item is valid based on its key, namespace, and current time.
-    * 
+    *
     * @param string $cacheKey
     * @param string $namespace
     * @param string $currentTime
@@ -212,7 +212,7 @@ class CacheDatabaseRepository
         $stmt = $this->connection->prepare(
             "SELECT 1 FROM {$this->table} 
             WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > :currentTime
-            LIMIT 1"
+            LIMIT 1",
         );
         $stmt->bindValue(':cacheKey', $cacheKey);
         $stmt->bindValue(':namespace', $namespace);
@@ -223,7 +223,7 @@ class CacheDatabaseRepository
 
     /**
     * Renews the expiration time of a cache item.
-    * 
+    *
     * @param string $cacheKey
     * @param string|int $ttl
     * @param string $namespace
@@ -249,7 +249,7 @@ class CacheDatabaseRepository
 
     /**
     * Flushes all cache items from the database.
-    * 
+    *
     * @return bool
     */
     public function flush(): bool
@@ -271,13 +271,13 @@ class CacheDatabaseRepository
 
     /**
     * Gets the current date and time based on the database driver.
-    * 
+    *
     * @param string $driver
     * @return string
     */
     private function getCurrentDateTime(?DatabaseDriver $driver): string
     {
-        return ($driver === DatabaseDriver::SQLITE) ? "DATETIME('now', 'localtime')" : "NOW()";
+        return ($driver === DatabaseDriver::SQLITE) ? "DATETIME('now', 'localtime')" : 'NOW()';
     }
 
     /**

@@ -26,7 +26,6 @@ class Connect
     */
     private static ?PDOException $error = null;
 
-
     /**
      * Creates a new PDO instance based on the specified database configuration.
      *
@@ -76,26 +75,30 @@ class Connect
 
     /**
     * Returns the last error encountered during connection attempts.\
-    * 
+    *
     * @return PDOException|null
     */
     public static function getError(): ?PDOException
     {
         return self::$error;
     }
-    
+
     /**
      * Prevents instantiation of the Connect class.
      * This class is designed to be used statically, so it cannot be instantiated.
-     * 
+     *
      * @return void
-    */    
-    private function __construct() {}
+    */
+    private function __construct()
+    {
+    }
 
     /**
     * Prevents cloning of the Connect instance.
     *
     * @return void
     */
-    private function __clone() {}
+    private function __clone()
+    {
+    }
 }

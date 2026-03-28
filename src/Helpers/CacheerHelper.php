@@ -8,7 +8,6 @@ use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
 
 class CacheerHelper
 {
-
     /**
      * Characters forbidden in cache keys (PSR-16 reserved set).
      */
@@ -33,7 +32,7 @@ class CacheerHelper
 
         if (strpbrk($key, self::INVALID_KEY_CHARS) !== false) {
             throw new CacheInvalidArgumentException(
-                "Cache key \"{$key}\" contains one or more reserved characters: " . self::INVALID_KEY_CHARS
+                "Cache key \"{$key}\" contains one or more reserved characters: " . self::INVALID_KEY_CHARS,
             );
         }
     }
@@ -158,8 +157,8 @@ class CacheerHelper
             }
 
             // First 16 bytes are the IV; the rest is the actual ciphertext.
-            $iv        = substr($raw, 0, 16);
-            $cipher    = substr($raw, 16);
+            $iv = substr($raw, 0, 16);
+            $cipher = substr($raw, 16);
             $decrypted = openssl_decrypt($cipher, 'AES-256-CBC', $encryptionKey, OPENSSL_RAW_DATA, $iv);
 
             if ($decrypted === false) {

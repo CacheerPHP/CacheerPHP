@@ -1,0 +1,8 @@
+{
+  "name": "cacheer-php",
+  "private": true,
+  "scripts": {
+    "lint:fix": "vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --allow-risky=yes",
+    "lint:check": "vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --allow-risky=yes --dry-run --diff"
+  }
+}

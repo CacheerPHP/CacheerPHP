@@ -1,10 +1,10 @@
 <?php
 
 use PHPUnit\Framework\TestCase;
-use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Psr\Psr16CacheAdapter;
-use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
 use Psr\SimpleCache\CacheInterface;
+use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
+use Silviooosilva\CacheerPhp\Psr\Psr16CacheAdapter;
 
 /**
  * PSR-16 compliance tests for Psr16CacheAdapter.
@@ -21,7 +21,7 @@ class Psr16CacheAdapterTest extends TestCase
     {
         $this->cache = new Cacheer();
         $this->cache->setDriver()->useArrayDriver();
-        $this->psr   = new Psr16CacheAdapter($this->cache);
+        $this->psr = new Psr16CacheAdapter($this->cache);
     }
 
     protected function tearDown(): void
@@ -126,7 +126,7 @@ class Psr16CacheAdapterTest extends TestCase
 
         $this->assertSame(10, $results['x']);
         $this->assertSame(20, $results['y']);
-        $this->assertSame(0,  $results['z'], 'Missing key must return the $default.');
+        $this->assertSame(0, $results['z'], 'Missing key must return the $default.');
     }
 
     public function testSetMultiple(): void
@@ -134,7 +134,7 @@ class Psr16CacheAdapterTest extends TestCase
         $ok = $this->psr->setMultiple(['p' => 'apple', 'q' => 'banana']);
 
         $this->assertTrue($ok);
-        $this->assertSame('apple',  $this->psr->get('p'));
+        $this->assertSame('apple', $this->psr->get('p'));
         $this->assertSame('banana', $this->psr->get('q'));
     }
 
@@ -190,15 +190,15 @@ class Psr16CacheAdapterTest extends TestCase
     public static function invalidKeyProvider(): array
     {
         return [
-            'empty string'         => [''],
-            'curly open'           => ['key{bad'],
-            'curly close'          => ['key}bad'],
-            'parenthesis open'     => ['key(bad'],
-            'parenthesis close'    => ['key)bad'],
-            'forward slash'        => ['key/bad'],
-            'backslash'            => ['key\\bad'],
-            'at sign'              => ['key@bad'],
-            'colon'                => ['key:bad'],
+            'empty string'      => [''],
+            'curly open'        => ['key{bad'],
+            'curly close'       => ['key}bad'],
+            'parenthesis open'  => ['key(bad'],
+            'parenthesis close' => ['key)bad'],
+            'forward slash'     => ['key/bad'],
+            'backslash'         => ['key\\bad'],
+            'at sign'           => ['key@bad'],
+            'colon'             => ['key:bad'],
         ];
     }
 

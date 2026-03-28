@@ -29,7 +29,7 @@ final class StaticAccessTest extends TestCase
         $cache = new Cacheer();
         $options = [
             'driver' => 'file',
-            'path' => '/tmp/cache',
+            'path'   => '/tmp/cache',
         ];
         $cache->setUp($options);
         // cacheStore is now private; use getOptions() accessor instead.
@@ -40,7 +40,7 @@ final class StaticAccessTest extends TestCase
     {
         $options = [
             'driver' => 'file',
-            'path' => '/tmp/cache',
+            'path'   => '/tmp/cache',
         ];
         Cacheer::setUp($options);
         // Cacheer::getOptions() cannot be called statically (it is an instance method).

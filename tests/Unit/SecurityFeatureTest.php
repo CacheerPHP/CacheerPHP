@@ -66,7 +66,7 @@ class SecurityFeatureTest extends TestCase
      */
     public function testEncryptionUsesRandomIv(): void
     {
-        $key  = 'my-32-byte-secret-key-for-aes256';
+        $key = 'my-32-byte-secret-key-for-aes256';
         $data = ['sensitive' => 'payload'];
 
         // Instantiate two independent caches that write to different keys
@@ -90,8 +90,7 @@ class SecurityFeatureTest extends TestCase
         $this->assertEquals($data, $cacheB->getCache('iv_test_b'));
 
         // The on-disk blobs for the two keys must differ.
-        $buildPath = fn(string $cacheKey): string =>
-            $this->cacheDir . DIRECTORY_SEPARATOR . md5($cacheKey) . '.cache';
+        $buildPath = fn (string $cacheKey): string => $this->cacheDir . DIRECTORY_SEPARATOR . md5($cacheKey) . '.cache';
 
         $blobA = file_get_contents($buildPath('iv_test_a'));
         $blobB = file_get_contents($buildPath('iv_test_b'));
@@ -103,7 +102,7 @@ class SecurityFeatureTest extends TestCase
      */
     public function testEncryptionDecryptionRoundtrip(): void
     {
-        $key  = 'roundtrip-test-key-32-bytes-long';
+        $key = 'roundtrip-test-key-32-bytes-long';
         $data = ['user' => 'Alice', 'score' => 99];
 
         $this->cache->useEncryption($key);

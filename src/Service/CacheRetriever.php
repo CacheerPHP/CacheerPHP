@@ -6,9 +6,9 @@ use Closure;
 use DateInterval;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
+use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
-use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 
 /**
  * Class CacheRetriever
@@ -101,7 +101,7 @@ class CacheRetriever
         $cachedData = $this->getCache($cacheKey, $namespace);
 
         if ($this->cacheer->isSuccess()) {
-            $this->cacheer->setInternalState("Cache retrieved and deleted successfully!", true);
+            $this->cacheer->setInternalState('Cache retrieved and deleted successfully!', true);
             $this->cacheer->clearCache($cacheKey, $namespace);
             return $cachedData;
         }

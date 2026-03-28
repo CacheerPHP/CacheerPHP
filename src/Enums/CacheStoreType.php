@@ -9,4 +9,3 @@ enum CacheStoreType: string
     case FILE = 'file';
     case ARRAY = 'array';
 }
-

@@ -9,7 +9,9 @@ namespace Silviooosilva\CacheerPhp\Utils;
  */
 class CacheDataFormatter
 {
-    /** @param mixed $data */
+    /**
+     * @param mixed $data
+     */
     private mixed $data;
 
     /**
@@ -38,13 +40,13 @@ class CacheDataFormatter
             JSON_PRETTY_PRINT |
                 JSON_UNESCAPED_UNICODE |
                 JSON_UNESCAPED_SLASHES |
-                JSON_THROW_ON_ERROR
+                JSON_THROW_ON_ERROR,
         );
     }
 
     /**
     * Converts the data to an array.
-    * 
+    *
     * @return array
     */
     public function toArray(): array
@@ -54,7 +56,7 @@ class CacheDataFormatter
 
     /**
     * Converts the data to a string.
-    * 
+    *
     * @return string
     */
     public function toString(): string
@@ -64,7 +66,7 @@ class CacheDataFormatter
 
     /**
     * Converts the data to an object.
-    * 
+    *
     * @return object
     */
     public function toObject(): object

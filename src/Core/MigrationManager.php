@@ -15,7 +15,7 @@ class MigrationManager
 {
     /**
      * Executes the migration process for the database.
-     * 
+     *
      * @param PDO $connection
      * @return void
      */
@@ -36,7 +36,7 @@ class MigrationManager
 
     /**
      * Prepares the database connection for migration.
-     * 
+     *
      * @param PDO $connection
      * @return void
      */
@@ -51,7 +51,7 @@ class MigrationManager
 
     /**
      * Generates the SQL queries needed for the migration based on the database driver.
-     * 
+     *
      * @param PDO $connection
      * @param string|null $tableName
      * @return array

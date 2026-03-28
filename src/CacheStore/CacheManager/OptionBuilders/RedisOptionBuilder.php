@@ -16,107 +16,143 @@ use Silviooosilva\CacheerPhp\Support\TimeBuilder;
  */
 final class RedisOptionBuilder
 {
-  private function __construct() {}
+    private function __construct()
+    {
+    }
 
-  public static function create(): self
-  {
-    return new self();
-  }
+    /**
+     * Creates a new instance of RedisOptionBuilder.
+     *
+     * @return self
+     */
+    public static function create(): self
+    {
+        return new self();
+    }
 
-  private ?string $namespace = null;
-  private ?string $loggerPath = null;
-  private ?string $expirationTime = null;
-  private ?string $flushAfter = null;
-  private array $options = [];
+    /**
+     * @var string|null
+     */
+    private ?string $namespace = null;
 
-  /**
-   * Sets the Redis key namespace prefix.
-   *
-   * @param string $namespace
-   * @return $this
-   */
-  public function setNamespace(string $namespace): self
-  {
-    $this->namespace = $namespace;
-    return $this;
-  }
+    /**
+     * @var string|null
+     */
+    private ?string $loggerPath = null;
+
+    /**
+     * @var string|null
+     */
+    private ?string $expirationTime = null;
+
+    /**
+     * @var string|null
+     */
+
+    private ?string $flushAfter = null;
+
+    /**
+     * @var array
+     */
+    private array $options = [];
+
+    /**
+     * Sets the Redis key namespace prefix.
+     *
+     * @param string $namespace
+     * @return $this
+     */
+    public function setNamespace(string $namespace): self
+    {
+        $this->namespace = $namespace;
+        return $this;
+    }
 
     /**
     * Logger path for cache operations.
     *
     * @param string $loggerPath
     * @return $this
-    */  
-  public function loggerPath(string $loggerPath): self
-  {
-    $this->loggerPath = $loggerPath;
-    return $this;
-  }
-
-  /**
-   * Sets the default expiration time for keys.
-   *
-   * @param ?string $expirationTime
-   * @return $this|TimeBuilder
-   */
-  public function expirationTime(?string $expirationTime = null)
-  {
-    if (!is_null($expirationTime)) {
-      $this->expirationTime = $expirationTime;
-      return $this;
+    */
+    public function loggerPath(string $loggerPath): self
+    {
+        $this->loggerPath = $loggerPath;
+        return $this;
     }
 
-    return new TimeBuilder(function ($formattedTime) {
-      $this->expirationTime = $formattedTime;
-    }, $this);
-  }
+    /**
+     * Sets the default expiration time for keys.
+     *
+     * @param ?string $expirationTime
+     * @return $this|TimeBuilder
+     */
+    public function expirationTime(?string $expirationTime = null)
+    {
+        if (!is_null($expirationTime)) {
+            $this->expirationTime = $expirationTime;
+            return $this;
+        }
 
-  /**
-   * Sets the auto-flush interval.
-   *
-   * @param ?string $flushAfter
-   * @return $this|TimeBuilder
-   */
-  public function flushAfter(?string $flushAfter = null)
-  {
-    if (!is_null($flushAfter)) {
-      $this->flushAfter = mb_strtolower($flushAfter, 'UTF-8');
-      return $this;
+        return new TimeBuilder(function ($formattedTime) {
+            $this->expirationTime = $formattedTime;
+        }, $this);
     }
 
-    return new TimeBuilder(function ($formattedTime) {
-      $this->flushAfter = $formattedTime;
-    }, $this);
-  }
+    /**
+     * Sets the auto-flush interval.
+     *
+     * @param ?string $flushAfter
+     * @return $this|TimeBuilder
+     */
+    public function flushAfter(?string $flushAfter = null)
+    {
+        if (!is_null($flushAfter)) {
+            $this->flushAfter = mb_strtolower($flushAfter, 'UTF-8');
+            return $this;
+        }
 
-  /**
-   * Builds the options array.
-   *
-   * @return array
-   */
-  public function build(): array
-  {
-    return $this->validated();
-  }
-
-  private function validated(): array
-  {
-    foreach ($this->properties() as $key => $value) {
-      if (!empty($value)) {
-        $this->options[$key] = $value;
-      }
+        return new TimeBuilder(function ($formattedTime) {
+            $this->flushAfter = $formattedTime;
+        }, $this);
     }
-    return $this->options;
-  }
 
-  private function properties(): array
-  {
-    return [
-      'namespace'      => $this->namespace,
-      'loggerPath'     => $this->loggerPath,
-      'expirationTime' => $this->expirationTime,
-      'flushAfter'     => $this->flushAfter,
-    ];
-  }
+    /**
+     * Builds the options array.
+     *
+     * @return array
+     */
+    public function build(): array
+    {
+        return $this->validated();
+    }
+
+    /**
+     * Validates and compiles the options into an array.
+     *
+     * @return array
+     */
+    private function validated(): array
+    {
+        foreach ($this->properties() as $key => $value) {
+            if (!empty($value)) {
+                $this->options[$key] = $value;
+            }
+        }
+        return $this->options;
+    }
+
+    /**
+     * Returns the properties of the option builder.
+     *
+     * @return array
+     */
+    private function properties(): array
+    {
+        return [
+          'namespace'      => $this->namespace,
+          'loggerPath'     => $this->loggerPath,
+          'expirationTime' => $this->expirationTime,
+          'flushAfter'     => $this->flushAfter,
+        ];
+    }
 }
-

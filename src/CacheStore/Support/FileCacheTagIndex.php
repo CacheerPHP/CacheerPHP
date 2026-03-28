@@ -17,7 +17,7 @@ final class FileCacheTagIndex
     public function __construct(
         private FileCacheManager $fileManager,
         private string $cacheDir,
-        private OperationStatus $status
+        private OperationStatus $status,
     ) {
     }
 
@@ -41,7 +41,7 @@ final class FileCacheTagIndex
             $current[$key] = true;
         }
         $this->fileManager->writeFile($path, json_encode($current));
-        $this->status->record("Tagged successfully", true);
+        $this->status->record('Tagged successfully', true);
         return true;
     }
 
@@ -65,7 +65,7 @@ final class FileCacheTagIndex
         if ($this->fileManager->fileExists($path)) {
             $this->fileManager->removeFile($path);
         }
-        $this->status->record("Tag flushed successfully", true);
+        $this->status->record('Tag flushed successfully', true);
     }
 
     /**

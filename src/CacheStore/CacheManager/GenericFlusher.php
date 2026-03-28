@@ -9,15 +9,19 @@ use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
  *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
- * 
+ *
  * Lightweight flusher that stores last flush timestamp in a file and invokes a provided callback.
  */
 class GenericFlusher
 {
-    /** @var string */
+    /**
+     * @var string
+     */
     private string $lastFlushTimeFile;
 
-    /** @var callable */
+    /**
+     * @var callable
+     */
     private $flushCallback;
 
     /**
@@ -76,7 +80,7 @@ class GenericFlusher
 
     /**
      * Persist the last flush timestamp, throwing on failure to avoid silent state drift.
-     * 
+     *
      * @param int $timestamp
      * @return void
      */

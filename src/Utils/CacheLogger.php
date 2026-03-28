@@ -37,9 +37,9 @@ class CacheLogger extends AbstractLogger
      * @param string $logLevel   Minimum level to record (DEBUG, INFO, WARNING, ERROR).
      */
     public function __construct(
-        private string $logFile      = 'cacheer.log',
-        private int    $maxFileSize  = 5 * 1024 * 1024,
-        private string $logLevel     = 'DEBUG'
+        private string $logFile = 'cacheer.log',
+        private int    $maxFileSize = 5 * 1024 * 1024,
+        private string $logLevel = 'DEBUG',
     ) {
         $this->logLevel = strtoupper($logLevel);
     }
@@ -65,8 +65,8 @@ class CacheLogger extends AbstractLogger
 
         $this->rotateLog();
 
-        $message    = $this->interpolate((string) $message, $context);
-        $date       = date('Y-m-d H:i:s');
+        $message = $this->interpolate((string) $message, $context);
+        $date = date('Y-m-d H:i:s');
         $logMessage = "[$date] [$levelStr] $message" . PHP_EOL;
         file_put_contents($this->logFile, $logMessage, FILE_APPEND);
     }
@@ -79,8 +79,8 @@ class CacheLogger extends AbstractLogger
      */
     private function shouldLog(string $level): bool
     {
-        $levelIdx  = array_search($level,           $this->logLevels, true);
-        $configIdx = array_search($this->logLevel,  $this->logLevels, true);
+        $levelIdx = array_search($level, $this->logLevels, true);
+        $configIdx = array_search($this->logLevel, $this->logLevels, true);
 
         return $levelIdx !== false && $levelIdx >= $configIdx;
     }
@@ -99,7 +99,7 @@ class CacheLogger extends AbstractLogger
             return;
         }
 
-        $dir  = dirname($this->logFile);
+        $dir = dirname($this->logFile);
         $base = basename($this->logFile, '.log');
         $date = date('Y-m-d_H-i-s');
 

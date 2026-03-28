@@ -2,9 +2,8 @@
 
 namespace Silviooosilva\CacheerPhp\Helpers;
 
-use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
-use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
+use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 
 /**
  * Class CacheFileHelper
@@ -13,7 +12,6 @@ use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
  */
 class CacheFileHelper
 {
-
     /**
      * Converts a string expiration format to seconds.
      *
@@ -37,7 +35,7 @@ class CacheFileHelper
                 return (int)$expiration * $value;
             }
         }
-        throw CacheFileException::create("Invalid expiration format");
+        throw CacheFileException::create('Invalid expiration format');
     }
 
     /**
@@ -53,7 +51,7 @@ class CacheFileHelper
 
     /**
      * Validates a cache item.
-     * 
+     *
      * @param array $item
      * @return void
      */
@@ -61,7 +59,7 @@ class CacheFileHelper
     {
         CacheerHelper::validateCacheItem(
             $item,
-            fn($msg) => CacheFileException::create($msg)
+            fn ($msg) => CacheFileException::create($msg),
         );
     }
 
@@ -83,15 +81,15 @@ class CacheFileHelper
         return $ttl;
     }
 
-  /**
-  * Generates an array identifier for cache data.
-  * 
-  * @param mixed $currentCacheData
-  * @param mixed $cacheData
-  * @return array
-  */
-  public static function arrayIdentifier(mixed $currentCacheData, mixed $cacheData): array
-  {
-    return CacheerHelper::arrayIdentifier($currentCacheData, $cacheData);
-  }
+    /**
+    * Generates an array identifier for cache data.
+    *
+    * @param mixed $currentCacheData
+    * @param mixed $cacheData
+    * @return array
+    */
+    public static function arrayIdentifier(mixed $currentCacheData, mixed $cacheData): array
+    {
+        return CacheerHelper::arrayIdentifier($currentCacheData, $cacheData);
+    }
 }

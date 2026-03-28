@@ -2,16 +2,16 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore;
 
-use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
-use Silviooosilva\CacheerPhp\CacheStore\CacheManager\FileCacheManager;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\FileCacheFlusher;
-use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
-use Silviooosilva\CacheerPhp\CacheStore\Support\FileCachePathBuilder;
+use Silviooosilva\CacheerPhp\CacheStore\CacheManager\FileCacheManager;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheBatchProcessor;
+use Silviooosilva\CacheerPhp\CacheStore\Support\FileCachePathBuilder;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
+use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
+use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Utils\CacheLogger;
 
 /**
  * Class FileCacheStore
@@ -20,28 +20,44 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
  */
 class FileCacheStore implements CacheerInterface
 {
-    /** @var string */
+    /**
+     * @var string
+     */
     private string $cacheDir;
 
-    /** @var FileCachePathBuilder */
+    /**
+     * @var FileCachePathBuilder
+     */
     private FileCachePathBuilder $pathBuilder;
 
-    /** @var FileCacheBatchProcessor */
+    /**
+     * @var FileCacheBatchProcessor
+     */
     private FileCacheBatchProcessor $batchProcessor;
 
-    /** @var int Default TTL in seconds (used when no per-item TTL is supplied). */
+    /**
+     * @var int
+     */
     private int $defaultTTL = 3600;
 
-    /** @var OperationStatus */
+    /**
+     * @var OperationStatus
+     */
     private OperationStatus $status;
 
-    /** @var FileCacheManager */
+    /**
+     * @var FileCacheManager
+     */
     private FileCacheManager $fileManager;
 
-    /** @var FileCacheFlusher */
+    /**
+     * @var FileCacheFlusher
+     */
     private FileCacheFlusher $flusher;
 
-    /** @var FileCacheTagIndex */
+    /**
+     * @var FileCacheTagIndex
+     */
     private FileCacheTagIndex $tagIndex;
 
     /**
@@ -53,16 +69,16 @@ class FileCacheStore implements CacheerInterface
     public function __construct(array $options = [])
     {
         $this->fileManager = new FileCacheManager();
-        $loggerPath        = $options['loggerPath'] ?? 'cacheer.log';
-        $this->status      = new OperationStatus(new CacheLogger($loggerPath), 'file');
+        $loggerPath = $options['loggerPath'] ?? 'cacheer.log';
+        $this->status = new OperationStatus(new CacheLogger($loggerPath), 'file');
 
         $this->validateOptions($options);
         $this->initializeCacheDir($options['cacheDir']);
 
-        $this->pathBuilder    = new FileCachePathBuilder($this->fileManager, $this->cacheDir);
+        $this->pathBuilder = new FileCachePathBuilder($this->fileManager, $this->cacheDir);
         $this->batchProcessor = new FileCacheBatchProcessor($this);
-        $this->flusher        = new FileCacheFlusher($this->fileManager, $this->cacheDir);
-        $this->tagIndex       = new FileCacheTagIndex($this->fileManager, $this->cacheDir, $this->status);
+        $this->flusher = new FileCacheFlusher($this->fileManager, $this->cacheDir);
+        $this->tagIndex = new FileCacheTagIndex($this->fileManager, $this->cacheDir, $this->status);
 
         if (isset($options['expirationTime'])) {
             $this->defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
@@ -92,7 +108,7 @@ class FileCacheStore implements CacheerInterface
 
         $this->putCache($cacheKey, $mergedCacheData, $namespace);
         if ($this->isSuccess()) {
-            $this->status->record("Cache updated successfully", true);
+            $this->status->record('Cache updated successfully', true);
             return true;
         }
 
@@ -112,9 +128,9 @@ class FileCacheStore implements CacheerInterface
         $cacheFile = $this->pathBuilder->build($cacheKey, $namespace);
         if ($this->fileManager->fileExists($cacheFile)) {
             $this->fileManager->removeFile($cacheFile);
-            $this->status->record("Cache file deleted successfully!", true);
+            $this->status->record('Cache file deleted successfully!', true);
         } else {
-            $this->status->record("Cache file does not exist!", false);
+            $this->status->record('Cache file does not exist!', false);
         }
     }
 
@@ -126,7 +142,7 @@ class FileCacheStore implements CacheerInterface
     public function flushCache(): void
     {
         $this->flusher->flushCache();
-        $this->status->record("Cache flushed successfully", true);
+        $this->status->record('Cache flushed successfully', true);
     }
 
     /**
@@ -176,10 +192,10 @@ class FileCacheStore implements CacheerInterface
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600): mixed
     {
         $ttlSeconds = CacheFileHelper::ttl($ttl, $this->defaultTTL);
-        $cacheFile  = $this->pathBuilder->build($cacheKey, $namespace);
+        $cacheFile = $this->pathBuilder->build($cacheKey, $namespace);
 
         if (!$this->fileManager->fileExists($cacheFile)) {
-            $this->status->record("cacheFile not found, does not exist or has expired.", false, 'info');
+            $this->status->record('cacheFile not found, does not exist or has expired.', false, 'info');
             return null;
         }
 
@@ -189,21 +205,21 @@ class FileCacheStore implements CacheerInterface
         if (is_array($raw) && isset($raw['expires_at'], $raw['data'])) {
             if (time() > $raw['expires_at']) {
                 $this->fileManager->removeFile($cacheFile);
-                $this->status->record("cacheFile not found, does not exist or has expired.", false, 'info');
+                $this->status->record('cacheFile not found, does not exist or has expired.', false, 'info');
                 return null;
             }
 
-            $this->status->record("Cache retrieved successfully", true);
+            $this->status->record('Cache retrieved successfully', true);
             return $raw['data'];
         }
 
         // Legacy v4.x format: fall back to filemtime-based TTL check
         if (filemtime($cacheFile) <= (time() - $ttlSeconds)) {
-            $this->status->record("cacheFile not found, does not exist or has expired.", false, 'info');
+            $this->status->record('cacheFile not found, does not exist or has expired.', false, 'info');
             return null;
         }
 
-        $this->status->record("Cache retrieved successfully", true);
+        $this->status->record('Cache retrieved successfully', true);
         return $raw;
     }
 
@@ -219,17 +235,17 @@ class FileCacheStore implements CacheerInterface
         $cacheDir = $this->pathBuilder->namespaceDir($namespace);
 
         if (!$this->fileManager->directoryExists($cacheDir)) {
-            $this->status->record("Cache directory does not exist", false, 'info');
+            $this->status->record('Cache directory does not exist', false, 'info');
             return [];
         }
 
-        $files   = $this->fileManager->getFilesInDirectory($cacheDir);
+        $files = $this->fileManager->getFilesInDirectory($cacheDir);
         $results = [];
 
         foreach ($files as $file) {
             if (pathinfo($file, PATHINFO_EXTENSION) === 'cache') {
                 $cacheKey = basename($file, '.cache');
-                $raw      = $this->fileManager->serialize($this->fileManager->readFile($file), false);
+                $raw = $this->fileManager->serialize($this->fileManager->readFile($file), false);
 
                 if (is_array($raw) && isset($raw['expires_at'], $raw['data'])) {
                     if (time() > $raw['expires_at']) {
@@ -243,11 +259,11 @@ class FileCacheStore implements CacheerInterface
         }
 
         if (!empty($results)) {
-            $this->status->record("Cache retrieved successfully", true);
+            $this->status->record('Cache retrieved successfully', true);
             return $results;
         }
 
-        $this->status->record("No cache data found for the provided namespace", false, 'info');
+        $this->status->record('No cache data found for the provided namespace', false, 'info');
         return [];
     }
 
@@ -262,11 +278,11 @@ class FileCacheStore implements CacheerInterface
      */
     public function getMany(array $cacheKeys, string $namespace = '', string|int $ttl = 3600): array
     {
-        $ttl     = CacheFileHelper::ttl($ttl, $this->defaultTTL);
+        $ttl = CacheFileHelper::ttl($ttl, $this->defaultTTL);
         $results = [];
 
         foreach ($cacheKeys as $cacheKey) {
-            $cacheData          = $this->getCache($cacheKey, $namespace, $ttl);
+            $cacheData = $this->getCache($cacheKey, $namespace, $ttl);
             $results[$cacheKey] = $this->isSuccess() ? $cacheData : null;
         }
 
@@ -302,7 +318,7 @@ class FileCacheStore implements CacheerInterface
     public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', string|int $ttl = 3600): bool
     {
         $ttlSeconds = CacheFileHelper::ttl($ttl, $this->defaultTTL);
-        $cacheFile  = $this->pathBuilder->build($cacheKey, $namespace);
+        $cacheFile = $this->pathBuilder->build($cacheKey, $namespace);
 
         $envelope = [
             'data'       => $cacheData,
@@ -311,7 +327,7 @@ class FileCacheStore implements CacheerInterface
         ];
 
         $this->fileManager->writeFile($cacheFile, $this->fileManager->serialize($envelope));
-        $this->status->record("Cache file created successfully", true);
+        $this->status->record('Cache file created successfully', true);
         return true;
     }
 

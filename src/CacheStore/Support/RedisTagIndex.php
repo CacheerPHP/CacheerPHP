@@ -7,13 +7,19 @@ namespace Silviooosilva\CacheerPhp\CacheStore\Support;
  */
 final class RedisTagIndex
 {
-    /** @var mixed */
+    /**
+     * @var mixed
+     */
     private $redis;
 
-    /** @var RedisKeyspace */
+    /**
+     * @var RedisKeyspace
+     */
     private RedisKeyspace $keyspace;
 
-    /** @var OperationStatus */
+    /**
+     * @var OperationStatus
+     */
     private OperationStatus $status;
 
     /**
@@ -49,7 +55,7 @@ final class RedisTagIndex
     /**
      * @param callable $clearCache Receives ($key, $namespace)
      * @param string $tag
-     * 
+     *
      * @return void
      */
     public function flush(string $tag, callable $clearCache): void

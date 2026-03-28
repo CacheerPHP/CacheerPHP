@@ -9,13 +9,19 @@ use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
  */
 final class DatabaseCacheTagIndex
 {
-    /** @var CacheDatabaseRepository */
+    /**
+     * @var CacheDatabaseRepository
+     */
     private CacheDatabaseRepository $repository;
 
-    /** @var OperationStatus */
+    /**
+     * @var OperationStatus
+     */
     private OperationStatus $status;
 
-    /** @var string */
+    /**
+     * @var string
+     */
     private string $namespace;
 
     /**
@@ -46,7 +52,7 @@ final class DatabaseCacheTagIndex
             $existing[$key] = true;
         }
         $ok = $this->repository->store($indexKey, $existing, $this->namespace, 31536000);
-        $this->status->record($ok ? "Tagged successfully" : "Failed to tag keys", $ok);
+        $this->status->record($ok ? 'Tagged successfully' : 'Failed to tag keys', $ok);
         return $ok;
     }
 
@@ -66,7 +72,7 @@ final class DatabaseCacheTagIndex
             }
         }
         $this->repository->clear($indexKey, $this->namespace);
-        $this->status->record("Tag flushed successfully", true);
+        $this->status->record('Tag flushed successfully', true);
     }
 
     /**

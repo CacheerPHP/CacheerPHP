@@ -9,7 +9,9 @@ use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
  */
 final class DatabaseTtlResolver
 {
-    /** @var int|null */
+    /**
+     * @var int|null
+     */
     private ?int $defaultTTL;
 
     /**
