@@ -7,7 +7,7 @@ require_once __DIR__ . "/../vendor/autoload.php";
 $Cacheer = new Cacheer();
 $Cacheer->setDriver()->useRedisDriver();
 
-// Dados a serem armazenados no cache
+// Data to be stored in the cache
 $cacheKey = 'user_profile_1';
 $userProfile = [
     'id' => 1,
@@ -16,15 +16,15 @@ $userProfile = [
 ];
 
 $userProfile02 = [
-    'casaNº' => 2130,
-    'telefone' => "(999)999-9999"
+    'house_number' => 2130,
+    'phone' => "(999)999-9999"
 ];
 
 
-// Armazenando dados no cache
+// Storing data in the cache
 $Cacheer->putCache($cacheKey, $userProfile);
 
-// Recuperando dados do cache
+// Retrieving data from the cache
 if($Cacheer->isSuccess()){
     echo "Cache Found: ";
     print_r($Cacheer->getCache($cacheKey));
@@ -33,7 +33,7 @@ if($Cacheer->isSuccess()){
 }
 
 
-// Mesclando os dados
+// Merging data into the cache
 $Cacheer->appendCache($cacheKey, $userProfile02);
 
 if($Cacheer->isSuccess()){

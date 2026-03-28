@@ -8,21 +8,25 @@ use Silviooosilva\CacheerPhp\Support\TimeBuilder;
 
 /**
  * Class FileOptionBuilder
+ *
+ * @internal This class should not be used directly. Use OptionBuilder::forFile() instead.
+ *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class FileOptionBuilder
+final class FileOptionBuilder
 {
-  /** @param null|string $cacheDir */
+  private function __construct() {}
+
+  public static function create(): self
+  {
+    return new self();
+  }
+
   private ?string $cacheDir = null;
-
-  /** @param null|string $expirationTime */
+  private ?string $loggerPath = null;
   private ?string $expirationTime = null;
-
-  /** @param null|string $flushAfter */
   private ?string $flushAfter = null;
-
-  /** @param array $options */
   private array $options = [];
 
   /**
@@ -34,6 +38,18 @@ class FileOptionBuilder
   public function dir(string $cacheDir)
   {
     $this->cacheDir = $cacheDir;
+    return $this;
+  }
+
+  /**
+  * Logger path for cache operations.
+  *
+  * @param string $loggerPath
+  * @return $this
+  */
+  public function loggerPath(string $loggerPath)
+  {
+    $this->loggerPath = $loggerPath;
     return $this;
   }
 
@@ -84,12 +100,6 @@ class FileOptionBuilder
     return $this->validated();
   }
 
-  /**
-  * Validates the properties and returns an array of options.
-  * It checks if each property is valid and not null, then adds it to the options
-  *
-  * @return array
-  */
   private function validated()
   {
     foreach ($this->properties() as $key => $value) {
@@ -100,28 +110,16 @@ class FileOptionBuilder
     return $this->options;
   }
 
-  /**
-  * Checks if the provided data is valid and not null.
-  * This is used to ensure that only valid options are included in the final configuration.
-  *
-  * @param mixed $data
-  * @return bool
-  */
   private function isValidAndNotNull(mixed $data)
   {
     return !empty($data) ? true : false;
   }
 
-  /**
-  * Returns the properties of the FileOptionBuilder instance.
-  * This method is used to gather the current state of the instance's properties.
-  *
-  * @return array
-  */
   private function properties()
   {
     $properties = [
       'cacheDir' => $this->cacheDir,
+      'loggerPath' => $this->loggerPath,
       'expirationTime' => $this->expirationTime,
       'flushAfter' => $this->flushAfter
     ];

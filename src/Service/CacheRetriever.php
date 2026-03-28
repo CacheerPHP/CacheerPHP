@@ -3,6 +3,7 @@
 namespace Silviooosilva\CacheerPhp\Service;
 
 use Closure;
+use DateInterval;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
@@ -10,27 +11,26 @@ use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 
 /**
-* Class CacheRetriever
-* @author Sílvio Silva <https://github.com/silviooosilva>
-* @package Silviooosilva\CacheerPhp
-*/
+ * Class CacheRetriever
+ *
+ * Handles all read-side operations (get, getMany, getAll, has, remember …)
+ * by delegating to the active cache store and syncing status back to Cacheer.
+ *
+ * @author Sílvio Silva <https://github.com/silviooosilva>
+ * @package Silviooosilva\CacheerPhp
+ */
 class CacheRetriever
 {
     /**
-    * @var Cacheer
-    */
+     * @var Cacheer
+     */
     private Cacheer $cacheer;
 
     /**
-    * @var int
-    */
-    private int $foreverTTL = CacheTimeConstants::CACHE_FOREVER_TTL->value;
-
-    /**
-    * CacheRetriever constructor.
-    *
-    * @param Cacheer $cacheer
-    */
+     * CacheRetriever constructor.
+     *
+     * @param Cacheer $cacheer
+     */
     public function __construct(Cacheer $cacheer)
     {
         $this->cacheer = $cacheer;
@@ -47,10 +47,10 @@ class CacheRetriever
      */
     public function getCache(string $cacheKey, string $namespace = '', int|string $ttl = 3600): mixed
     {
-        $cacheData = $this->cacheer->cacheStore->getCache($cacheKey, $namespace, $ttl);
+        $cacheData = $this->cacheer->getCacheStore()->getCache($cacheKey, $namespace, $ttl);
         $this->cacheer->syncState();
 
-        if ($this->cacheer->isSuccess() && ($this->cacheer->isCompressionEnabled() ||   $this->cacheer->getEncryptionKey() !== null)) {
+        if ($this->cacheer->isSuccess() && ($this->cacheer->isCompressionEnabled() || $this->cacheer->getEncryptionKey() !== null)) {
             $cacheData = CacheerHelper::recoverFromStorage($cacheData, $this->cacheer->isCompressionEnabled(), $this->cacheer->getEncryptionKey());
         }
 
@@ -68,7 +68,7 @@ class CacheRetriever
      */
     public function getMany(array $cacheKeys, string $namespace = '', int|string $ttl = 3600): array|CacheDataFormatter
     {
-        $cachedData = $this->cacheer->cacheStore->getMany($cacheKeys, $namespace, $ttl);
+        $cachedData = $this->cacheer->getCacheStore()->getMany($cacheKeys, $namespace, $ttl);
         return $this->getCachedDatum($cachedData);
     }
 
@@ -81,12 +81,15 @@ class CacheRetriever
      */
     public function getAll(string $namespace = ''): mixed
     {
-        $cachedData = $this->cacheer->cacheStore->getAll($namespace);
+        $cachedData = $this->cacheer->getCacheStore()->getAll($namespace);
         return $this->getCachedDatum($cachedData);
     }
 
     /**
-     * Retrieves a cache item, deletes it, and returns its data.
+     * Retrieves a cache item, deletes it, and returns its data (atomic pop).
+     *
+     * Uses isSuccess() — not empty() — so falsy values (0, '', false) are
+     * correctly treated as valid cached data rather than cache misses.
      *
      * @param string $cacheKey
      * @param string $namespace
@@ -97,7 +100,7 @@ class CacheRetriever
     {
         $cachedData = $this->getCache($cacheKey, $namespace);
 
-        if (!empty($cachedData)) {
+        if ($this->cacheer->isSuccess()) {
             $this->cacheer->setInternalState("Cache retrieved and deleted successfully!", true);
             $this->cacheer->clearCache($cacheKey, $namespace);
             return $cachedData;
@@ -107,19 +110,22 @@ class CacheRetriever
     }
 
     /**
-     * Retrieves a cache item, or executes a callback to store it if not found.
+     * Retrieves a cache item, or executes a callback to compute and store it.
+     *
+     * Uses isSuccess() — not empty() — so falsy values (0, '', false, []) stored
+     * in the cache are returned as-is without re-invoking the callback.
      *
      * @param string $cacheKey
-     * @param int|string $ttl
+     * @param int|string|\DateInterval|null $ttl
      * @param Closure $callback
      * @return mixed
      * @throws CacheFileException
      */
-    public function remember(string $cacheKey, int|string $ttl, Closure $callback): mixed
+    public function remember(string $cacheKey, int|string|DateInterval|null $ttl, Closure $callback): mixed
     {
-        $cachedData = $this->getCache($cacheKey, ttl: $ttl);
+        $cachedData = $this->getCache($cacheKey, ttl: is_int($ttl) ? $ttl : 3600);
 
-        if (!empty($cachedData)) {
+        if ($this->cacheer->isSuccess()) {
             return $cachedData;
         }
 
@@ -129,7 +135,7 @@ class CacheRetriever
     }
 
     /**
-     * Retrieves a cache item indefinitely, or executes a callback to store it if not found.
+     * Retrieves a cache item indefinitely, or computes and stores it if absent.
      *
      * @param string $cacheKey
      * @param Closure $callback
@@ -138,7 +144,7 @@ class CacheRetriever
      */
     public function rememberForever(string $cacheKey, Closure $callback): mixed
     {
-        return $this->remember($cacheKey, $this->foreverTTL, $callback);
+        return $this->remember($cacheKey, CacheTimeConstants::CACHE_FOREVER_TTL->value, $callback);
     }
 
     /**
@@ -151,15 +157,16 @@ class CacheRetriever
      */
     public function has(string $cacheKey, string $namespace = ''): bool
     {
-        $result = $this->cacheer->cacheStore->has($cacheKey, $namespace);
+        $result = $this->cacheer->getCacheStore()->has($cacheKey, $namespace);
         $this->cacheer->syncState();
 
         return $result;
     }
 
     /**
-     * Processes cached data for retrieval.
-     * 
+     * Processes cached data for retrieval, applying decompression/decryption
+     * and optional formatting.
+     *
      * @param mixed $cachedData
      * @return mixed|CacheDataFormatter
      */

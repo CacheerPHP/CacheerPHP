@@ -8,15 +8,18 @@ class RedisOptionBuilderFeatureTest extends TestCase
   {
     $options = OptionBuilder::forRedis()
       ->setNamespace('app:')
+      ->loggerPath(__DIR__ . "/cache/logger.log")
       ->expirationTime('2 hours')
       ->flushAfter('1 day')
       ->build();
 
     $this->assertArrayHasKey('namespace', $options);
+    $this->assertArrayHasKey('loggerPath', $options);
     $this->assertArrayHasKey('expirationTime', $options);
     $this->assertArrayHasKey('flushAfter', $options);
 
     $this->assertSame('app:', $options['namespace']);
+    $this->assertSame(__DIR__ . "/cache/logger.log", $options['loggerPath']);
     $this->assertSame('2 hours', $options['expirationTime']);
     $this->assertSame('1 day', $options['flushAfter']);
   }

@@ -2,15 +2,22 @@
 require_once __DIR__ . "/../vendor/autoload.php";
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\CacheStore\CacheManager\OptionBuilders\FileOptionBuilder;
+use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
+// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
 
-$options = [
-    "cacheDir" =>  __DIR__ . "/cache",
-];
+// $options = [
+//     "cacheDir" =>  __DIR__ . "/cache",
+// ];
+
+$options = OptionBuilder::forFile()
+            ->dir(__DIR__ . "/cache")
+            ->build();
 
 $Cacheer = new Cacheer($options);
 
-// Dados a serem armazenados no cache
+// Data to be stored in the cache
 $cacheKey = 'user_profile_1234';
 $userProfile = [
     'id' => 123,
@@ -18,10 +25,10 @@ $userProfile = [
     'email' => 'john.doe@example.com',
 ];
 
-// Armazenando dados no cache
+// Storing data in the cache
 $Cacheer->putCache($cacheKey, $userProfile);
 
-// Recuperando dados do cache
+// Retrieving data from the cache
 $cachedProfile = $Cacheer->getCache($cacheKey);
 
 if ($Cacheer->isSuccess()) {

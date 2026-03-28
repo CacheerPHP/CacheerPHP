@@ -3,17 +3,24 @@
 require_once __DIR__ . "/../vendor/autoload.php";
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = [
-    "cacheDir" =>  __DIR__ . "/cache",
-];
+// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+
+// $options = [
+//     "cacheDir" =>  __DIR__ . "/cache",
+// ];
+
+$options = OptionBuilder::forFile()
+        ->dir( __DIR__ . "/cache")
+        ->build();
 
 $Cacheer = new Cacheer($options);
 
-// Chave do cache a ser limpo
+// Cache key to be cleared
 $cacheKey = 'user_profile_123';
 
-// Limpando um item específico do cache
+// Clearing a specific cache item
 
 $Cacheer->clearCache($cacheKey);
 

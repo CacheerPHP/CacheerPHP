@@ -282,25 +282,21 @@ class DatabaseCacheStoreTest extends TestCase
         $this->assertNull($noCacheData);
     }
 
-        public function test_store_if_not_present_with_add_function()
+    public function test_store_if_not_present_with_add_function()
     {
-        $existentKey = 'cache_key_test';
-
+        $existentKey    = 'cache_key_test';
         $nonExistentKey = 'non_existent_key';
 
         $this->cache->putCache($existentKey, 'existent_data');
-
         $this->assertTrue($this->cache->isSuccess());
         $this->assertEquals('existent_data', $this->cache->getCache($existentKey));
 
-        $addCache = $this->cache->add($existentKey, 100);
-        
-        $this->assertTrue($addCache);
-        $this->assertNotEquals(100, 'existent_data');
-    
-        $addNonExistentKey = $this->cache->add($nonExistentKey, 'non_existent_data');
+        $addExisting = $this->cache->add($existentKey, 100);
+        $this->assertFalse($addExisting);
+        $this->assertEquals('existent_data', $this->cache->getCache($existentKey));
 
-        $this->assertFalse($addNonExistentKey);
+        $addNew = $this->cache->add($nonExistentKey, 'non_existent_data');
+        $this->assertTrue($addNew);
         $this->assertEquals('non_existent_data', $this->cache->getCache($nonExistentKey));
         $this->assertTrue($this->cache->isSuccess());
     }

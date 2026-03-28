@@ -2,14 +2,21 @@
 require_once __DIR__ . "/../vendor/autoload.php";
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = [
-    "cacheDir" =>  __DIR__ . "/cache",
-];
+// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+
+// $options = [
+//     "cacheDir" =>  __DIR__ . "/cache",
+// ];
+
+$options = OptionBuilder::forFile()
+        ->dir( __DIR__ . "/cache")
+        ->build();
 
 $Cacheer = new Cacheer($options);
 
-// Dados a serem armazenados no cache com namespace
+// Data to be stored in the cache with a namespace
 $namespace = 'session_data_01';
 $cacheKey = 'session_456';
 $sessionData = [
@@ -17,10 +24,10 @@ $sessionData = [
     'login_time' => time(),
 ];
 
-// Armazenando dados no cache com namespace
+// Storing data in the cache with a namespace
 $Cacheer->putCache($cacheKey, $sessionData, $namespace);
 
-// Recuperando dados do cache
+// Retrieving data from the cache
 $cachedSessionData = $Cacheer->getCache($cacheKey, $namespace);
 
 if ($Cacheer->isSuccess()) {

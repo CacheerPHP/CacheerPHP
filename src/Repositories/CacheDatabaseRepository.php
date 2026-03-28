@@ -48,7 +48,9 @@ class CacheDatabaseRepository
             return $this->update($cacheKey, $cacheData, $namespace);
         }
 
-        $expirationTime = date('Y-m-d H:i:s', time() + $ttl);
+        // Guard against PHP_INT_MAX (forever) overflowing the integer add.
+        $expiresAt      = (int) $ttl >= PHP_INT_MAX ? PHP_INT_MAX : (time() + (int) $ttl);
+        $expirationTime = $expiresAt === PHP_INT_MAX ? '9999-12-31 23:59:59' : date('Y-m-d H:i:s', $expiresAt);
         $createdAt = date('Y-m-d H:i:s');
 
         $stmt = $this->connection->prepare(

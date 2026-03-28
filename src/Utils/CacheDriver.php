@@ -13,6 +13,9 @@ use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 
 /**
  * Class CacheDriver
+ *
+ * Selects and initialises the cache backend (file, database, Redis, array).
+ *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
@@ -24,7 +27,11 @@ class CacheDriver
     */
     protected Cacheer $cacheer;
 
-    /** @param string $logPath */
+    /**
+     * Path written to the log file used by each driver.
+     *
+     * @var string
+     */
     public string $logPath = 'cacheer.log';
 
     /**
@@ -38,62 +45,71 @@ class CacheDriver
     }
 
     /**
-    * Uses the database driver for caching.
-    * 
-    * @return Cacheer
-    */
+     * Switches to the database-backed cache driver.
+     *
+     * @return Cacheer
+     */
     public function useDatabaseDriver(): Cacheer
     {
-        $this->cacheer->cacheStore = new DatabaseCacheStore($this->logPath, $this->cacheer->options);
+        $this->cacheer->setCacheStore(new DatabaseCacheStore($this->logPath, $this->cacheer->getOptions()));
         return $this->cacheer;
     }
 
     /**
-    * Uses the file driver for caching.
-    *
-    * @return Cacheer
-    */
+     * Switches to the filesystem-backed cache driver.
+     *
+     * Injects the logger path into the options array so FileCacheStore can
+     * create its CacheLogger in the correct location.
+     *
+     * @return Cacheer
+     */
     public function useFileDriver(): Cacheer
     {
-        $this->cacheer->options['loggerPath'] = $this->logPath;
-        $this->cacheer->cacheStore = new FileCacheStore($this->cacheer->options);
+        $this->cacheer->setOption('loggerPath', $this->logPath);
+        $this->cacheer->setCacheStore(new FileCacheStore($this->cacheer->getOptions()));
         return $this->cacheer;
     }
 
     /**
-    * Uses the Redis driver for caching.
-    * 
-    * @return Cacheer
-    */
+     * Switches to the Redis-backed cache driver.
+     *
+     * @return Cacheer
+     */
     public function useRedisDriver(): Cacheer
     {
-        $this->cacheer->cacheStore = new RedisCacheStore($this->logPath, $this->cacheer->options);
+        $this->cacheer->setCacheStore(new RedisCacheStore($this->logPath, $this->cacheer->getOptions()));
         return $this->cacheer;
     }
 
     /**
-    * Uses the array driver for caching.
-    * 
-    * @return Cacheer
-    */
+     * Switches to the in-memory array driver.
+     *
+     * Useful for testing or environments where persistence is not required.
+     *
+     * @return Cacheer
+     */
     public function useArrayDriver(): Cacheer
     {
-        $this->cacheer->cacheStore = new ArrayCacheStore($this->logPath);
+        $this->cacheer->setCacheStore(new ArrayCacheStore($this->logPath));
         return $this->cacheer;
     }
 
     /**
-    * Uses the default driver for caching.
-    * 
-    * @return Cacheer
-    */
+     * Selects the default (file) driver, auto-creating the cache directory
+     * under the project root when none is provided in the options.
+     *
+     * @return Cacheer
+     * @throws \Silviooosilva\CacheerPhp\Exceptions\CacheFileException
+     */
     public function useDefaultDriver(): Cacheer
     {
-        if (!isset($this->cacheer->options['cacheDir'])) {
+        $option = $this->cacheer->getOption('cacheDir');
+
+        if (!isset($option)) {
             $projectRoot = EnvHelper::getRootPath();
             $cacheDir = $projectRoot . DIRECTORY_SEPARATOR . "CacheerPHP" . DIRECTORY_SEPARATOR . "Cache";
             if ($this->isDir($cacheDir)) {
-                $this->cacheer->options['cacheDir'] = $cacheDir;
+                $this->cacheer->setOption('cacheDir', $cacheDir);
             } else {
                 throw CacheFileException::create("Failed to create cache directory: " . $cacheDir);
             }

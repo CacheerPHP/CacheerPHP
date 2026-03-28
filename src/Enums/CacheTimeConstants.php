@@ -6,8 +6,10 @@ enum CacheTimeConstants: int
 {
     /**
      * TTL value for storing cache items indefinitely (forever).
+     * Uses PHP_INT_MAX to avoid 32-bit integer overflow that
+     * the previous 31536000 * 1000 literal caused.
      */
-    case CACHE_FOREVER_TTL = 31536000 * 1000;
+    case CACHE_FOREVER_TTL = PHP_INT_MAX;
 
     /**
      * Time units in seconds.

@@ -37,6 +37,18 @@ class OptionBuildTest extends TestCase
     $this->assertEquals($cacheDir, $options['cacheDir']);
   }
 
+  public function test_it_can_set_logger_path()
+  {
+    $loggerPath = __DIR__ . "/cache/logger.log";
+
+    $options = OptionBuilder::forFile()
+    ->loggerPath($loggerPath)
+    ->build();
+
+    $this->assertArrayHasKey('loggerPath', $options);
+    $this->assertEquals($loggerPath, $options['loggerPath']);
+  }
+
 
   public function test_it_can_set_expiration_time()
     {
@@ -65,12 +77,14 @@ class OptionBuildTest extends TestCase
 
       $options = OptionBuilder::forFile()
             ->dir($cacheDir)
+            ->loggerPath($cacheDir . "/logger.log")
             ->expirationTime('1 day')
             ->flushAfter('30 minutes')
             ->build();
 
         $this->assertEquals([
             'cacheDir' => $cacheDir,
+            'loggerPath' => $cacheDir . "/logger.log",
             'expirationTime' => '1 day',
             'flushAfter' => '30 minutes',
         ], $options);
@@ -95,12 +109,14 @@ class OptionBuildTest extends TestCase
     $cacheDir = __DIR__ . "/cache";
     $options = OptionBuilder::forFile()
           ->dir($cacheDir)
+          ->loggerPath($cacheDir . "/logger.log")
           ->expirationTime()->week(1)
           ->flushAfter()->minute(10)
           ->build();
 
     $this->assertEquals([
             'cacheDir' => $cacheDir,
+            'loggerPath' => $cacheDir . "/logger.log",
             'expirationTime' => '1 weeks',
             'flushAfter' => '10 minutes',
         ], $options);

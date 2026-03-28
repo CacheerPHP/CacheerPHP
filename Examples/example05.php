@@ -3,29 +3,36 @@
 require_once __DIR__ . "/../vendor/autoload.php";
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = [
-    "cacheDir" =>  __DIR__ . "/cache",
-];
+// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+
+// $options = [
+//     "cacheDir" =>  __DIR__ . "/cache",
+// ];
+
+$options = OptionBuilder::forFile()
+        ->dir( __DIR__ . "/cache")
+        ->build();
 
 $Cacheer = new Cacheer($options);
 
-// URL da API e chave de cache
+// API URL and cache key
 $apiUrl = 'https://jsonplaceholder.typicode.com/posts';
 $cacheKey = 'api_response_' . md5($apiUrl);
 
-// Verificando se a resposta da API já está no cache
+// Checking if the API response is already cached
 $cachedResponse = $Cacheer->getCache($cacheKey);
 
 if ($Cacheer->isSuccess()) {
-    // Use a resposta do cache
+    // Use the cached response
     $response = $cachedResponse;
 } else {
-    // Faça a chamada à API e armazene a resposta no cache
+    // Call the API and store the response in the cache
     $response = file_get_contents($apiUrl);
     $Cacheer->putCache($cacheKey, $response);
 }
 
-// Usando a resposta da API (do cache ou da chamada)
+// Using the API response (from cache or from the call)
 $data = json_decode($response, true);
 print_r($data);

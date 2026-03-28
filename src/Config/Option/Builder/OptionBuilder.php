@@ -21,7 +21,7 @@ class OptionBuilder
   */
   public static function forFile(): FileOptionBuilder
   {
-    return new FileOptionBuilder();
+    return FileOptionBuilder::create();
   }
 
   /**
@@ -31,7 +31,7 @@ class OptionBuilder
   */
   public static function forRedis(): RedisOptionBuilder
   {
-    return new RedisOptionBuilder();
+    return RedisOptionBuilder::create();
   }
 
   /**
@@ -41,6 +41,6 @@ class OptionBuilder
   */
   public static function forDatabase(): DatabaseOptionBuilder
   {
-    return new DatabaseOptionBuilder();
+    return DatabaseOptionBuilder::create();
   }
 }

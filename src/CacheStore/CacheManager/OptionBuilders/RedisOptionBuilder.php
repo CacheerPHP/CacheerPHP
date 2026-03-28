@@ -8,21 +8,25 @@ use Silviooosilva\CacheerPhp\Support\TimeBuilder;
 
 /**
  * Class RedisOptionBuilder
+ *
+ * @internal This class should not be used directly. Use OptionBuilder::forRedis() instead.
+ *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class RedisOptionBuilder
+final class RedisOptionBuilder
 {
-  /** @var ?string */
+  private function __construct() {}
+
+  public static function create(): self
+  {
+    return new self();
+  }
+
   private ?string $namespace = null;
-
-  /** @var ?string */
+  private ?string $loggerPath = null;
   private ?string $expirationTime = null;
-
-  /** @var ?string */
   private ?string $flushAfter = null;
-
-  /** @var array */
   private array $options = [];
 
   /**
@@ -34,6 +38,18 @@ class RedisOptionBuilder
   public function setNamespace(string $namespace): self
   {
     $this->namespace = $namespace;
+    return $this;
+  }
+
+    /**
+    * Logger path for cache operations.
+    *
+    * @param string $loggerPath
+    * @return $this
+    */  
+  public function loggerPath(string $loggerPath): self
+  {
+    $this->loggerPath = $loggerPath;
     return $this;
   }
 
@@ -83,10 +99,6 @@ class RedisOptionBuilder
     return $this->validated();
   }
 
-  /**
-   * Validate and assemble options.
-   * @return array
-   */
   private function validated(): array
   {
     foreach ($this->properties() as $key => $value) {
@@ -97,14 +109,11 @@ class RedisOptionBuilder
     return $this->options;
   }
 
-  /**
-   * Returns current properties.
-   * @return array
-   */
   private function properties(): array
   {
     return [
       'namespace'      => $this->namespace,
+      'loggerPath'     => $this->loggerPath,
       'expirationTime' => $this->expirationTime,
       'flushAfter'     => $this->flushAfter,
     ];

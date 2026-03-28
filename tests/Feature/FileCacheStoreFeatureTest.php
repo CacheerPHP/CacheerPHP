@@ -132,8 +132,10 @@ class FileCacheStoreFeatureTest extends TestCase
     public function test_store_if_not_present_with_add_function()
     {
         $this->cache->putCache('cache_key_test', 'existent_data');
-        $this->assertTrue($this->cache->add('cache_key_test', 100));
-        $this->assertFalse($this->cache->add('non_existent_key', 'non_existent_data'));
+        // add() returns false when the key already exists (nothing was written).
+        $this->assertFalse($this->cache->add('cache_key_test', 100));
+        // add() returns true when the key does not exist yet.
+        $this->assertTrue($this->cache->add('non_existent_key', 'non_existent_data'));
     }
 
     public function test_increment_and_decrement_functions()

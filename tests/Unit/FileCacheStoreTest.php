@@ -54,11 +54,14 @@ class FileCacheStoreTest extends TestCase
         $this->assertTrue($this->cache->isSuccess());
         $this->assertEquals($data, $cachedData);
 
-        // Recuperar cache fora do período de expiração
+        // Store with 1-second TTL, wait for it to expire, then verify miss.
+        // In v5.0.0 the expiry is stored in the file envelope, so we must use
+        // a short TTL at write time (not at read time as in the legacy driver).
+        $this->cache->putCache($cacheKey, $data, '', 1);
         sleep(2);
-        $this->cache->getCache($cacheKey, '', '2 seconds');
+        $this->cache->getCache($cacheKey);
         $this->assertFalse($this->cache->isSuccess());
-        $this->assertEquals('cacheFile not found, does not exists or expired', $this->cache->getMessage());
+        $this->assertEquals('cacheFile not found, does not exist or has expired.', $this->cache->getMessage());
     }
 
     public function testClearCache()

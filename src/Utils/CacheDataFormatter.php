@@ -23,17 +23,22 @@ class CacheDataFormatter
     }
 
     /**
-    * Converts the data to JSON format.
-    *
-    * @return string|false
-    */
-    public function toJson(): bool|string
+     * Converts the data to a JSON string.
+     *
+     * Uses JSON_THROW_ON_ERROR so a \JsonException is raised on encoding
+     * failure instead of silently returning false.
+     *
+     * @return string
+     * @throws \JsonException
+     */
+    public function toJson(): string
     {
         return json_encode(
             $this->data,
             JSON_PRETTY_PRINT |
                 JSON_UNESCAPED_UNICODE |
-                JSON_UNESCAPED_SLASHES
+                JSON_UNESCAPED_SLASHES |
+                JSON_THROW_ON_ERROR
         );
     }
 

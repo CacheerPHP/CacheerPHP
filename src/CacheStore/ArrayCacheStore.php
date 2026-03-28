@@ -2,6 +2,7 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore;
 
+use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Utils\CacheLogger;
 use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheBatchWriter;
@@ -12,66 +13,66 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
 
 /**
  * Class ArrayCacheStore
+ *
+ * In-memory, request-scoped cache. All data is lost when the process ends.
+ * Useful for unit tests and request-level memoisation.
+ *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
 class ArrayCacheStore implements CacheerInterface
 {
-
     /**
-     * @param array $arrayStore
+     * Internal storage: keyspace_key => ['cacheData' => encoded, 'expirationTime' => int]
+     *
+     * @var array
      */
     private array $arrayStore = [];
 
-    /**
-     * @var OperationStatus
-     */
+    /** @var OperationStatus */
     private OperationStatus $status;
 
-    /**
-     * @var ArrayCacheKeyspace
-     */
+    /** @var ArrayCacheKeyspace */
     private ArrayCacheKeyspace $keyspace;
 
-    /**
-     * @var ArrayCacheCodec
-     */
+    /** @var ArrayCacheCodec */
     private ArrayCacheCodec $codec;
 
-    /**
-     * @var ArrayCacheTagIndex
-     */
+    /** @var ArrayCacheTagIndex */
     private ArrayCacheTagIndex $tagIndex;
 
-  /**
-   * ArrayCacheStore constructor.
-   * 
-   * @param string $logPath
-   */
+    /**
+     * ArrayCacheStore constructor.
+     *
+     * @param string $logPath Path to the log file.
+     */
     public function __construct(string $logPath)
     {
         $logger = new CacheLogger($logPath);
-        $this->status = new OperationStatus($logger, 'array');
+        $this->status   = new OperationStatus($logger, 'array');
         $this->keyspace = new ArrayCacheKeyspace();
-        $this->codec = new ArrayCacheCodec();
+        $this->codec    = new ArrayCacheCodec();
         $this->tagIndex = new ArrayCacheTagIndex($this->keyspace, $this->status);
     }
 
-  /**
-   * Appends data to an existing cache item.
-   * 
-   * @param string $cacheKey
-   * @param mixed  $cacheData
-   * @param string $namespace
-   * @return bool
-   */
+    /**
+     * Appends data to an existing cache item.
+     *
+     * Returns false if the key does not exist or has expired — there is nothing
+     * to append to.
+     *
+     * @param string $cacheKey
+     * @param mixed $cacheData
+     * @param string $namespace
+     * @return bool
+     */
     public function appendCache(string $cacheKey, mixed $cacheData, string $namespace = ''): bool
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
         $entry = $this->arrayStore[$arrayStoreKey] ?? null;
 
         if ($entry === null || $this->keyspace->isExpired($entry)) {
-            $this->status->record("cacheData can't be appended, because doesn't exist or expired", false);
+            $this->status->record("cacheData can't be appended because it doesn't exist or has expired.", false);
             return false;
         }
 
@@ -80,13 +81,13 @@ class ArrayCacheStore implements CacheerInterface
         return true;
     }
 
-  /**
-   * Clears a specific cache item.
-   * 
-   * @param string $cacheKey
-   * @param string $namespace
-   * @return void
-   */
+    /**
+     * Clears a specific cache item.
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @return void
+     */
     public function clearCache(string $cacheKey, string $namespace = ''): void
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
@@ -94,24 +95,24 @@ class ArrayCacheStore implements CacheerInterface
         $this->status->record("Cache cleared successfully", true);
     }
 
-  /**
-   * Decrements a cache item by a specified amount.
-   * 
-   * @param string $cacheKey
-   * @param int $amount
-   * @param string $namespace
-   * @return bool
-   */
+    /**
+     * Decrements a cache item by a specified amount.
+     *
+     * @param string $cacheKey
+     * @param int $amount
+     * @param string $namespace
+     * @return bool
+     */
     public function decrement(string $cacheKey, int $amount = 1, string $namespace = ''): bool
     {
         return $this->increment($cacheKey, ($amount * -1), $namespace);
     }
 
-  /**
-   * Flushes all cache items.
-   * 
-   * @return void
-   */
+    /**
+     * Flushes all cache items and resets the tag index.
+     *
+     * @return void
+     */
     public function flushCache(): void
     {
         $this->arrayStore = [];
@@ -120,7 +121,10 @@ class ArrayCacheStore implements CacheerInterface
     }
 
     /**
-     * Stores a cache item permanently.
+     * Stores a cache item with no expiration.
+     *
+     * Uses CacheTimeConstants::CACHE_FOREVER_TTL (PHP_INT_MAX) instead of the
+     * previous magic number 31536000 * 1000, which overflowed 32-bit integers.
      *
      * @param string $cacheKey
      * @param mixed $cacheData
@@ -128,24 +132,27 @@ class ArrayCacheStore implements CacheerInterface
      */
     public function forever(string $cacheKey, mixed $cacheData): void
     {
-        $this->putCache($cacheKey, $cacheData, ttl: 31536000 * 1000);
+        $this->putCache($cacheKey, $cacheData, ttl: CacheTimeConstants::CACHE_FOREVER_TTL->value);
     }
 
-  /**
-   * Retrieves a single cache item.
-   * 
-   * @param string $cacheKey
-   * @param string $namespace
-   * @param int|string $ttl
-   * @return mixed
-   */
+    /**
+     * Retrieves a single cache item.
+     *
+     * Returns null on miss or expiry — not false — for consistency with all
+     * other drivers and to allow the value false to be cached normally.
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @param int|string $ttl
+     * @return mixed
+     */
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600): mixed
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
-        $cacheData = $this->arrayStore[$arrayStoreKey] ?? null;
+        $cacheData     = $this->arrayStore[$arrayStoreKey] ?? null;
 
         if ($cacheData === null) {
-            $this->status->record("cacheData not found, does not exists or expired", false);
+            $this->status->record("cacheData not found, does not exist or has expired.", false);
             return null;
         }
 
@@ -159,17 +166,17 @@ class ArrayCacheStore implements CacheerInterface
         return $this->codec->decode($cacheData['cacheData']);
     }
 
-  /**
-   * Gets all items in a specific namespace.
-   * 
-   * @param string $namespace
-   * @return array
-   */
+    /**
+     * Gets all non-expired items in a specific namespace.
+     *
+     * @param string $namespace
+     * @return array
+     */
     public function getAll(string $namespace = ''): array
     {
         $results = [];
         foreach ($this->arrayStore as $key => $data) {
-            if (str_starts_with($key, $namespace . ':') || $namespace === '') {
+            if ((str_starts_with($key, $namespace . ':') || $namespace === '') && !$this->keyspace->isExpired($data)) {
                 $results[$key] = $this->codec->decode($data['cacheData']);
             }
         }
@@ -181,14 +188,14 @@ class ArrayCacheStore implements CacheerInterface
         return $results;
     }
 
-  /**
-   * Retrieves multiple cache items by their keys.
-   * 
-   * @param array $cacheKeys
-   * @param string $namespace
-   * @param string|int $ttl
-   * @return array
-   */
+    /**
+     * Retrieves multiple cache items by their keys.
+     *
+     * @param array $cacheKeys
+     * @param string $namespace
+     * @param int|string $ttl
+     * @return array
+     */
     public function getMany(array $cacheKeys, string $namespace = '', string|int $ttl = 3600): array
     {
         $results = [];
@@ -208,40 +215,45 @@ class ArrayCacheStore implements CacheerInterface
         return $results;
     }
 
-  /**
-   * Checks if a cache item exists.
-   * 
-   * @param string $cacheKey
-   * @param string $namespace
-   * @return bool
-   */
+    /**
+     * Checks if a cache item exists and has not expired.
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @return bool
+     */
     public function has(string $cacheKey, string $namespace = ''): bool
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
-        $entry = $this->arrayStore[$arrayStoreKey] ?? null;
+        $entry  = $this->arrayStore[$arrayStoreKey] ?? null;
         $exists = $entry !== null && !$this->keyspace->isExpired($entry);
 
         $this->status->record(
-            $exists ? "Cache key: {$cacheKey} exists and it's available!" : "Cache key: {$cacheKey} does not exist or it's expired!",
+            $exists
+                ? "Cache key: {$cacheKey} exists and it's available!"
+                : "Cache key: {$cacheKey} does not exist or it's expired!",
             $exists
         );
 
         return $exists;
     }
 
-  /**
-   * Increments a cache item by a specified amount.
-   * 
-   * @param string $cacheKey
-   * @param int $amount
-   * @param string $namespace
-   * @return bool
-   */
+    /**
+     * Increments a numeric cache item by a specified amount.
+     *
+     * Uses isSuccess() to detect hits — not empty() — so that the value 0 is
+     * treated as a valid cached number and can be incremented normally.
+     *
+     * @param string $cacheKey
+     * @param int $amount
+     * @param string $namespace
+     * @return bool
+     */
     public function increment(string $cacheKey, int $amount = 1, string $namespace = ''): bool
     {
         $cacheData = $this->getCache($cacheKey, $namespace);
 
-        if (!empty($cacheData) && is_numeric($cacheData)) {
+        if ($this->isSuccess() && is_numeric($cacheData)) {
             $this->putCache($cacheKey, (int) ($cacheData + $amount), $namespace);
             return true;
         }
@@ -249,56 +261,56 @@ class ArrayCacheStore implements CacheerInterface
         return false;
     }
 
-  /**
-   * Checks if the operation was successful.
-   * 
-   * @return boolean
-   */
+    /**
+     * Checks if the last operation was successful.
+     *
+     * @return bool
+     */
     public function isSuccess(): bool
     {
         return $this->status->isSuccess();
     }
 
-  /**
-   * Gets the last message.
-   * 
-   * @return string
-   */
+    /**
+     * Gets the last operation message.
+     *
+     * @return string
+     */
     public function getMessage(): string
     {
         return $this->status->getMessage();
     }
 
-  /**
-   * Stores an item in the cache with a specific TTL.
-   * 
-   * @param string $cacheKey
-   * @param mixed $cacheData
-   * @param string $namespace
-   * @param int|string $ttl
-   * @return bool
-   */
+    /**
+     * Stores an item in the cache with a specific TTL.
+     *
+     * @param string $cacheKey
+     * @param mixed $cacheData
+     * @param string $namespace
+     * @param int|string $ttl Seconds until expiry.
+     * @return bool
+     */
     public function putCache(string $cacheKey, mixed $cacheData, string $namespace = '', int|string $ttl = 3600): bool
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
 
         $this->arrayStore[$arrayStoreKey] = [
-            'cacheData' => $this->codec->encode($cacheData),
-            'expirationTime' => time() + $ttl
+            'cacheData'      => $this->codec->encode($cacheData),
+            'expirationTime' => time() + (int) $ttl,
         ];
 
         $this->status->record("Cache stored successfully", true);
         return true;
     }
 
-  /**
-   * Stores multiple items in the cache in batches.
-   * 
-   * @param array $items
-   * @param string $namespace
-   * @param int $batchSize
-   * @return void
-   */
+    /**
+     * Stores multiple items in the cache in batches.
+     *
+     * @param array $items
+     * @param string $namespace
+     * @param int $batchSize
+     * @return void
+     */
     public function putMany(array $items, string $namespace = '', int $batchSize = 100): void
     {
         $writer = new ArrayCacheBatchWriter($batchSize);
@@ -309,14 +321,14 @@ class ArrayCacheStore implements CacheerInterface
         $this->status->record($this->getMessage(), $this->isSuccess());
     }
 
-  /**
-   * Renews the expiration time of a cache item.
-   * 
-   * @param string $cacheKey
-   * @param string|int $ttl
-   * @param string $namespace
-   * @return void
-   */
+    /**
+     * Renews the expiration time of a cache item.
+     *
+     * @param string $cacheKey
+     * @param int|string $ttl
+     * @param string $namespace
+     * @return void
+     */
     public function renewCache(string $cacheKey, int|string $ttl = 3600, string $namespace = ''): void
     {
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
@@ -328,24 +340,24 @@ class ArrayCacheStore implements CacheerInterface
         }
     }
 
-  /**
-   * Associates one or more keys to a tag.
-   *
-   * @param string $tag
-   * @param string ...$keys
-   * @return bool
-   */
+    /**
+     * Associates one or more keys to a tag.
+     *
+     * @param string $tag
+     * @param string ...$keys
+     * @return bool
+     */
     public function tag(string $tag, string ...$keys): bool
     {
         return $this->tagIndex->tag($tag, ...$keys);
     }
 
-  /**
-   * Flushes all keys associated with a tag.
-   *
-   * @param string $tag
-   * @return void
-   */
+    /**
+     * Flushes all keys associated with a tag.
+     *
+     * @param string $tag
+     * @return void
+     */
     public function flushTag(string $tag): void
     {
         $this->tagIndex->flush($tag, function (string $cacheKey, string $namespace): void {
