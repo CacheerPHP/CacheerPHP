@@ -12,6 +12,7 @@ use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+
 /**
  * Class FileCacheStore
  * @author Sílvio Silva <https://github.com/silviooosilva>

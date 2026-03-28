@@ -19,7 +19,7 @@ class CacheFileHelper
     {
         return CacheerHelper::mergeCacheData($cacheData);
     }
-    
+
     public static function ttl($ttl = null, ?int $defaultTTL = null): mixed
     {
         if ($ttl) {
