@@ -11,12 +11,10 @@ use Silviooosilva\CacheerPhp\Core\Connect;
 use Silviooosilva\CacheerPhp\Core\MigrationManager;
 use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
 use Silviooosilva\CacheerPhp\Helpers\CacheDatabaseHelper;
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
-
 /**
  * Class DatabaseCacheStore
  * @author Sílvio Silva <https://github.com/silviooosilva>
@@ -62,8 +60,7 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function __construct(string $logPath, array $options = [])
     {
-        $logger = new CacheLogger($logPath);
-        $this->status = new OperationStatus($logger, 'database');
+        $this->status = OperationStatus::create($logPath, 'database');
         $tableOption = $options['table'] ?? 'cacheer_table';
         $table = is_string($tableOption) && $tableOption !== '' ? $tableOption : 'cacheer_table';
         $this->cacheRepository = new CacheDatabaseRepository($table);
@@ -74,7 +71,7 @@ class DatabaseCacheStore implements CacheerInterface
 
         $defaultTTL = null;
         if (!empty($options['expirationTime'])) {
-            $defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
+            $defaultTTL = (int) CacheerHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
 
         $this->ttlResolver = new DatabaseTtlResolver($defaultTTL);

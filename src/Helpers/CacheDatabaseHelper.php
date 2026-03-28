@@ -2,8 +2,6 @@
 
 namespace Silviooosilva\CacheerPhp\Helpers;
 
-use Silviooosilva\CacheerPhp\Exceptions\CacheDatabaseException;
-
 /**
  * Class CacheDatabaseHelper
  * @author Sílvio Silva <https://github.com/silviooosilva>
@@ -11,20 +9,6 @@ use Silviooosilva\CacheerPhp\Exceptions\CacheDatabaseException;
  */
 class CacheDatabaseHelper
 {
-    /**
-     * Validates a cache item.
-     *
-     * @param array $item
-     * @return void
-     */
-    public static function validateCacheItem(array $item): void
-    {
-        CacheerHelper::validateCacheItem(
-            $item,
-            fn ($msg) => CacheDatabaseException::create($msg),
-        );
-    }
-
     /**
      * Merges cache data with existing data.
      *

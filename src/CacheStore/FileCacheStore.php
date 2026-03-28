@@ -9,10 +9,9 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\FileCachePathBuilder;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
-
 /**
  * Class FileCacheStore
  * @author Sílvio Silva <https://github.com/silviooosilva>
@@ -70,7 +69,7 @@ class FileCacheStore implements CacheerInterface
     {
         $this->fileManager = new FileCacheManager();
         $loggerPath = $options['loggerPath'] ?? 'cacheer.log';
-        $this->status = new OperationStatus(new CacheLogger($loggerPath), 'file');
+        $this->status = OperationStatus::create($loggerPath, 'file');
 
         $this->validateOptions($options);
         $this->initializeCacheDir($options['cacheDir']);
@@ -81,7 +80,7 @@ class FileCacheStore implements CacheerInterface
         $this->tagIndex = new FileCacheTagIndex($this->fileManager, $this->cacheDir, $this->status);
 
         if (isset($options['expirationTime'])) {
-            $this->defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
+            $this->defaultTTL = (int) CacheerHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
 
         $this->flusher->handleAutoFlush($options);

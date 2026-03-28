@@ -9,8 +9,6 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
-
 /**
  * Class ArrayCacheStore
  *
@@ -56,8 +54,7 @@ class ArrayCacheStore implements CacheerInterface
      */
     public function __construct(string $logPath)
     {
-        $logger = new CacheLogger($logPath);
-        $this->status = new OperationStatus($logger, 'array');
+        $this->status = OperationStatus::create($logPath, 'array');
         $this->keyspace = new ArrayCacheKeyspace();
         $this->codec = new ArrayCacheCodec();
         $this->tagIndex = new ArrayCacheTagIndex($this->keyspace, $this->status);

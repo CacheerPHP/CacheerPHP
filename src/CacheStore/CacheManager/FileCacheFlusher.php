@@ -2,8 +2,7 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\CacheManager;
 
-use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
  * Class FileCacheFlusher
@@ -69,11 +68,11 @@ class FileCacheFlusher
      *
      * @param string $flushAfter
      * @return void
-     * @throws CacheFileException
+     * @throws \InvalidArgumentException
      */
     private function scheduleFlush(string $flushAfter): void
     {
-        $flushAfterSeconds = CacheFileHelper::convertExpirationToSeconds($flushAfter);
+        $flushAfterSeconds = CacheerHelper::convertExpirationToSeconds($flushAfter);
 
         if (!$this->fileManager->fileExists($this->lastFlushTimeFile)) {
             $this->fileManager->writeFile($this->lastFlushTimeFile, time());

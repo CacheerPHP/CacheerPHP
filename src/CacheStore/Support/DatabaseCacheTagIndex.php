@@ -2,6 +2,7 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
 
 /**
@@ -67,7 +68,7 @@ final class DatabaseCacheTagIndex
         $existing = $this->repository->retrieve($indexKey, $this->namespace) ?? [];
         if (is_array($existing)) {
             foreach (array_keys($existing) as $key) {
-                [$namespace, $cacheKey] = $this->splitKey($key);
+                [$namespace, $cacheKey] = CacheerHelper::splitKey($key);
                 $clearCache($cacheKey, $namespace);
             }
         }
@@ -75,16 +76,4 @@ final class DatabaseCacheTagIndex
         $this->status->record('Tag flushed successfully', true);
     }
 
-    /**
-     * @param string $key
-     * @return array{0:string,1:string}
-     */
-    private function splitKey(string $key): array
-    {
-        if (str_contains($key, ':')) {
-            $parts = explode(':', $key, 2);
-            return [$parts[0], $parts[1]];
-        }
-        return ['', $key];
-    }
 }

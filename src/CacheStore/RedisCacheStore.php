@@ -11,15 +11,13 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\RedisKeyspace;
 use Silviooosilva\CacheerPhp\CacheStore\Support\RedisTagIndex;
 use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
 use Silviooosilva\CacheerPhp\Exceptions\CacheRedisException;
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheRedisHelper;
 use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Interface\CacheReadStoreInterface;
 use Silviooosilva\CacheerPhp\Interface\CacheWriteStoreInterface;
 use Silviooosilva\CacheerPhp\Interface\TaggableCacheStoreInterface;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
-
 /**
  * Class RedisCacheStore
  *
@@ -64,17 +62,16 @@ class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, Cach
     public function __construct(string $logPath, array $options = [])
     {
         $this->redis = RedisCacheManager::connect();
-        $logger = new CacheLogger($logPath);
 
         $namespace = !empty($options['namespace']) ? (string) $options['namespace'] : '';
         $defaultTTL = null;
 
         if (!empty($options['expirationTime'])) {
-            $defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
+            $defaultTTL = (int) CacheerHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
 
         $this->keyspace = new RedisKeyspace($namespace, $defaultTTL);
-        $this->status = new OperationStatus($logger);
+        $this->status = OperationStatus::create($logPath, 'redis');
         $this->tagIndex = new RedisTagIndex($this->redis, $this->keyspace, $this->status);
 
         $lastFlushFile = FlushHelper::pathFor(CacheStoreType::REDIS, $namespace ?: 'default');

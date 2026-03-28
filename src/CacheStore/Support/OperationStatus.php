@@ -30,6 +30,16 @@ final class OperationStatus
     private string $driverLabel;
 
     /**
+     * @param string $logPath
+     * @param string $driver
+     * @return self
+     */
+    public static function create(string $logPath, string $driver): self
+    {
+        return new self(new CacheLogger($logPath), $driver);
+    }
+
+    /**
      * @param CacheLogger $logger
      * @param string $driverLabel
      */

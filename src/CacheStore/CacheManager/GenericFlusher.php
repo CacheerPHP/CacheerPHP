@@ -2,7 +2,7 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\CacheManager;
 
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
  * Class GenericFlusher
@@ -63,7 +63,7 @@ class GenericFlusher
      */
     private function scheduleFlush(string $flushAfter): void
     {
-        $flushAfterSeconds = (int) CacheFileHelper::convertExpirationToSeconds($flushAfter);
+        $flushAfterSeconds = (int) CacheerHelper::convertExpirationToSeconds($flushAfter);
 
         if (!file_exists($this->lastFlushTimeFile)) {
             $this->writeTimestamp(time());

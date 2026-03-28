@@ -8,6 +8,7 @@
 /CacheerPHP
 cacheer.log
 /tests/Unit/cache
+/tests/Feature/cache/last_flush_time
 /Examples/InternalTests/
  
 # OS/editor

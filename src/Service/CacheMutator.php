@@ -6,7 +6,6 @@ use DateInterval;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 
 /**
  * Class CacheMutator
@@ -246,7 +245,7 @@ class CacheMutator
      * Accepted input types:
      *  - null          → PHP_INT_MAX (store forever)
      *  - int           → used as-is
-     *  - string        → parsed by CacheFileHelper::convertExpirationToSeconds()
+     *  - string        → parsed by CacheerHelper::convertExpirationToSeconds()
      *  - \DateInterval → converted via date arithmetic
      *
      * @param int|string|\DateInterval|null $ttl
@@ -265,7 +264,7 @@ class CacheMutator
         }
 
         if (is_string($ttl)) {
-            return (int) CacheFileHelper::convertExpirationToSeconds($ttl);
+            return (int) CacheerHelper::convertExpirationToSeconds($ttl);
         }
 
         return $ttl;

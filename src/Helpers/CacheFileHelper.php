@@ -2,9 +2,6 @@
 
 namespace Silviooosilva\CacheerPhp\Helpers;
 
-use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
-use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
-
 /**
  * Class CacheFileHelper
  * @author Sílvio Silva <https://github.com/silviooosilva>
@@ -12,32 +9,6 @@ use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
  */
 class CacheFileHelper
 {
-    /**
-     * Converts a string expiration format to seconds.
-     *
-     * @param string $expiration
-     * @return float|int
-     * @throws CacheFileException
-     */
-    public static function convertExpirationToSeconds(string $expiration): float|int
-    {
-        $units = [
-            'second' => CacheTimeConstants::SECOND->value,
-            'minute' => CacheTimeConstants::MINUTE->value,
-            'hour'   => CacheTimeConstants::HOUR->value,
-            'day'    => CacheTimeConstants::DAY->value,
-            'week'   => CacheTimeConstants::WEEK->value,
-            'month'  => CacheTimeConstants::MONTH->value,
-            'year'   => CacheTimeConstants::YEAR->value,
-        ];
-        foreach ($units as $unit => $value) {
-            if (str_contains($expiration, $unit)) {
-                return (int)$expiration * $value;
-            }
-        }
-        throw CacheFileException::create('Invalid expiration format');
-    }
-
     /**
      * Merges cache data with existing data.
      *
@@ -48,33 +19,11 @@ class CacheFileHelper
     {
         return CacheerHelper::mergeCacheData($cacheData);
     }
-
-    /**
-     * Validates a cache item.
-     *
-     * @param array $item
-     * @return void
-     */
-    public static function validateCacheItem(array $item): void
-    {
-        CacheerHelper::validateCacheItem(
-            $item,
-            fn ($msg) => CacheFileException::create($msg),
-        );
-    }
-
-    /**
-     * Calculates the TTL (Time To Live) for cache items.
-     *
-     * @param null $ttl
-     * @param int|null $defaultTTL
-     * @return mixed
-     * @throws CacheFileException
-     */
+    
     public static function ttl($ttl = null, ?int $defaultTTL = null): mixed
     {
         if ($ttl) {
-            $ttl = is_string($ttl) ? self::convertExpirationToSeconds($ttl) : $ttl;
+            $ttl = is_string($ttl) ? CacheerHelper::convertExpirationToSeconds($ttl) : $ttl;
         } else {
             $ttl = $defaultTTL;
         }

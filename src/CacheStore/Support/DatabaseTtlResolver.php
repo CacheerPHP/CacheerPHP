@@ -2,7 +2,7 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
  * Resolves TTL values for the database store.
@@ -28,16 +28,6 @@ final class DatabaseTtlResolver
      */
     public function resolve(string|int|null $ttl): int
     {
-        $ttlToUse = $ttl;
-
-        if ($this->defaultTTL !== null && ($ttl === null || (int) $ttl === 3600)) {
-            $ttlToUse = $this->defaultTTL;
-        }
-
-        if (is_string($ttlToUse)) {
-            $ttlToUse = (int) CacheFileHelper::convertExpirationToSeconds($ttlToUse);
-        }
-
-        return (int) $ttlToUse;
+        return (int) CacheerHelper::normalizeTtl($ttl, $this->defaultTTL);
     }
 }

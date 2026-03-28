@@ -2,8 +2,6 @@
 
 namespace Silviooosilva\CacheerPhp\Helpers;
 
-use Silviooosilva\CacheerPhp\Exceptions\CacheRedisException;
-
 /**
  * Class CacheRedisHelper
  * @author Sílvio Silva <https://github.com/silviooosilva>
@@ -26,20 +24,6 @@ class CacheRedisHelper
 
         return unserialize($data);
 
-    }
-
-    /**
-    * Validates a cache item.
-    *
-    * @param array $item
-    * @return void
-    */
-    public static function validateCacheItem(array $item): void
-    {
-        CacheerHelper::validateCacheItem(
-            $item,
-            fn ($msg) => CacheRedisException::create($msg),
-        );
     }
 
     /**

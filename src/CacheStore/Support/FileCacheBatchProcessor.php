@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
 use Silviooosilva\CacheerPhp\CacheStore\FileCacheStore;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 
 /**
@@ -33,7 +34,7 @@ class FileCacheBatchProcessor
     public function process(array $batchItems, string $namespace): void
     {
         foreach ($batchItems as $item) {
-            CacheFileHelper::validateCacheItem($item);
+            CacheerHelper::validateCacheItem($item, fn ($msg) => CacheFileException::create($msg));
             $cacheKey = $item['cacheKey'];
             $cacheData = $item['cacheData'];
             $mergedData = CacheFileHelper::mergeCacheData($cacheData);

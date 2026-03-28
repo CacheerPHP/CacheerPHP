@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Helpers;
 
 use InvalidArgumentException;
 use RuntimeException;
+use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
 
 class CacheerHelper
@@ -88,19 +89,68 @@ class CacheerHelper
     }
 
     /**
-     * Prepares data for storage, applying compression and/or encryption.
+     * Converts a string expiration format (e.g. "5 minutes", "2 hours") to seconds.
      *
-     * Encryption uses AES-256-CBC with a randomly generated IV (16 bytes) that
-     * is prepended to the ciphertext and then base64-encoded. This means two
-     * encryptions of the same plaintext will always produce different outputs,
-     * which is a fundamental requirement for semantic security under CBC mode.
-     *
-     * @param mixed $data
-     * @param bool $compression
-     * @param string|null $encryptionKey
-     * @return mixed
-     * @throws RuntimeException
+     * @param string $expiration
+     * @return float|int
+     * @throws InvalidArgumentException
      */
+    public static function convertExpirationToSeconds(string $expiration): float|int
+    {
+        $units = [
+            'second' => CacheTimeConstants::SECOND->value,
+            'minute' => CacheTimeConstants::MINUTE->value,
+            'hour'   => CacheTimeConstants::HOUR->value,
+            'day'    => CacheTimeConstants::DAY->value,
+            'week'   => CacheTimeConstants::WEEK->value,
+            'month'  => CacheTimeConstants::MONTH->value,
+            'year'   => CacheTimeConstants::YEAR->value,
+        ];
+        foreach ($units as $unit => $value) {
+            if (str_contains($expiration, $unit)) {
+                return (int) $expiration * $value;
+            }
+        }
+        throw new InvalidArgumentException('Invalid expiration format: ' . $expiration);
+    }
+
+    /**
+     * Normalizes a TTL value, applying a default override when appropriate
+     * and converting string expressions (e.g. "5 minutes") to seconds.
+     *
+     * @param string|int|null $ttl
+     * @param int|null $defaultTTL
+     * @return int|null
+     */
+    public static function normalizeTtl(string|int|null $ttl, ?int $defaultTTL = null): ?int
+    {
+        if ($defaultTTL !== null && ($ttl === null || (int) $ttl === 3600)) {
+            $ttl = $defaultTTL;
+        }
+
+        if (is_string($ttl)) {
+            $ttl = (int) self::convertExpirationToSeconds($ttl);
+        }
+
+        return $ttl === null ? null : (int) $ttl;
+    }
+
+    /**
+     * Splits a composite "namespace:key" string into [namespace, key].
+     * Returns ['', $key] when no namespace prefix is present.
+     *
+     * @param string $key
+     * @return array{0:string,1:string}
+     */
+    public static function splitKey(string $key): array
+    {
+        if (str_contains($key, ':')) {
+            $parts = explode(':', $key, 2);
+            return [$parts[0], $parts[1]];
+        }
+        return ['', $key];
+    }
+
     public static function prepareForStorage(mixed $data, bool $compression = false, ?string $encryptionKey = null): mixed
     {
         if (!$compression && is_null($encryptionKey)) {

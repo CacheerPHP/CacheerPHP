@@ -2,7 +2,7 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
  * Handles namespacing and TTL resolution for Redis cache keys.
@@ -59,16 +59,6 @@ final class RedisKeyspace
      */
     public function resolveTTL(string|int|null $ttl): ?int
     {
-        $ttlToUse = $ttl;
-
-        if ($this->defaultTTL !== null && ($ttl === null || (int) $ttl === 3600)) {
-            $ttlToUse = $this->defaultTTL;
-        }
-
-        if (is_string($ttlToUse)) {
-            $ttlToUse = (int) CacheFileHelper::convertExpirationToSeconds($ttlToUse);
-        }
-
-        return $ttlToUse === null ? null : (int) $ttlToUse;
+        return CacheerHelper::normalizeTtl($ttl, $this->defaultTTL);
     }
 }

@@ -2,6 +2,8 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
+
 /**
  * Manages tag membership for Redis-backed cache items.
  */
@@ -64,12 +66,8 @@ final class RedisTagIndex
         $members = $this->redis->smembers($setKey) ?? [];
 
         foreach ($members as $key) {
-            if (str_contains($key, ':')) {
-                [$namespace, $cacheKey] = explode(':', $key, 2);
-                $clearCache($cacheKey, $namespace);
-            } else {
-                $clearCache($key, '');
-            }
+            [$namespace, $cacheKey] = CacheerHelper::splitKey($key);
+            $clearCache($cacheKey, $namespace);
         }
 
         $this->redis->del($setKey);
