@@ -70,7 +70,7 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  * @method void setUp(array $options)
  */
 final class Cacheer
-{   
+{
     /**
      * @var string
      */
@@ -165,10 +165,10 @@ final class Cacheer
 
         foreach ($delegates as $delegate) {
             if (method_exists($delegate, $method)) {
-                $start  = microtime(true);
+                $start = microtime(true);
                 $result = $delegate->{$method}(...$parameters);
                 if (CacheEventDispatcher::hasListeners()) {
-                    $parts  = explode('\\', get_class($this->cacheStore));
+                    $parts = explode('\\', get_class($this->cacheStore));
                     CacheEventDispatcher::dispatch($method, $this->isSuccess(), $parameters, (microtime(true) - $start) * 1000.0, end($parts));
                 }
                 return $result;

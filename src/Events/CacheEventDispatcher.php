@@ -64,8 +64,8 @@ final class CacheEventDispatcher
         }
 
         $event = self::resolveEventName($method, $success);
-        $key   = isset($parameters[0]) && is_string($parameters[0]) ? $parameters[0] : '';
-        $ns    = isset($parameters[1]) && is_string($parameters[1]) ? $parameters[1] : '';
+        $key = isset($parameters[0]) && is_string($parameters[0]) ? $parameters[0] : '';
+        $ns = isset($parameters[1]) && is_string($parameters[1]) ? $parameters[1] : '';
 
         $context = [
             'namespace'   => $ns,
