@@ -5,6 +5,8 @@ namespace Silviooosilva\CacheerPhp;
 use BadMethodCallException;
 use Closure;
 use RuntimeException;
+use Silviooosilva\CacheerPhp\Contracts\CacheEventListener;
+use Silviooosilva\CacheerPhp\Events\CacheEventDispatcher;
 use Silviooosilva\CacheerPhp\Helpers\CacheConfig;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Service\CacheMutator;
@@ -68,22 +70,29 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  * @method void setUp(array $options)
  */
 final class Cacheer
-{
+{   
+    /**
+     * @var string
+     */
     private string $message;
+
+    /**
+     * @var bool
+     */
     private bool $success;
 
     /**
-     * @var bool Whether the formatter is enabled for output.
+     * @var bool
      */
     private bool $formatted = false;
 
     /**
-     * @var bool Whether gzip compression is applied to stored values.
+     * @var bool
      */
     private bool $compression = false;
 
     /**
-     * @var string|null AES-256-CBC encryption key, or null if disabled.
+     * @var string|null
      */
     private ?string $encryptionKey = null;
 
@@ -156,11 +165,41 @@ final class Cacheer
 
         foreach ($delegates as $delegate) {
             if (method_exists($delegate, $method)) {
-                return $delegate->{$method}(...$parameters);
+                $start  = microtime(true);
+                $result = $delegate->{$method}(...$parameters);
+                if (CacheEventDispatcher::hasListeners()) {
+                    $parts  = explode('\\', get_class($this->cacheStore));
+                    CacheEventDispatcher::dispatch($method, $this->isSuccess(), $parameters, (microtime(true) - $start) * 1000.0, end($parts));
+                }
+                return $result;
             }
         }
 
         throw new BadMethodCallException("Method {$method} does not exist on Cacheer.");
+    }
+
+    /**
+     * Register a listener that will be notified after every cache operation.
+     *
+     * Listeners are global (shared across all Cacheer instances and static calls).
+     * Register once in your application bootstrap
+     *
+     * @param CacheEventListener $listener
+     * @return void
+     */
+    public static function addListener(CacheEventListener $listener): void
+    {
+        CacheEventDispatcher::addListener($listener);
+    }
+
+    /**
+     * Remove all registered event listeners.
+     *
+     * @return void
+     */
+    public static function removeListeners(): void
+    {
+        CacheEventDispatcher::removeListeners();
     }
 
     /**
