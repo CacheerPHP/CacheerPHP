@@ -9,11 +9,11 @@ use Composer\InstalledVersions;
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class EnvHelper {
-
+class EnvHelper
+{
     /**
      * Gets the root path of the project.
-     * 
+     *
      * @return string
      */
     public static function getRootPath(): string

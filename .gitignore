@@ -1,12 +1,14 @@
 /vendor
 
 .phpunit.result.cache
+.php-cs-fixer.cache
 .env
 /composer.lock
 /database
 /CacheerPHP
 cacheer.log
 /tests/Unit/cache
+/tests/Feature/cache/last_flush_time
 /Examples/InternalTests/
  
 # OS/editor

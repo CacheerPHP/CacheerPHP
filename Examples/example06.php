@@ -7,27 +7,27 @@ require_once __DIR__ . "/../vendor/autoload.php";
 $Cacheer = new Cacheer();
 $Cacheer->setDriver()->useRedisDriver();
 
-// Dados a serem armazenados no cache
+// Data to be stored in the cache
 $cacheKey = 'user_profile_1234';
 $userProfile = [
     'id' => 1,
-    'name' => 'Sílvio Silva',
+    'name' => 'Silvio Silva',
     'email' => 'gasparsilvio7@gmail.com',
     'role' => 'Developer'
 ];
 $cacheNamespace = 'userData';
 
-// Armazenando dados no cache
+// Storing data in the cache
 //$Cacheer->putCache($cacheKey, $userProfile, $cacheNamespace);
 
 $Cacheer->has($cacheKey, $cacheNamespace);
 
-// Verificando se o cache existe e recuperando os dados
+// Checking if the cache exists and retrieving the data
 if ($Cacheer->isSuccess()) {
     $cachedProfile = $Cacheer->getCache($cacheKey, $cacheNamespace);
-    echo "Perfil de Usuário Encontrado:\n";
+    echo "User Profile Found:\n";
     print_r($cachedProfile);
 } else {
-    echo "Cache não encontrado: " . $Cacheer->getMessage();
+    echo "Cache not found: " . $Cacheer->getMessage();
 }
 

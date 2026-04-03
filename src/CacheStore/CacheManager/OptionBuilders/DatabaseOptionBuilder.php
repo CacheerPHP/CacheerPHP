@@ -8,106 +8,150 @@ use Silviooosilva\CacheerPhp\Support\TimeBuilder;
 
 /**
  * Class DatabaseOptionBuilder
+ *
+ * @internal This class should not be used directly. Use OptionBuilder::forDatabase() instead.
+ *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class DatabaseOptionBuilder
+final class DatabaseOptionBuilder
 {
-  /** @var ?string */
-  private ?string $table = null;
-
-  /** @var ?string */
-  private ?string $expirationTime = null;
-
-  /** @var ?string */
-  private ?string $flushAfter = null;
-
-  /** @var array */
-  private array $options = [];
-
-  /**
-   * Sets the database table used for cache storage.
-   *
-   * @param string $table
-   * @return $this
-   */
-  public function table(string $table): self
-  {
-    $this->table = $table;
-    return $this;
-  }
-
-  /**
-   * Sets the default expiration time for records.
-   *
-   * @param ?string $expirationTime
-   * @return $this|TimeBuilder
-   */
-  public function expirationTime(?string $expirationTime = null)
-  {
-    if (!is_null($expirationTime)) {
-      $this->expirationTime = $expirationTime;
-      return $this;
+    private function __construct()
+    {
     }
 
-    return new TimeBuilder(function ($formattedTime) {
-      $this->expirationTime = $formattedTime;
-    }, $this);
-  }
-
-  /**
-   * Sets an auto-flush interval for database cache.
-   *
-   * @param ?string $flushAfter
-   * @return $this|TimeBuilder
-   */
-  public function flushAfter(?string $flushAfter = null)
-  {
-    if (!is_null($flushAfter)) {
-      $this->flushAfter = mb_strtolower($flushAfter, 'UTF-8');
-      return $this;
+    /**
+     * Creates a new instance of DatabaseOptionBuilder.
+     *
+     * @return self
+     */
+    public static function create(): self
+    {
+        return new self();
     }
 
-    return new TimeBuilder(function ($formattedTime) {
-      $this->flushAfter = $formattedTime;
-    }, $this);
-  }
+    /**
+     * @var string|null
+     */
+    private ?string $table = null;
 
-  /**
-   * Builds the options array.
-   *
-   * @return array
-   */
-  public function build(): array
-  {
-    return $this->validated();
-  }
+    /**
+     * @var string|null
+     */
+    private ?string $loggerPath = null;
 
-  /**
-   * Validate and assemble options.
-   * @return array
-   */
-  private function validated(): array
-  {
-    foreach ($this->properties() as $key => $value) {
-      if (!empty($value)) {
-        $this->options[$key] = $value;
-      }
+    /**
+     * @var string|null
+     */
+    private ?string $expirationTime = null;
+
+    /**
+     * @var string|null
+     */
+    private ?string $flushAfter = null;
+
+    /**
+      * @var array
+      */
+    private array $options = [];
+
+    /**
+     * Sets the database table used for cache storage.
+     *
+     * @param string $table
+     * @return $this
+     */
+    public function table(string $table): self
+    {
+        $this->table = $table;
+        return $this;
     }
-    return $this->options;
-  }
 
-  /**
-   * Returns current properties.
-   * @return array
-   */
-  private function properties(): array
-  {
-    return [
-      'table'          => $this->table,
-      'expirationTime' => $this->expirationTime,
-      'flushAfter'     => $this->flushAfter,
-    ];
-  }
+    /**
+     * Logger path for cache operations.
+     *
+     * @param string $loggerPath
+     * @return $this
+     */
+    public function loggerPath(string $loggerPath): self
+    {
+        $this->loggerPath = $loggerPath;
+        return $this;
+    }
+
+    /**
+     * Sets the default expiration time for records.
+     *
+     * @param ?string $expirationTime
+     * @return $this|TimeBuilder
+     */
+    public function expirationTime(?string $expirationTime = null)
+    {
+        if (!is_null($expirationTime)) {
+            $this->expirationTime = $expirationTime;
+            return $this;
+        }
+
+        return new TimeBuilder(function ($formattedTime) {
+            $this->expirationTime = $formattedTime;
+        }, $this);
+    }
+
+    /**
+     * Sets an auto-flush interval for database cache.
+     *
+     * @param ?string $flushAfter
+     * @return $this|TimeBuilder
+     */
+    public function flushAfter(?string $flushAfter = null)
+    {
+        if (!is_null($flushAfter)) {
+            $this->flushAfter = mb_strtolower($flushAfter, 'UTF-8');
+            return $this;
+        }
+
+        return new TimeBuilder(function ($formattedTime) {
+            $this->flushAfter = $formattedTime;
+        }, $this);
+    }
+
+    /**
+     * Builds the options array.
+     *
+     * @return array
+     */
+    public function build(): array
+    {
+        return $this->validated();
+    }
+
+    /**
+     * Validates and compiles the options into an array.
+     *
+     * @return array
+     */
+    private function validated(): array
+    {
+        foreach ($this->properties() as $key => $value) {
+            if (!empty($value)) {
+                $this->options[$key] = $value;
+            }
+        }
+        return $this->options;
+    }
+
+    /**
+     * Returns the properties of the option builder.
+     *
+     * @return array
+     */
+    private function properties(): array
+    {
+        return [
+          'table'          => $this->table,
+          'loggerPath'     => $this->loggerPath,
+          'expirationTime' => $this->expirationTime,
+          'flushAfter'     => $this->flushAfter,
+        ];
+    }
 }
-

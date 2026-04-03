@@ -2,20 +2,19 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore;
 
-use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
-use Silviooosilva\CacheerPhp\Helpers\CacheDatabaseHelper;
-use Silviooosilva\CacheerPhp\Utils\CacheLogger;
-use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\GenericFlusher;
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
-use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
-use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
-use Silviooosilva\CacheerPhp\Core\Connect;
-use Silviooosilva\CacheerPhp\Core\MigrationManager;
 use Silviooosilva\CacheerPhp\CacheStore\Support\DatabaseBatchWriter;
 use Silviooosilva\CacheerPhp\CacheStore\Support\DatabaseCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\DatabaseTtlResolver;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
+use Silviooosilva\CacheerPhp\Core\Connect;
+use Silviooosilva\CacheerPhp\Core\MigrationManager;
+use Silviooosilva\CacheerPhp\Enums\CacheStoreType;
+use Silviooosilva\CacheerPhp\Helpers\CacheDatabaseHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
+use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
+use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
 
 /**
  * Class DatabaseCacheStore
@@ -49,7 +48,9 @@ class DatabaseCacheStore implements CacheerInterface
      */
     private DatabaseTtlResolver $ttlResolver;
 
-    /** @var GenericFlusher|null */
+    /**
+     * @var GenericFlusher|null
+     */
     private ?GenericFlusher $flusher = null;
 
     /**
@@ -60,8 +61,7 @@ class DatabaseCacheStore implements CacheerInterface
      */
     public function __construct(string $logPath, array $options = [])
     {
-        $logger = new CacheLogger($logPath);
-        $this->status = new OperationStatus($logger, 'database');
+        $this->status = OperationStatus::create($logPath, 'database');
         $tableOption = $options['table'] ?? 'cacheer_table';
         $table = is_string($tableOption) && $tableOption !== '' ? $tableOption : 'cacheer_table';
         $this->cacheRepository = new CacheDatabaseRepository($table);
@@ -72,7 +72,7 @@ class DatabaseCacheStore implements CacheerInterface
 
         $defaultTTL = null;
         if (!empty($options['expirationTime'])) {
-            $defaultTTL = (int) CacheFileHelper::convertExpirationToSeconds((string) $options['expirationTime']);
+            $defaultTTL = (int) CacheerHelper::convertExpirationToSeconds((string) $options['expirationTime']);
         }
 
         $this->ttlResolver = new DatabaseTtlResolver($defaultTTL);
@@ -88,7 +88,7 @@ class DatabaseCacheStore implements CacheerInterface
 
     /**
      * Appends data to an existing cache item.
-     * 
+     *
      * @param string $cacheKey
      * @param mixed  $cacheData
      * @param string $namespace
@@ -101,17 +101,17 @@ class DatabaseCacheStore implements CacheerInterface
 
         $updated = $this->cacheRepository->update($cacheKey, $mergedCacheData, $namespace);
         if ($updated) {
-            $this->status->record("Cache updated successfully.", true);
+            $this->status->record('Cache updated successfully.', true);
             return true;
         }
 
-        $this->status->record("Cache does not exist or update failed!", false, 'error');
+        $this->status->record('Cache does not exist or update failed!', false, 'error');
         return false;
     }
 
     /**
      * Clears a specific cache item.
-     * 
+     *
      * @param string $cacheKey
      * @param string $namespace
      * @return void
@@ -119,22 +119,22 @@ class DatabaseCacheStore implements CacheerInterface
     public function clearCache(string $cacheKey, string $namespace = ''): void
     {
         $deleted = $this->cacheRepository->clear($cacheKey, $namespace);
-        $this->status->record($deleted ? "Cache deleted successfully!" : "Cache does not exists!", $deleted);
+        $this->status->record($deleted ? 'Cache deleted successfully!' : 'Cache does not exists!', $deleted);
     }
 
     /**
      * Flushes all cache items.
-     * 
+     *
      * @return void
      */
     public function flushCache(): void
     {
         if ($this->cacheRepository->flush()) {
-            $this->status->record("Flush finished successfully", true, 'info');
+            $this->status->record('Flush finished successfully', true, 'info');
             return;
         }
 
-        $this->status->record("Something went wrong. Please, try again.", false, 'info');
+        $this->status->record('Something went wrong. Please, try again.', false, 'info');
     }
 
     /**
@@ -164,7 +164,7 @@ class DatabaseCacheStore implements CacheerInterface
 
     /**
      * Gets a single cache item.
-     * 
+     *
      * @param string $cacheKey
      * @param string $namespace
      * @param string|int $ttl
@@ -174,16 +174,16 @@ class DatabaseCacheStore implements CacheerInterface
     {
         $cacheData = $this->cacheRepository->retrieve($cacheKey, $namespace);
         if ($cacheData !== null) {
-            $this->status->record("Cache retrieved successfully", true);
+            $this->status->record('Cache retrieved successfully', true);
             return $cacheData;
         }
-        $this->status->record("CacheData not found, does not exists or expired", false, 'info');
+        $this->status->record('CacheData not found, does not exists or expired', false, 'info');
         return null;
     }
 
     /**
      * Gets all items in a specific namespace.
-     * 
+     *
      * @param string $namespace
      * @return array
      */
@@ -191,16 +191,16 @@ class DatabaseCacheStore implements CacheerInterface
     {
         $cacheData = $this->cacheRepository->getAll($namespace);
         if (!empty($cacheData)) {
-            $this->status->record("Cache retrieved successfully", true);
+            $this->status->record('Cache retrieved successfully', true);
             return $cacheData;
         }
-        $this->status->record("No cache data found for the provided namespace", false, 'info');
+        $this->status->record('No cache data found for the provided namespace', false, 'info');
         return [];
     }
 
     /**
      * Retrieves multiple cache items by their keys.
-     * 
+     *
      * @param array  $cacheKeys
      * @param string $namespace
      * @param string|int $ttl
@@ -216,10 +216,10 @@ class DatabaseCacheStore implements CacheerInterface
             }
         }
         if (!empty($cacheData)) {
-            $this->status->record("Cache retrieved successfully", true);
+            $this->status->record('Cache retrieved successfully', true);
             return $cacheData;
         }
-        $this->status->record("No cache data found for the provided keys", false, 'info');
+        $this->status->record('No cache data found for the provided keys', false, 'info');
         return [];
     }
 
@@ -235,7 +235,7 @@ class DatabaseCacheStore implements CacheerInterface
 
     /**
      * Checks if a cache item exists.
-     * 
+     *
      * @param string $cacheKey
      * @param string $namespace
      * @return bool
@@ -256,7 +256,7 @@ class DatabaseCacheStore implements CacheerInterface
 
     /**
      * Checks if the last operation was successful.
-     * 
+     *
      * @return boolean
      */
     public function isSuccess(): bool
@@ -266,7 +266,7 @@ class DatabaseCacheStore implements CacheerInterface
 
     /**
      * Store multiple items in the cache.
-     * 
+     *
      * @param array   $items
      * @param string  $namespace
      * @param integer $batchSize
@@ -282,7 +282,7 @@ class DatabaseCacheStore implements CacheerInterface
 
     /**
      * Stores an item in the cache with a specific TTL.
-     * 
+     *
      * @param string $cacheKey
      * @param mixed  $cacheData
      * @param string $namespace
@@ -295,17 +295,17 @@ class DatabaseCacheStore implements CacheerInterface
         $stored = $this->cacheRepository->store($cacheKey, $cacheData, $namespace, $ttlToUse);
 
         if ($stored) {
-            $this->status->record("Cache Stored Successfully", true);
+            $this->status->record('Cache Stored Successfully', true);
             return true;
         }
 
-        $this->status->record("Already exists a cache with this key...", false, 'error');
+        $this->status->record('Already exists a cache with this key...', false, 'error');
         return false;
     }
 
     /**
      * Renews the cache for a specific key with a new TTL.
-     * 
+     *
      * @param string $cacheKey
      * @param string|int $ttl
      * @param string $namespace

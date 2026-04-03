@@ -5,12 +5,11 @@ use Silviooosilva\CacheerPhp\Cacheer;
 
 class FileCacheStoreFeatureTest extends TestCase
 {
-    
     /**
      * @var Cacheer
      */
     private $cache;
-    
+
     /**
      * @var string
      */
@@ -33,8 +32,8 @@ class FileCacheStoreFeatureTest extends TestCase
     public function testAutoFlush()
     {
         $options = [
-            'cacheDir' => $this->cacheDir,
-            'flushAfter' => '10 seconds'
+            'cacheDir'   => $this->cacheDir,
+            'flushAfter' => '10 seconds',
         ];
 
         $this->cache = new Cacheer($options);
@@ -79,12 +78,12 @@ class FileCacheStoreFeatureTest extends TestCase
         $cacheer = new Cacheer(['cacheDir' => __DIR__ . '/cache']);
         $items = [
             [
-                'cacheKey' => 'user_1_profile',
-                'cacheData' => ['name' => 'John Doe', 'email' => 'john@example.com']
+                'cacheKey'  => 'user_1_profile',
+                'cacheData' => ['name' => 'John Doe', 'email' => 'john@example.com'],
             ],
             [
-                'cacheKey' => 'user_2_profile',
-                'cacheData' => ['name' => 'Jane Doe', 'email' => 'jane@example.com']
+                'cacheKey'  => 'user_2_profile',
+                'cacheData' => ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
             ],
         ];
 
@@ -102,7 +101,7 @@ class FileCacheStoreFeatureTest extends TestCase
             return 'valor_teste';
         });
         $this->assertEquals('valor_teste', $value);
-        $cachedValue = $this->cache->remember('remember_test_key', 60, function(){
+        $cachedValue = $this->cache->remember('remember_test_key', 60, function () {
             return 'novo_valor';
         });
         $this->assertEquals('valor_teste', $cachedValue);
@@ -132,8 +131,10 @@ class FileCacheStoreFeatureTest extends TestCase
     public function test_store_if_not_present_with_add_function()
     {
         $this->cache->putCache('cache_key_test', 'existent_data');
-        $this->assertTrue($this->cache->add('cache_key_test', 100));
-        $this->assertFalse($this->cache->add('non_existent_key', 'non_existent_data'));
+        // add() returns false when the key already exists (nothing was written).
+        $this->assertFalse($this->cache->add('cache_key_test', 100));
+        // add() returns true when the key does not exist yet.
+        $this->assertTrue($this->cache->add('non_existent_key', 'non_existent_data'));
     }
 
     public function test_increment_and_decrement_functions()
@@ -148,7 +149,9 @@ class FileCacheStoreFeatureTest extends TestCase
     public function test_get_many_cache_items()
     {
         $items = ['key1' => 'value1', 'key2' => 'value2', 'key3' => 'value3'];
-        foreach ($items as $k => $v) { $this->cache->putCache($k, $v); }
+        foreach ($items as $k => $v) {
+            $this->cache->putCache($k, $v);
+        }
         $retrieved = $this->cache->getMany(array_keys($items));
         $this->assertEquals($items, $retrieved);
     }
@@ -156,7 +159,9 @@ class FileCacheStoreFeatureTest extends TestCase
     public function test_get_all_cache_items()
     {
         $items = ['key1' => 'value1', 'key2' => 'value2', 'key3' => 'value3'];
-        foreach ($items as $k => $v) { $this->cache->putCache($k, $v); }
+        foreach ($items as $k => $v) {
+            $this->cache->putCache($k, $v);
+        }
         $retrieved = $this->cache->getAll();
         $this->assertCount(3, $retrieved);
     }

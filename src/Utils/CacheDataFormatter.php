@@ -9,7 +9,9 @@ namespace Silviooosilva\CacheerPhp\Utils;
  */
 class CacheDataFormatter
 {
-    /** @param mixed $data */
+    /**
+     * @param mixed $data
+     */
     private mixed $data;
 
     /**
@@ -23,23 +25,28 @@ class CacheDataFormatter
     }
 
     /**
-    * Converts the data to JSON format.
-    *
-    * @return string|false
-    */
-    public function toJson(): bool|string
+     * Converts the data to a JSON string.
+     *
+     * Uses JSON_THROW_ON_ERROR so a \JsonException is raised on encoding
+     * failure instead of silently returning false.
+     *
+     * @return string
+     * @throws \JsonException
+     */
+    public function toJson(): string
     {
         return json_encode(
             $this->data,
             JSON_PRETTY_PRINT |
                 JSON_UNESCAPED_UNICODE |
-                JSON_UNESCAPED_SLASHES
+                JSON_UNESCAPED_SLASHES |
+                JSON_THROW_ON_ERROR,
         );
     }
 
     /**
     * Converts the data to an array.
-    * 
+    *
     * @return array
     */
     public function toArray(): array
@@ -49,7 +56,7 @@ class CacheDataFormatter
 
     /**
     * Converts the data to a string.
-    * 
+    *
     * @return string
     */
     public function toString(): string
@@ -59,7 +66,7 @@ class CacheDataFormatter
 
     /**
     * Converts the data to an object.
-    * 
+    *
     * @return object
     */
     public function toObject(): object

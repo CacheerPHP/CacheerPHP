@@ -2,22 +2,26 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\CacheManager;
 
-use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
  * Class GenericFlusher
  *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
- * 
+ *
  * Lightweight flusher that stores last flush timestamp in a file and invokes a provided callback.
  */
 class GenericFlusher
 {
-    /** @var string */
+    /**
+     * @var string
+     */
     private string $lastFlushTimeFile;
 
-    /** @var callable */
+    /**
+     * @var callable
+     */
     private $flushCallback;
 
     /**
@@ -59,7 +63,7 @@ class GenericFlusher
      */
     private function scheduleFlush(string $flushAfter): void
     {
-        $flushAfterSeconds = (int) CacheFileHelper::convertExpirationToSeconds($flushAfter);
+        $flushAfterSeconds = (int) CacheerHelper::convertExpirationToSeconds($flushAfter);
 
         if (!file_exists($this->lastFlushTimeFile)) {
             $this->writeTimestamp(time());
@@ -76,7 +80,7 @@ class GenericFlusher
 
     /**
      * Persist the last flush timestamp, throwing on failure to avoid silent state drift.
-     * 
+     *
      * @param int $timestamp
      * @return void
      */

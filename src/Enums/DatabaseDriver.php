@@ -11,35 +11,35 @@ enum DatabaseDriver: string
 
     /**
      * Human friendly label for error/help messages.
-     * 
+     *
      * @return string
      */
     public function label(): string
     {
         return match ($this) {
-            self::MYSQL => 'MySQL(mysql)',
+            self::MYSQL   => 'MySQL(mysql)',
             self::MARIADB => 'MariaDB(mariadb)',
-            self::SQLITE => 'SQLite(sqlite)',
-            self::PGSQL => 'PgSQL(pgsql)',
+            self::SQLITE  => 'SQLite(sqlite)',
+            self::PGSQL   => 'PgSQL(pgsql)',
         };
     }
 
     /**
      * PDO DSN identifier for the driver.
-     * 
+     *
      * @return string
      */
     public function dsnName(): string
     {
         return match ($this) {
             self::MARIADB => self::MYSQL->value,
-            default => $this->value,
+            default       => $this->value,
         };
     }
 
     /**
      * Whether the driver behaves like MySQL for SQL syntax decisions.
-     * 
+     *
      * @return bool
      */
     public function isMysqlFamily(): bool
@@ -57,4 +57,3 @@ enum DatabaseDriver: string
         return array_map(static fn (self $driver) => $driver->label(), self::cases());
     }
 }
-

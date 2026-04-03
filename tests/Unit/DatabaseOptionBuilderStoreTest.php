@@ -7,16 +7,16 @@ use Silviooosilva\CacheerPhp\Core\Connect;
 
 class DatabaseOptionBuilderStoreTest extends TestCase
 {
-  private ?PDO $pdo = null;
-  private string $table = 'cache_items';
+    private ?PDO $pdo = null;
+    private string $table = 'cache_items';
 
-  protected function setUp(): void
-  {
-    // Ensure SQLite connection and create a custom table for this test
-    $this->pdo = Connect::getInstance();
+    protected function setUp(): void
+    {
+        // Ensure SQLite connection and create a custom table for this test
+        $this->pdo = Connect::getInstance();
 
-    // Create table compatible with SQLite
-    $this->pdo->exec("CREATE TABLE IF NOT EXISTS {$this->table} (
+        // Create table compatible with SQLite
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS {$this->table} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         cacheKey VARCHAR(255) NOT NULL,
         cacheData TEXT NOT NULL,
@@ -30,43 +30,42 @@ class DatabaseOptionBuilderStoreTest extends TestCase
     CREATE INDEX IF NOT EXISTS idx_{$this->table}_expirationTime ON {$this->table} (expirationTime);
     CREATE INDEX IF NOT EXISTS idx_{$this->table}_key_namespace ON {$this->table} (cacheKey, cacheNamespace);
     ");
-  }
-
-  protected function tearDown(): void
-  {
-    if ($this->pdo instanceof PDO) {
-      $this->pdo->exec("DROP TABLE IF EXISTS {$this->table}");
     }
-  }
 
-  public function test_database_store_uses_custom_table_from_option_builder()
-  {
-    $options = OptionBuilder::forDatabase()
-      ->table($this->table)
-      ->build();
+    protected function tearDown(): void
+    {
+        if ($this->pdo instanceof PDO) {
+            $this->pdo->exec("DROP TABLE IF EXISTS {$this->table}");
+        }
+    }
 
-    $cache = new Cacheer($options);
-    $cache->setDriver()->useDatabaseDriver();
+    public function test_database_store_uses_custom_table_from_option_builder()
+    {
+        $options = OptionBuilder::forDatabase()
+          ->table($this->table)
+          ->build();
 
-    $key = 'opt_table_key';
-    $data = ['x' => 1];
+        $cache = new Cacheer($options);
+        $cache->setDriver()->useDatabaseDriver();
 
-    $cache->putCache($key, $data, '', 3600);
-    $this->assertTrue($cache->isSuccess());
+        $key = 'opt_table_key';
+        $data = ['x' => 1];
 
-    // Validate via direct SQL against the custom table
-    $nowFunction = "DATETIME('now', 'localtime')";
-    $stmt = $this->pdo?->prepare("SELECT cacheData FROM {$this->table} WHERE cacheKey = :k AND cacheNamespace = '' AND expirationTime > $nowFunction LIMIT 1");
-    $stmt->bindValue(':k', $key);
-    $stmt->execute();
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $cache->putCache($key, $data, '', 3600);
+        $this->assertTrue($cache->isSuccess());
 
-    $this->assertNotFalse($row);
-    $this->assertEquals($data, unserialize($row['cacheData']));
+        // Validate via direct SQL against the custom table
+        $nowFunction = "DATETIME('now', 'localtime')";
+        $stmt = $this->pdo?->prepare("SELECT cacheData FROM {$this->table} WHERE cacheKey = :k AND cacheNamespace = '' AND expirationTime > $nowFunction LIMIT 1");
+        $stmt->bindValue(':k', $key);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    // And ensure Cacheer can read it back through the store
-    $read = $cache->getCache($key);
-    $this->assertEquals($data, $read);
-  }
+        $this->assertNotFalse($row);
+        $this->assertEquals($data, unserialize($row['cacheData']));
+
+        // And ensure Cacheer can read it back through the store
+        $read = $cache->getCache($key);
+        $this->assertEquals($data, $read);
+    }
 }
-

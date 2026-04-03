@@ -18,7 +18,6 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  */
 class CacheConfig
 {
-
     /**
      * @var Cacheer
      */
@@ -37,18 +36,12 @@ class CacheConfig
 
     /**
      * Sets the default timezone for the application.
-     * 
+     *
      * @param string $timezone
      * @return $this
      */
     public function setTimeZone(string $timezone): CacheConfig
     {
-        /**
-         * Make sure the provided timezone is valid
-         * 
-         * https://www.php.net/manual/en/timezones.php 
-         * */
-
         if (in_array($timezone, timezone_identifiers_list())) {
             date_default_timezone_set($timezone);
         }
@@ -57,7 +50,7 @@ class CacheConfig
 
     /**
      * Sets the cache driver for the application.
-     * 
+     *
      * @return CacheDriver
      */
     public function setDriver(): CacheDriver
@@ -67,23 +60,23 @@ class CacheConfig
 
     /**
      * Sets the logger path for the cache driver.
-     * 
+     *
      * @param string $path
      * @return Cacheer
      */
     public function setLoggerPath(string $path): Cacheer
     {
-        
+
         $cacheDriver = $this->setDriver();
         $cacheDriver->logPath = $path;
 
-        $cacheDriverInstance = $this->cacheer->cacheStore;
+        $cacheDriverInstance = $this->cacheer->getCacheStore();
 
         return match (get_class($cacheDriverInstance)) {
-            FileCacheStore::class => $cacheDriver->useFileDriver(),
+            FileCacheStore::class  => $cacheDriver->useFileDriver(),
             RedisCacheStore::class => $cacheDriver->useRedisDriver(),
             ArrayCacheStore::class => $cacheDriver->useArrayDriver(),
-            default => $cacheDriver->useDatabaseDriver(),
+            default                => $cacheDriver->useDatabaseDriver(),
         };
     }
 
@@ -100,23 +93,35 @@ class CacheConfig
     }
 
     /**
-     * Sets up the Cacheer instance with the provided options.
+     * Replaces all options on the Cacheer instance.
      *
      * @param array $options
      * @return void
      */
     public function setUp(array $options): void
     {
-        $this->cacheer->options = $options;
+        $this->cacheer->setOptions($options);
     }
 
     /**
-     * Gets the options for the Cacheer instance.
+     * Returns the value of a single configuration option, or a default if the key is not set.
+     *
+     * @param string $key
+     * @param mixed  $default
+     * @return mixed
+    */
+    public function getOption(string $key, mixed $default = null): mixed
+    {
+        return $this->cacheer->getOption($key, $default);
+    }
+
+    /**
+     * Gets the options from the Cacheer instance.
      *
      * @return array
      */
     public function getOptions(): array
     {
-        return $this->cacheer->options;
+        return $this->cacheer->getOptions();
     }
 }

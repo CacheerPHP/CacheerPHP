@@ -2,15 +2,23 @@
 require_once __DIR__ . "/../vendor/autoload.php";
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = [
-    "cacheDir" =>  __DIR__ . "/cache",
-    "expirationTime" => "2 hour"
-];
+// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+
+// $options = [
+//     "cacheDir" =>  __DIR__ . "/cache",
+//     "expirationTime" => "2 hour"
+// ];
+
+$options = OptionBuilder::forFile()
+        ->dir(__DIR__ . "/cache")
+        ->expirationTime()->hour(2)
+        ->build();
 
 $Cacheer = new Cacheer($options);
 
-// Dados a serem armazenados no cache
+// Data to be stored in the cache
 $cacheKey = 'daily_stats';
 $dailyStats = [
     'visits' => 1500,
@@ -18,10 +26,10 @@ $dailyStats = [
     'revenue' => 500.75,
 ];
 
-// Armazenando dados no cache
+// Storing data in the cache
 $Cacheer->putCache($cacheKey, $dailyStats);
 
-// Recuperando dados do cache por 2 horas
+// Retrieving cached data (TTL: 2 hours)
 $cachedStats = $Cacheer->getCache($cacheKey);
 
 if ($Cacheer->isSuccess()) {

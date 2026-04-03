@@ -3,6 +3,7 @@
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\FileCacheManager;
+use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
  * Manages tag membership for file-backed cache items.
@@ -17,7 +18,7 @@ final class FileCacheTagIndex
     public function __construct(
         private FileCacheManager $fileManager,
         private string $cacheDir,
-        private OperationStatus $status
+        private OperationStatus $status,
     ) {
     }
 
@@ -41,7 +42,7 @@ final class FileCacheTagIndex
             $current[$key] = true;
         }
         $this->fileManager->writeFile($path, json_encode($current));
-        $this->status->record("Tagged successfully", true);
+        $this->status->record('Tagged successfully', true);
         return true;
     }
 
@@ -59,13 +60,13 @@ final class FileCacheTagIndex
             $current = json_decode($json, true) ?: [];
         }
         foreach (array_keys($current) as $key) {
-            [$namespace, $cacheKey] = $this->splitKey($key);
+            [$namespace, $cacheKey] = CacheerHelper::splitKey($key);
             $clearCache($cacheKey, $namespace);
         }
         if ($this->fileManager->fileExists($path)) {
             $this->fileManager->removeFile($path);
         }
-        $this->status->record("Tag flushed successfully", true);
+        $this->status->record('Tag flushed successfully', true);
     }
 
     /**
@@ -81,16 +82,4 @@ final class FileCacheTagIndex
         return $tagDir . DIRECTORY_SEPARATOR . $tag . '.json';
     }
 
-    /**
-     * @param string $key
-     * @return array{0:string,1:string}
-     */
-    private function splitKey(string $key): array
-    {
-        if (str_contains($key, ':')) {
-            $parts = explode(':', $key, 2);
-            return [$parts[0], $parts[1]];
-        }
-        return ['', $key];
-    }
 }

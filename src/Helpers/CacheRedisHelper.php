@@ -2,9 +2,6 @@
 
 namespace Silviooosilva\CacheerPhp\Helpers;
 
-use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
-use Silviooosilva\CacheerPhp\Exceptions\CacheRedisException;
-
 /**
  * Class CacheRedisHelper
  * @author Sílvio Silva <https://github.com/silviooosilva>
@@ -12,36 +9,21 @@ use Silviooosilva\CacheerPhp\Exceptions\CacheRedisException;
  */
 class CacheRedisHelper
 {
-
-  /**
-  * serializes or unserializes data based on the $serialize flag.
-  * 
-  * @param mixed $data
-  * @param bool  $serialize
-  * @return mixed
-  */
-  public static function serialize(mixed $data, bool $serialize = true): mixed
-  {
-    if($serialize) {
-      return serialize($data);
-    }
-
-    return unserialize($data);
-
-  }
-
     /**
-    * Validates a cache item.
-    *  
-    * @param array $item
-    * @return void
+    * serializes or unserializes data based on the $serialize flag.
+    *
+    * @param mixed $data
+    * @param bool  $serialize
+    * @return mixed
     */
-    public static function validateCacheItem(array $item): void
+    public static function serialize(mixed $data, bool $serialize = true): mixed
     {
-        CacheerHelper::validateCacheItem(
-            $item,
-            fn($msg) => CacheRedisException::create($msg)
-        );
+        if ($serialize) {
+            return serialize($data);
+        }
+
+        return unserialize($data);
+
     }
 
     /**
@@ -55,17 +37,16 @@ class CacheRedisHelper
         return CacheerHelper::mergeCacheData($cacheData);
     }
 
-  /**
-  * Generates an array identifier for cache data.
-  * 
-  * @param mixed $currentCacheData
-  * @param mixed $cacheData
-  * @return array
-  */
-  public static function arrayIdentifier(mixed $currentCacheData, mixed $cacheData): array
-  {
-      return CacheerHelper::arrayIdentifier($currentCacheData, $cacheData);
-  }
+    /**
+    * Generates an array identifier for cache data.
+    *
+    * @param mixed $currentCacheData
+    * @param mixed $cacheData
+    * @return array
+    */
+    public static function arrayIdentifier(mixed $currentCacheData, mixed $cacheData): array
+    {
+        return CacheerHelper::arrayIdentifier($currentCacheData, $cacheData);
+    }
 
 }
-

@@ -6,110 +6,111 @@ use Silviooosilva\CacheerPhp\CacheStore\RedisCacheStore;
 
 class RedisCacheStoreTest extends TestCase
 {
+    /**
+     * @var Cacheer
+     */
+    private $cache;
 
-  /** @var Cacheer */
-  private $cache;
+    protected function setUp(): void
+    {
+        $this->cache = new Cacheer();
+        $this->cache->setDriver()->useRedisDriver();
+    }
 
-  protected function setUp(): void
-  {
-    $this->cache = new Cacheer();
-    $this->cache->setDriver()->useRedisDriver();
-  }
+    protected function tearDown(): void
+    {
+        $this->cache->flushCache();
+    }
 
-  protected function tearDown(): void
-  {
-    $this->cache->flushCache();
-  }
+    public function testUsingRedisDriverSetsProperInstance()
+    {
+        $this->assertInstanceOf(RedisCacheStore::class, $this->cache->getCacheStore());
+    }
 
-  public function testUsingRedisDriverSetsProperInstance()
-  {
-    $this->assertInstanceOf(RedisCacheStore::class, $this->cache->cacheStore);
-  }
+    public function testPutCacheInRedis()
+    {
+        $cacheKey = 'test_key';
+        $cacheData = ['name' => 'Sílvio Silva', 'role' => 'Developer'];
 
-  public function testPutCacheInRedis()
-  {
-    $cacheKey = 'test_key';
-    $cacheData = ['name' => 'Sílvio Silva', 'role' => 'Developer'];
+        $this->cache->putCache($cacheKey, $cacheData);
 
-    $this->cache->putCache($cacheKey, $cacheData);
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
+        $this->assertNotEmpty($this->cache->getCache($cacheKey));
+        $this->assertEquals($cacheData, $this->cache->getCache($cacheKey));
 
-    $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
-    $this->assertNotEmpty($this->cache->getCache($cacheKey));
-    $this->assertEquals($cacheData, $this->cache->getCache($cacheKey));
+    }
 
-  }
+    public function testGetCacheFromRedis()
+    {
+        $cacheKey = 'test_key';
+        $cacheData = ['name' => 'Sílvio Silva', 'role' => 'Developer'];
 
-  public function testGetCacheFromRedis()
-  {
-    $cacheKey = 'test_key';
-    $cacheData = ['name' => 'Sílvio Silva', 'role' => 'Developer'];
+        $this->cache->putCache($cacheKey, $cacheData);
 
-    $this->cache->putCache($cacheKey, $cacheData);
-    
-    $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
 
-    $data = $this->cache->getCache($cacheKey);
-    $this->assertNotEmpty($data);
-    $this->assertEquals($cacheData, $data);
-  }
+        $data = $this->cache->getCache($cacheKey);
+        $this->assertNotEmpty($data);
+        $this->assertEquals($cacheData, $data);
+    }
 
-  public function testExpiredCacheInRedis()
-  {
-    $cacheKey = 'expired_key';
-    $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
+    public function testExpiredCacheInRedis()
+    {
+        $cacheKey = 'expired_key';
+        $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
 
-    $this->cache->putCache($cacheKey, $cacheData, '', 1);
-    sleep(3);
+        $this->cache->putCache($cacheKey, $cacheData, '', 1);
+        sleep(3);
 
-    $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
-    $this->assertEmpty($this->cache->getCache($cacheKey));
-    $this->assertFalse($this->cache->isSuccess());
-  }
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
+        $this->assertEmpty($this->cache->getCache($cacheKey));
+        $this->assertFalse($this->cache->isSuccess());
+    }
 
-  public function testOverwriteExistingCacheInRedis()
-  {
-    $cacheKey = 'overwrite_key';
-    $initialCacheData = ['name' => 'Initial Data', 'email' => 'initial@example.com'];
-    $newCacheData = ['name' => 'New Data', 'email' => 'new@example.com'];
+    public function testOverwriteExistingCacheInRedis()
+    {
+        $cacheKey = 'overwrite_key';
+        $initialCacheData = ['name' => 'Initial Data', 'email' => 'initial@example.com'];
+        $newCacheData = ['name' => 'New Data', 'email' => 'new@example.com'];
 
-    $this->cache->putCache($cacheKey, $initialCacheData);
-    $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
+        $this->cache->putCache($cacheKey, $initialCacheData);
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
 
-    $this->cache->appendCache($cacheKey, $newCacheData);
-    $this->assertEquals("Cache appended successfully", $this->cache->getMessage());
-    $this->assertEquals($newCacheData, $this->cache->getCache($cacheKey));
-  }
+        $this->cache->appendCache($cacheKey, $newCacheData);
+        $this->assertEquals('Cache appended successfully', $this->cache->getMessage());
+        $this->assertEquals($newCacheData, $this->cache->getCache($cacheKey));
+    }
 
-  public function testPutManyCacheItemsInRedis()
-  {
-     $items = [
-            [
-                'cacheKey' => 'user_1_profile',
-                'cacheData' => [
-                    ['name' => 'John Doe', 'email' => 'john@example.com'],
-                    ['name' => 'John Doe', 'email' => 'john@example.com'],
-                    ['name' => 'John Doe', 'email' => 'john@example.com'],
-                    ['name' => 'John Doe', 'email' => 'john@example.com']
-                ]
-            ],
-            [
-                'cacheKey' => 'user_2_profile',
-                'cacheData' => [
-                    ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
-                    ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
-                    ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
-                    ['name' => 'Jane Doe', 'email' => 'jane@example.com']
-                ]
-            ]
-        ];
+    public function testPutManyCacheItemsInRedis()
+    {
+        $items = [
+               [
+                   'cacheKey'  => 'user_1_profile',
+                   'cacheData' => [
+                       ['name' => 'John Doe', 'email' => 'john@example.com'],
+                       ['name' => 'John Doe', 'email' => 'john@example.com'],
+                       ['name' => 'John Doe', 'email' => 'john@example.com'],
+                       ['name' => 'John Doe', 'email' => 'john@example.com'],
+                   ],
+               ],
+               [
+                   'cacheKey'  => 'user_2_profile',
+                   'cacheData' => [
+                       ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
+                       ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
+                       ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
+                       ['name' => 'Jane Doe', 'email' => 'jane@example.com'],
+                   ],
+               ],
+           ];
 
-    $this->cache->putMany($items);
-    foreach ($items as $item) {
+        $this->cache->putMany($items);
+        foreach ($items as $item) {
             $this->assertEquals($item['cacheData'], $this->cache->getCache($item['cacheKey']));
         }
-  }
+    }
 
-      public function testAppendCacheWithNamespaceInRedis()
+    public function testAppendCacheWithNamespaceInRedis()
     {
         $cacheKey = 'test_append_key_ns';
         $namespace = 'test_namespace';
@@ -119,26 +120,23 @@ class RedisCacheStoreTest extends TestCase
 
         $expectedData = array_merge($initialData, $additionalData);
 
- 
         $this->cache->putCache($cacheKey, $initialData, $namespace);
         $this->assertTrue($this->cache->isSuccess());
 
- 
         $this->cache->appendCache($cacheKey, $additionalData, $namespace);
         $this->assertTrue($this->cache->isSuccess());
-
 
         $cachedData = $this->cache->getCache($cacheKey, $namespace);
         $this->assertEquals($expectedData, $cachedData);
     }
 
-      public function testDataOutputShouldBeOfTypeArray()
+    public function testDataOutputShouldBeOfTypeArray()
     {
 
         $this->cache->useFormatter();
 
-        $cacheKey = "key_array";
-        $cacheData = "data_array";
+        $cacheKey = 'key_array';
+        $cacheData = 'data_array';
 
         $this->cache->putCache($cacheKey, $cacheData);
         $this->assertTrue($this->cache->isSuccess());
@@ -152,8 +150,8 @@ class RedisCacheStoreTest extends TestCase
     {
         $this->cache->useFormatter();
 
-        $cacheKey = "key_object";
-        $cacheData = ["id" => 123];
+        $cacheKey = 'key_object';
+        $cacheData = ['id' => 123];
 
         $this->cache->putCache($cacheKey, $cacheData);
         $this->assertTrue($this->cache->isSuccess());
@@ -163,12 +161,12 @@ class RedisCacheStoreTest extends TestCase
         $this->assertIsObject($cacheOutput);
     }
 
-        public function testDataOutputShouldBeOfTypeJson()
+    public function testDataOutputShouldBeOfTypeJson()
     {
         $this->cache->useFormatter();
 
-        $cacheKey = "key_json";
-        $cacheData = "data_json";
+        $cacheKey = 'key_json';
+        $cacheData = 'data_json';
 
         $this->cache->putCache($cacheKey, $cacheData);
         $this->assertTrue($this->cache->isSuccess());
@@ -178,23 +176,23 @@ class RedisCacheStoreTest extends TestCase
         $this->assertJson($cacheOutput);
     }
 
-      public function testClearCacheDataFromRedis()
+    public function testClearCacheDataFromRedis()
     {
         $cacheKey = 'test_key';
         $data = 'test_data';
 
         $this->cache->putCache($cacheKey, $data);
-        $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
 
         $this->cache->clearCache($cacheKey);
         $this->assertTrue($this->cache->isSuccess());
-        $this->assertEquals("Cache cleared successfully", $this->cache->getMessage());
+        $this->assertEquals('Cache cleared successfully', $this->cache->getMessage());
 
         $this->assertEmpty($this->cache->getCache($cacheKey));
     }
 
-  public function testFlushCacheDataFromRedis()
-  {
+    public function testFlushCacheDataFromRedis()
+    {
         $key1 = 'test_key1';
         $data1 = 'test_data1';
 
@@ -209,56 +207,56 @@ class RedisCacheStoreTest extends TestCase
         $this->cache->flushCache();
 
         $this->assertTrue($this->cache->isSuccess());
-        $this->assertEquals("Cache flushed successfully", $this->cache->getMessage());
+        $this->assertEquals('Cache flushed successfully', $this->cache->getMessage());
     }
 
-  public function testHasCacheFromRedis()
-  {
-    $cacheKey = 'test_key';
-    $cacheData = ['name' => 'Sílvio Silva', 'role' => 'Developer'];
+    public function testHasCacheFromRedis()
+    {
+        $cacheKey = 'test_key';
+        $cacheData = ['name' => 'Sílvio Silva', 'role' => 'Developer'];
 
-    $this->cache->putCache($cacheKey, $cacheData);
+        $this->cache->putCache($cacheKey, $cacheData);
 
-    $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
-    $this->assertTrue($this->cache->isSuccess());
-  }
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
+        $this->assertTrue($this->cache->isSuccess());
+    }
 
-  public function testRenewCacheFromRedis()
-  {
-    $cacheKey = 'expired_key';
-    $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
+    public function testRenewCacheFromRedis()
+    {
+        $cacheKey = 'expired_key';
+        $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
 
-    // Define TTL de 10 seg para que a chave ainda exista quando renovarmos
-    $this->cache->putCache($cacheKey, $cacheData, '', 120);
-    $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
-    sleep(2);
+        // Define TTL de 10 seg para que a chave ainda exista quando renovarmos
+        $this->cache->putCache($cacheKey, $cacheData, '', 120);
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
+        sleep(2);
 
-    // Verifica que a chave existe antes de renovar
-    $this->assertNotEmpty($this->cache->getCache($cacheKey));
+        // Verifica que a chave existe antes de renovar
+        $this->assertNotEmpty($this->cache->getCache($cacheKey));
 
-    $this->cache->renewCache($cacheKey, 7200);
-    $this->assertTrue($this->cache->isSuccess());
-    $this->assertNotEmpty($this->cache->getCache($cacheKey));
-  }
+        $this->cache->renewCache($cacheKey, 7200);
+        $this->assertTrue($this->cache->isSuccess());
+        $this->assertNotEmpty($this->cache->getCache($cacheKey));
+    }
 
     public function testRenewCacheWithNamespaceFromRedis()
-  {
-    $cacheKey = 'expired_key';
-    $namespace = 'expired_namespace';
-    $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
+    {
+        $cacheKey = 'expired_key';
+        $namespace = 'expired_namespace';
+        $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
 
-    $this->cache->putCache($cacheKey, $cacheData, $namespace, 120);
-    $this->assertEquals("Cache stored successfully", $this->cache->getMessage());
-    sleep(2);
+        $this->cache->putCache($cacheKey, $cacheData, $namespace, 120);
+        $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
+        sleep(2);
 
-    $this->assertNotEmpty($this->cache->getCache($cacheKey, $namespace));
+        $this->assertNotEmpty($this->cache->getCache($cacheKey, $namespace));
 
-    $this->cache->renewCache($cacheKey, 7200, $namespace);
-    $this->assertTrue($this->cache->isSuccess());
-    $this->assertNotEmpty($this->cache->getCache($cacheKey, $namespace));
-  }
+        $this->cache->renewCache($cacheKey, 7200, $namespace);
+        $this->assertTrue($this->cache->isSuccess());
+        $this->assertNotEmpty($this->cache->getCache($cacheKey, $namespace));
+    }
 
-  public function test_remember_saves_and_recover_values() 
+    public function test_remember_saves_and_recover_values()
     {
         $this->cache->flushCache();
 
@@ -268,10 +266,9 @@ class RedisCacheStoreTest extends TestCase
 
         $this->assertEquals('valor_teste', $value);
 
-        $cachedValue = $this->cache->remember('remember_test_key', 60, function (){
+        $cachedValue = $this->cache->remember('remember_test_key', 60, function () {
             return 'novo_valor';
         });
-
 
         $this->assertEquals('valor_teste', $cachedValue);
     }
@@ -292,8 +289,7 @@ class RedisCacheStoreTest extends TestCase
         $this->assertEquals('valor_eterno', $cachedValue);
     }
 
-
-      public function test_get_and_forget()
+    public function test_get_and_forget()
     {
         $cacheKey = 'cache_key_test';
         $this->cache->putCache($cacheKey, 10);
@@ -314,31 +310,29 @@ class RedisCacheStoreTest extends TestCase
         $this->assertNull($noCacheData);
     }
 
-      public function test_store_if_not_present_with_add_function()
+    public function test_store_if_not_present_with_add_function()
     {
         $existentKey = 'cache_key_test';
-
         $nonExistentKey = 'non_existent_key';
 
         $this->cache->putCache($existentKey, 'existent_data');
-
         $this->assertTrue($this->cache->isSuccess());
         $this->assertEquals('existent_data', $this->cache->getCache($existentKey));
 
-        $addCache = $this->cache->add($existentKey, 100);
-        
-        $this->assertTrue($addCache);
-        $this->assertNotEquals(100, 'existent_data');
-    
-        $addNonExistentKey = $this->cache->add($nonExistentKey, 'non_existent_data');
+        // add() returns false when the key already exists (nothing was written).
+        $addExisting = $this->cache->add($existentKey, 100);
+        $this->assertFalse($addExisting);
+        $this->assertEquals('existent_data', $this->cache->getCache($existentKey));
 
-        $this->assertFalse($addNonExistentKey);
+        // add() returns true when the key does not exist yet.
+        $addNew = $this->cache->add($nonExistentKey, 'non_existent_data');
+        $this->assertTrue($addNew);
         $this->assertEquals('non_existent_data', $this->cache->getCache($nonExistentKey));
         $this->assertTrue($this->cache->isSuccess());
-
     }
 
-      public function test_increment_function() {
+    public function test_increment_function()
+    {
 
         $cacheKey = 'test_increment';
         $cacheData = 2025;
@@ -356,7 +350,8 @@ class RedisCacheStoreTest extends TestCase
 
     }
 
-        public function test_decrement_function() {
+    public function test_decrement_function()
+    {
 
         $cacheKey = 'test_decrement';
         $cacheData = 2027;
@@ -380,7 +375,7 @@ class RedisCacheStoreTest extends TestCase
         $cacheItems = [
             'key1' => 'value1',
             'key2' => 'value2',
-            'key3' => 'value3'
+            'key3' => 'value3',
         ];
         foreach ($cacheItems as $key => $value) {
             $this->cache->putCache($key, $value);

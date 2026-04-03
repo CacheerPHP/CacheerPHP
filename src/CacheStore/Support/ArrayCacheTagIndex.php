@@ -34,7 +34,7 @@ final class ArrayCacheTagIndex
             $arrayStoreKey = (str_contains($key, ':')) ? $key : $this->keyspace->build($key, '');
             $this->tags[$tag][$arrayStoreKey] = true;
         }
-        $this->status->record("Tagged successfully", true);
+        $this->status->record('Tagged successfully', true);
         return true;
     }
 
@@ -51,7 +51,7 @@ final class ArrayCacheTagIndex
             $clearCache($key, $namespace);
         }
         unset($this->tags[$tag]);
-        $this->status->record("Tag flushed successfully", true);
+        $this->status->record('Tag flushed successfully', true);
     }
 
     /**
