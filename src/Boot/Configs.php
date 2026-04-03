@@ -7,6 +7,23 @@ use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 use Silviooosilva\CacheerPhp\Helpers\SqliteHelper;
 
 $rootPath = EnvHelper::getRootPath();
+$envFile  = $rootPath . DIRECTORY_SEPARATOR . '.env';
+
+if (!file_exists($envFile)) {
+    $message = implode(PHP_EOL, [
+        '',
+        '[CacheerPHP] No .env file found at: ' . $rootPath,
+        'Please, first of all, create one.',
+        'You can use the example file as a starting point:',
+        'vendor/silviooosilva/cacheer-php',
+        'move the .env.example to your project root and rename it to .env',
+        'Or simply run the following command in your project root:',
+        'cp .env.example .env',
+        '',
+    ]);
+    throw new \RuntimeException($message);
+}
+
 $dotenv = Dotenv::createImmutable($rootPath);
 $dotenv->load();
 
