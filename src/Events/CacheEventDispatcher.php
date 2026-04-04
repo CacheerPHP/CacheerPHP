@@ -64,19 +64,28 @@ final class CacheEventDispatcher
         }
 
         $event = self::resolveEventName($method, $success);
-        $key = isset($parameters[0]) && is_string($parameters[0]) ? $parameters[0] : '';
-        $ns = isset($parameters[1]) && is_string($parameters[1]) ? $parameters[1] : '';
-
         $context = [
-            'namespace'   => $ns,
+            'namespace'   => self::extractStringParam($parameters, 1),
             'duration_ms' => round($durationMs, 3),
             'success'     => $success,
             'driver'      => $driver,
         ];
 
         foreach (self::$listeners as $listener) {
-            $listener->on($event, $key, $context);
+            $listener->on($event, self::extractStringParam($parameters, 0), $context);
         }
+    }
+
+    /**
+     * Safely extract a string parameter from the parameters array, returning an empty string if not set or not a string.
+     *
+     * @param array $parameters
+     * @param int   $index
+     * @return string
+     */
+    private static function extractStringParam(array $parameters, int $index): string
+    {
+        return isset($parameters[$index]) && is_string($parameters[$index]) ? $parameters[$index] : '';
     }
 
     /**
