@@ -396,7 +396,7 @@ vendor/bin/phpunit
 
 ## Documentation
 
-Full documentation is available at [CacheerPHP Documentation](https://github.com/CacheerPHP/docs).
+Full documentation is available at [CacheerPHP Documentation](https://cacheerphp.com/docs/en/getting-started/).
 
 ---
 
