@@ -43,10 +43,11 @@ $custom->setDriver()->useArrayDriver();
 Cacheer::setInstance($custom);
 
 // All static calls now go through $custom.
-Cacheer::putCache('static_key', 'hello from static facade');
+
+Cacheer::/** @scrutinizer ignore-call */ putCache('static_key', 'hello from static facade');
 
 echo '--- setInstance() ---' . PHP_EOL;
-echo Cacheer::getCache('static_key') . PHP_EOL;    // hello from static facade
+echo Cacheer::/** @scrutinizer ignore-call */ getCache('static_key') . PHP_EOL;    // hello from static facade
 echo $custom->getCache('static_key') . PHP_EOL;    // same value via instance
 echo PHP_EOL;
 

@@ -45,7 +45,7 @@ final class StaticAccessTest extends TestCase
         Cacheer::setUp($options);
         // Cacheer::getOptions() cannot be called statically (it is an instance method).
         // Use the CacheConfig facade (setConfig()) which wraps the static instance.
-        self::assertSame($options, Cacheer::setConfig()->getOptions());
+        self::assertSame($options, Cacheer::/** @scrutinizer ignore-call */ setConfig()->getOptions());
     }
 
     public function testSetUpStaticWithOptionBuilder(): void
@@ -58,6 +58,6 @@ final class StaticAccessTest extends TestCase
 
         Cacheer::setUp($options);
         // Same approach: go through CacheConfig to read options from the static instance.
-        self::assertSame($options, Cacheer::setConfig()->getOptions());
+        self::assertSame($options, Cacheer::/** @scrutinizer ignore-call */ setConfig()->getOptions());
     }
 }
