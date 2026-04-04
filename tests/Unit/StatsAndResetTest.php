@@ -80,7 +80,7 @@ class StatsAndResetTest extends TestCase
     public function testResetInstanceClearsStaticState(): void
     {
         // Trigger lazy creation of the static singleton.
-        Cacheer::setDriver();
+        Cacheer::/** @scrutinizer ignore-call */ setDriver();
 
         Cacheer::resetInstance();
 
@@ -89,11 +89,11 @@ class StatsAndResetTest extends TestCase
         // and confirming that subsequent static calls use it.
         $custom = new Cacheer();
         $custom->setDriver()->useArrayDriver();
-        Cacheer::setInstance($custom);
+        Cacheer::/** @scrutinizer ignore-call */ setInstance($custom);
 
         // Static call delegates to $custom.
-        Cacheer::putCache('reset_test', 'hello');
-        $this->assertEquals('hello', Cacheer::getCache('reset_test'));
+        Cacheer::/** @scrutinizer ignore-call */ putCache('reset_test', 'hello');
+        $this->assertEquals('hello', Cacheer::/** @scrutinizer ignore-call */ getCache('reset_test'));
     }
 
     // -------------------------------------------------------------------------
@@ -105,10 +105,10 @@ class StatsAndResetTest extends TestCase
         $instance = new Cacheer();
         $instance->setDriver()->useArrayDriver();
 
-        Cacheer::setInstance($instance);
+        Cacheer::/** @scrutinizer ignore-call */ setInstance($instance);
 
         // The static facade must now delegate to $instance.
-        Cacheer::putCache('static_key', 'static_value');
+        Cacheer::/** @scrutinizer ignore-call */ putCache('static_key', 'static_value');
 
         $this->assertEquals('static_value', $instance->getCache('static_key'));
         $this->assertTrue($instance->isSuccess());

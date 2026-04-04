@@ -32,8 +32,8 @@ $cacheer->getCache('user:99');  // → 'miss'
 $cacheer->increment('page_views');
 $cacheer->clearCache('user:2');
 
-Cacheer::putCache('config:locale', 'en_US');
-Cacheer::getCache('config:locale');  // → 'hit'
+Cacheer::/** @scrutinizer ignore-call */ putCache('config:locale', 'en_US');
+Cacheer::/** @scrutinizer ignore-call */ getCache('config:locale');  // → 'hit'
 
 
 // ── Start the dashboard (separate terminal) ────────────────────────────────
