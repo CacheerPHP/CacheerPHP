@@ -239,24 +239,7 @@ class FileCacheStore implements CacheerInterface
             return [];
         }
 
-        $files = $this->fileManager->getFilesInDirectory($cacheDir);
-        $results = [];
-
-        foreach ($files as $file) {
-            if (pathinfo($file, PATHINFO_EXTENSION) === 'cache') {
-                $cacheKey = basename($file, '.cache');
-                $raw = $this->fileManager->serialize($this->fileManager->readFile($file), false);
-
-                if (is_array($raw) && isset($raw['expires_at'], $raw['data'])) {
-                    if (time() > $raw['expires_at']) {
-                        continue;
-                    }
-                    $results[$cacheKey] = $raw['data'];
-                } else {
-                    $results[$cacheKey] = $raw;
-                }
-            }
-        }
+        $results = $this->collectCacheEntries($cacheDir);
 
         if (!empty($results)) {
             $this->status->record('Cache retrieved successfully', true);
@@ -265,6 +248,46 @@ class FileCacheStore implements CacheerInterface
 
         $this->status->record('No cache data found for the provided namespace', false, 'info');
         return [];
+    }
+
+    /**
+     * Collects cache entries from a directory, filtering by .cache extension and checking for expiration.
+     *
+     * @param string $cacheDir
+     * @return array
+     * @throws CacheFileException
+     */
+    private function collectCacheEntries(string $cacheDir): array
+    {
+        $results = [];
+        foreach ($this->fileManager->getFilesInDirectory($cacheDir) as $file) {
+            if (pathinfo($file, PATHINFO_EXTENSION) !== 'cache') {
+                continue;
+            }
+            $data = $this->extractCacheEntry($file);
+            if ($data !== null) {
+                $results[basename($file, '.cache')] = $data;
+            }
+        }
+        return $results;
+    }
+
+    /**
+     * Extracts cache data from a file, checking for expiration based on the envelope format.
+     *
+     * @param string $file
+     * @return mixed|null
+     * @throws CacheFileException
+     */
+    private function extractCacheEntry(string $file): mixed
+    {
+        $raw = $this->fileManager->serialize($this->fileManager->readFile($file), false);
+
+        if (is_array($raw) && isset($raw['expires_at'], $raw['data'])) {
+            return time() > $raw['expires_at'] ? null : $raw['data'];
+        }
+
+        return $raw;
     }
 
     /**

@@ -200,22 +200,7 @@ class CacheerHelper
         }
 
         if (!is_null($encryptionKey)) {
-            $raw = base64_decode($data, true);
-
-            if ($raw === false || strlen($raw) < 16) {
-                throw new RuntimeException('Failed to decode encrypted cache data: invalid payload.');
-            }
-
-            // First 16 bytes are the IV; the rest is the actual ciphertext.
-            $iv = substr($raw, 0, 16);
-            $cipher = substr($raw, 16);
-            $decrypted = openssl_decrypt($cipher, 'AES-256-CBC', $encryptionKey, OPENSSL_RAW_DATA, $iv);
-
-            if ($decrypted === false) {
-                throw new RuntimeException('Failed to decrypt cache data. Wrong key or corrupted payload.');
-            }
-
-            $data = $decrypted;
+            $data = self::decryptPayload($data, $encryptionKey);
         }
 
         if ($compression) {
@@ -223,5 +208,31 @@ class CacheerHelper
         }
 
         return unserialize($data);
+    }
+
+    /**
+     * Decrypts a payload that was encrypted with prepareForStorage.
+     *
+     * @param mixed $data
+     * @param string $encryptionKey
+     * @return string
+     * @throws RuntimeException
+     */
+    private static function decryptPayload(mixed $data, string $encryptionKey): string
+    {
+        $raw = base64_decode($data, true);
+
+        if ($raw === false || strlen($raw) < 16) {
+            throw new RuntimeException('Failed to decode encrypted cache data: invalid payload.');
+        }
+
+        $iv = substr($raw, 0, 16);
+        $decrypted = openssl_decrypt(substr($raw, 16), 'AES-256-CBC', $encryptionKey, OPENSSL_RAW_DATA, $iv);
+
+        if ($decrypted === false) {
+            throw new RuntimeException('Failed to decrypt cache data. Wrong key or corrupted payload.');
+        }
+
+        return $decrypted;
     }
 }
