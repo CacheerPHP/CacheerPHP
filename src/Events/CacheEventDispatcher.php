@@ -55,21 +55,37 @@ final class CacheEventDispatcher
      * @param bool   $success
      * @param array  $parameters
      * @param float  $durationMs
+     * @param string $driver
+     * @param mixed  $result      Return value of the cache operation (used for value capture)
      * @return void
      */
-    public static function dispatch(string $method, bool $success, array $parameters, float $durationMs, string $driver = ''): void
+    public static function dispatch(string $method, bool $success, array $parameters, float $durationMs, string $driver = '', mixed $result = null): void
     {
         if (self::$listeners === [] || self::isConfigLikeMethod($method)) {
             return;
         }
 
         $event = self::resolveEventName($method, $success);
+
         $context = [
-            'namespace'   => self::extractStringParam($parameters, 1),
+            'namespace'   => self::extractNamespace($method, $parameters),
             'duration_ms' => round($durationMs, 3),
             'success'     => $success,
             'driver'      => $driver,
         ];
+
+        // Expose value and TTL for write operations so listeners can capture them
+        if (self::isWriteMethod($method)) {
+            if (isset($parameters[1])) {
+                $context['value'] = $parameters[1];
+            }
+            $context['ttl'] = self::extractTtl($method, $parameters);
+        }
+
+        // Expose the retrieved value for successful read operations
+        if ($method === 'getCache' && $success) {
+            $context['value'] = $result;
+        }
 
         foreach (self::$listeners as $listener) {
             $listener->on($event, self::extractStringParam($parameters, 0), $context);
@@ -77,7 +93,7 @@ final class CacheEventDispatcher
     }
 
     /**
-     * Safely extract a string parameter from the parameters array, returning an empty string if not set or not a string.
+     * Safely extract a string parameter from the parameters array.
      *
      * @param array $parameters
      * @param int   $index
@@ -86,6 +102,45 @@ final class CacheEventDispatcher
     private static function extractStringParam(array $parameters, int $index): string
     {
         return isset($parameters[$index]) && is_string($parameters[$index]) ? $parameters[$index] : '';
+    }
+
+    /**
+     * Extract the namespace from parameters, accounting for different method signatures.
+     *
+     * Write methods: (key, value, namespace, ttl)  → namespace at index 2
+     * forever:       (key, value)                   → no namespace (returns '')
+     * renewCache:    (key, ttl, namespace)           → namespace at index 2
+     * Other methods: (key, namespace, ...)           → namespace at index 1
+     *
+     * @param string $method
+     * @param array  $parameters
+     * @return string
+     */
+    private static function extractNamespace(string $method, array $parameters): string
+    {
+        return match (true) {
+            in_array($method, ['putCache', 'add'], true) => self::extractStringParam($parameters, 2),
+            $method === 'renewCache'                     => self::extractStringParam($parameters, 2),
+            $method === 'forever'                        => '',
+            default                                      => self::extractStringParam($parameters, 1),
+        };
+    }
+
+    /**
+     * Extract TTL from parameters for write operations.
+     *
+     * @param string $method
+     * @param array  $parameters
+     * @return mixed
+     */
+    private static function extractTtl(string $method, array $parameters): mixed
+    {
+        return match ($method) {
+            'putCache', 'add' => $parameters[3] ?? null,
+            'renewCache'      => $parameters[1] ?? null,
+            'forever'         => null,
+            default           => null,
+        };
     }
 
     /**
@@ -119,6 +174,17 @@ final class CacheEventDispatcher
             'getAndForget'    => 'get_and_forget',
             default           => $method,
         };
+    }
+
+    /**
+     * Returns true for methods that write a value to the cache.
+     *
+     * @param string $method
+     * @return bool
+     */
+    private static function isWriteMethod(string $method): bool
+    {
+        return in_array($method, ['putCache', 'forever', 'add', 'renewCache'], true);
     }
 
     /**

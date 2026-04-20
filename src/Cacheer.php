@@ -169,7 +169,7 @@ final class Cacheer
                 $result = $delegate->{$method}(...$parameters);
                 if (CacheEventDispatcher::hasListeners()) {
                     $parts = explode('\\', get_class($this->cacheStore));
-                    CacheEventDispatcher::dispatch($method, $this->isSuccess(), $parameters, (microtime(true) - $start) * 1000.0, end($parts));
+                    CacheEventDispatcher::dispatch($method, $this->isSuccess(), $parameters, (microtime(true) - $start) * 1000.0, end($parts), $result);
                 }
                 return $result;
             }
