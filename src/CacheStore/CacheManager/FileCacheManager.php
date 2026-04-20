@@ -66,7 +66,7 @@ class FileCacheManager
     */
     public function removeFile(string $filename): void
     {
-        if (file_exists($filename)) {
+        if ($this->fileExists($filename)) {
             unlink($filename);
         }
     }
@@ -83,7 +83,7 @@ class FileCacheManager
         );
         foreach ($iterator as $file) {
             $path = $file->getPathname();
-            $file->isDir() ? rmdir($path) : unlink($path);
+            $file->isDir() ? rmdir($path) : $this->removeFile($path);
         }
     }
 
