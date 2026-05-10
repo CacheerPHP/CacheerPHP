@@ -11,6 +11,7 @@ use Silviooosilva\CacheerPhp\Helpers\CacheConfig;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Service\CacheMutator;
 use Silviooosilva\CacheerPhp\Service\CacheRetriever;
+use Silviooosilva\CacheerPhp\Support\PendingCache;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
 use Silviooosilva\CacheerPhp\Utils\CacheDriver;
 
@@ -26,14 +27,18 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  * @method bool appendCache(string $cacheKey, mixed $cacheData, string $namespace = '')
  * @method static bool clearCache(string $cacheKey, string $namespace = '')
  * @method bool clearCache(string $cacheKey, string $namespace = '')
- * @method static bool decrement(string $cacheKey, int $amount = 1, string $namespace = '')
- * @method bool decrement(string $cacheKey, int $amount = 1, string $namespace = '')
+ * @method static bool forget(string $cacheKey, string $namespace = '')
+ * @method bool forget(string $cacheKey, string $namespace = '')
+ * @method static bool decrement(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
+ * @method bool decrement(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
  * @method static bool flushCache()
  * @method bool flushCache()
  * @method static bool forever(string $cacheKey, mixed $cacheData)
  * @method bool forever(string $cacheKey, mixed $cacheData)
  * @method static mixed getAndForget(string $cacheKey, string $namespace = '')
  * @method mixed getAndForget(string $cacheKey, string $namespace = '')
+ * @method static mixed pull(string $cacheKey, string $namespace = '')
+ * @method mixed pull(string $cacheKey, string $namespace = '')
  * @method static CacheDataFormatter|mixed getAll(string $namespace = '')
  * @method CacheDataFormatter|mixed getAll(string $namespace = '')
  * @method static mixed getCache(string $cacheKey, string $namespace = '', int|string $ttl = 3600)
@@ -46,8 +51,10 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  * @method array getOptions()
  * @method static bool has(string $cacheKey, string $namespace = '')
  * @method bool has(string $cacheKey, string $namespace = '')
- * @method static bool increment(string $cacheKey, int $amount = 1, string $namespace = '')
- * @method bool increment(string $cacheKey, int $amount = 1, string $namespace = '')
+ * @method static bool missing(string $cacheKey, string $namespace = '')
+ * @method bool missing(string $cacheKey, string $namespace = '')
+ * @method static bool increment(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
+ * @method bool increment(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
  * @method static bool putCache(string $cacheKey, mixed $cacheData, string $namespace = '', int|string|\DateInterval|null $ttl = 3600)
  * @method bool putCache(string $cacheKey, mixed $cacheData, string $namespace = '', int|string|\DateInterval|null $ttl = 3600)
  * @method static bool putMany(array $items, string $namespace = '', int $batchSize = 100)
@@ -420,6 +427,38 @@ final class Cacheer
     public static function setInstance(self $instance): void
     {
         self::$staticInstance = $instance;
+    }
+
+    /**
+     * Begin a fluent context scoped to $namespace.
+     *
+     * @param string $namespace
+     * @return PendingCache
+     */
+    public function in(string $namespace): PendingCache
+    {
+        return new PendingCache($this, $namespace);
+    }
+
+    /**
+     * Alias of in().
+     *
+     * @param string $namespace
+     * @return PendingCache
+     */
+    public function namespace(string $namespace): PendingCache
+    {
+        return $this->in($namespace);
+    }
+
+    /**
+     * Begin a fluent context with no namespace bound.
+     *
+     * @return PendingCache
+     */
+    public function withoutNamespace(): PendingCache
+    {
+        return new PendingCache($this, '');
     }
 
     /**

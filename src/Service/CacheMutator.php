@@ -89,16 +89,30 @@ class CacheMutator
     }
 
     /**
-     * Decrements a numeric cache item by a specified amount.
+     * Alias of clearCache().
      *
      * @param string $cacheKey
-     * @param int $amount
      * @param string $namespace
      * @return bool
      */
-    public function decrement(string $cacheKey, int $amount = 1, string $namespace = ''): bool
+    public function forget(string $cacheKey, string $namespace = ''): bool
     {
-        return $this->increment($cacheKey, ($amount * -1), $namespace);
+        return $this->clearCache($cacheKey, $namespace);
+    }
+
+    /**
+     * Decrements a numeric cache item by a specified amount.
+     *
+     * @param string                       $cacheKey
+     * @param int                          $amount
+     * @param string                       $namespace
+     * @param int|null                     $default
+     * @param int|string|DateInterval|null $ttl
+     * @return bool
+     */
+    public function decrement(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|DateInterval|null $ttl = null): bool
+    {
+        return $this->increment($cacheKey, ($amount * -1), $namespace, $default, $ttl);
     }
 
     /**
@@ -132,26 +146,32 @@ class CacheMutator
     /**
      * Increments a numeric cache item by a specified amount.
      *
-     * Unlike the previous implementation, this correctly handles the case where
-     * the stored value is 0 — !empty(0) would treat 0 as a miss, which is wrong.
-     * We use isSuccess() to distinguish a real hit from a miss.
-     *
-     * @param string $cacheKey
-     * @param int $amount
-     * @param string $namespace
+     * @param string                       $cacheKey
+     * @param int                          $amount
+     * @param string                       $namespace
+     * @param int|null                     $default
+     * @param int|string|DateInterval|null $ttl
      * @return bool
      */
-    public function increment(string $cacheKey, int $amount = 1, string $namespace = ''): bool
+    public function increment(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|DateInterval|null $ttl = null): bool
     {
+        $effectiveTtl = $ttl ?? CacheTimeConstants::CACHE_FOREVER_TTL->value;
         $cacheData = $this->cacheer->getCache($cacheKey, $namespace);
 
         if ($this->cacheer->isSuccess() && is_numeric($cacheData)) {
-            $this->putCache($cacheKey, (int) ($cacheData + $amount), $namespace);
+            $this->putCache($cacheKey, (int) ($cacheData + $amount), $namespace, $effectiveTtl);
             $this->cacheer->setInternalState($this->cacheer->getMessage(), $this->cacheer->isSuccess());
             return true;
         }
 
-        return false;
+        if ($default === null) {
+            return false;
+        }
+
+        $this->putCache($cacheKey, $default + $amount, $namespace, $effectiveTtl);
+        $this->cacheer->setInternalState($this->cacheer->getMessage(), $this->cacheer->isSuccess());
+
+        return $this->cacheer->isSuccess();
     }
 
     /**
@@ -182,17 +202,41 @@ class CacheMutator
     /**
      * Puts multiple cache items in a batch.
      *
-     * @param array $items
+     * @param array  $items
      * @param string $namespace
-     * @param int $batchSize
+     * @param int    $batchSize
      * @return bool
      */
     public function putMany(array $items, string $namespace = '', int $batchSize = 100): bool
     {
-        $this->cacheer->getCacheStore()->putMany($items, $namespace, $batchSize);
+        $normalized = self::normalizePutManyItems($items);
+        $this->cacheer->getCacheStore()->putMany($normalized, $namespace, $batchSize);
         $this->cacheer->syncState();
 
         return $this->cacheer->isSuccess();
+    }
+
+    /**
+     * @param array $items
+     * @return array<int, array{cacheKey:string, cacheData:mixed}>
+     */
+    private static function normalizePutManyItems(array $items): array
+    {
+        $normalized = [];
+        foreach ($items as $key => $value) {
+            if (is_array($value) && array_key_exists('cacheKey', $value) && array_key_exists('cacheData', $value)) {
+                $normalized[] = [
+                    'cacheKey'  => (string) $value['cacheKey'],
+                    'cacheData' => $value['cacheData'],
+                ];
+                continue;
+            }
+            $normalized[] = [
+                'cacheKey'  => (string) $key,
+                'cacheData' => $value,
+            ];
+        }
+        return $normalized;
     }
 
     /**
