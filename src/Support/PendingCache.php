@@ -31,7 +31,7 @@ final class PendingCache
      */
     public function __construct(Cacheer $cacheer, string $namespace = '')
     {
-        $this->cacheer   = $cacheer;
+        $this->cacheer = $cacheer;
         $this->namespace = self::canonicalise($namespace);
     }
 

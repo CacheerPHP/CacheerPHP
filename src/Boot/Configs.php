@@ -7,7 +7,7 @@ use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 use Silviooosilva\CacheerPhp\Helpers\SqliteHelper;
 
 $rootPath = EnvHelper::getRootPath();
-$envFile  = $rootPath . DIRECTORY_SEPARATOR . '.env';
+$envFile = $rootPath . DIRECTORY_SEPARATOR . '.env';
 
 if (!file_exists($envFile)) {
     $message = implode(PHP_EOL, [

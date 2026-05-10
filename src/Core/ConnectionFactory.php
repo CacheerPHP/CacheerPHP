@@ -33,7 +33,7 @@ class ConnectionFactory
                 self::buildDsn($driver, $dbConf),
                 $dbConf['username'] ?? null,
                 $dbConf['passwd'] ?? null,
-                self::resolveOptions($dbConf['options'] ?? [])
+                self::resolveOptions($dbConf['options'] ?? []),
             );
         } catch (PDOException $exception) {
             throw ConnectionException::create($exception->getMessage(), $exception->getCode(), $exception->getPrevious());

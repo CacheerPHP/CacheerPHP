@@ -50,7 +50,7 @@ class PutManySimpleFormTest extends TestCase
         // The normaliser tolerates a mix — entries with cacheKey/cacheData are
         // passed through, others are treated as the simple form.
         $this->cache->putMany([
-            'a' => 1,
+            'a'         => 1,
             ['cacheKey' => 'b', 'cacheData' => 2],
         ]);
 
