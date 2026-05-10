@@ -137,9 +137,9 @@ final class CacheEventDispatcher
     {
         return match ($method) {
             'putCache', 'add' => $parameters[3] ?? null,
-            'renewCache'      => $parameters[1] ?? null,
-            'forever'         => null,
-            default           => null,
+            'renewCache' => $parameters[1] ?? null,
+            'forever'    => null,
+            default      => null,
         };
     }
 

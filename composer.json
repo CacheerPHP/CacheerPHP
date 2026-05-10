@@ -1,5 +1,6 @@
 {
   "name": "silviooosilva/cacheer-php",
+  "version": "5.1.0",
   "description": "CacheerPHP is a minimalist package for caching in PHP, offering a simple interface for storing and retrieving cached data using multiple backends.",
   "keywords": [
     "cache",

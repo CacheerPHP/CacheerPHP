@@ -5,6 +5,48 @@ All notable changes to CacheerPHP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-05-07
+
+A **fully backwards-compatible** feature release. Every method, signature, and
+return type from v5.0.x continues to work exactly as before. New behaviours are
+opt-in.
+
+### Added
+- **Convenience aliases** for ergonomic parity with other PHP cache libraries:
+  - `forget(string $key, string $namespace = '')` — alias of `clearCache()`.
+  - `pull(string $key, string $namespace = '')` — alias of `getAndForget()`.
+  - `missing(string $key, string $namespace = '')` — inverse of `has()`.
+- **Fluent namespace context** via three new entry points on `Cacheer`:
+  - `in(string $namespace)` — short form.
+  - `namespace(string $namespace)` — long form (alias of `in()`).
+  - `withoutNamespace()` — clears the bound namespace mid-chain.
+  All three return an immutable `PendingCache` wrapper. The underlying
+  `Cacheer` is never mutated, so this is safe under the static facade.
+- **Dot-notation namespaces**: `in('users.123')` is parsed and joined with
+  subsequent `in()` calls using `.`. `in('users')->in('123')` is equivalent.
+- New `Silviooosilva\CacheerPhp\Support\PendingCache` exposing
+  `get`, `getMany`, `put`, `add`, `has`, `missing`, `forget`, `pull`,
+  `remember`, `rememberForever`, plus the chain methods `in`, `namespace`,
+  `withoutNamespace`, and `getNamespace` / `cacheer` accessors.
+- **`putMany()` simple form**: now also accepts a flat associative array
+  `['key1' => $v1, 'key2' => $v2]` in addition to the legacy
+  `[['cacheKey' => 'k', 'cacheData' => $v]]` shape.
+- **`increment()` / `decrement()` enhancements**: two new optional parameters,
+  fully backwards-compatible:
+  - `?int $default = null` — when the key is missing AND `$default` is given,
+    the cache is initialised to `$default + $amount`. With `$default = null`
+    (the legacy default) the v5.0.x behaviour is preserved (return `false` on
+    miss).
+  - `int|string|\DateInterval|null $ttl = null` — TTL applied when writing.
+
+### Changed
+- `composer.json` — `version` set to `5.1.0`.
+
+### Compatibility
+- Cache file format, database schema, Redis key layout — **unchanged**.
+- All existing public method signatures and return types — **unchanged**.
+- PSR-16 adapter, encryption, compression — **unchanged**.
+
 ## [5.0.0] - 2026-03-09
 
 ### Breaking Changes

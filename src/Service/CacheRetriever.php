@@ -164,6 +164,32 @@ class CacheRetriever
     }
 
     /**
+     * Inverse of has().
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @return bool
+     * @throws CacheFileException
+     */
+    public function missing(string $cacheKey, string $namespace = ''): bool
+    {
+        return !$this->has($cacheKey, $namespace);
+    }
+
+    /**
+     * Alias of getAndForget().
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @return mixed
+     * @throws CacheFileException
+     */
+    public function pull(string $cacheKey, string $namespace = ''): mixed
+    {
+        return $this->getAndForget($cacheKey, $namespace);
+    }
+
+    /**
      * Processes cached data for retrieval, applying decompression/decryption
      * and optional formatting.
      *
