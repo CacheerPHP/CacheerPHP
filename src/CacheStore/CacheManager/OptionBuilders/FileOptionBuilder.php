@@ -149,7 +149,15 @@ final class FileOptionBuilder
      */
     private function isValidAndNotNull(mixed $data)
     {
-        return !empty($data) ? true : false;
+        if (!is_null($data)) {
+            return true;
+        }
+
+        if (is_string($data)) {
+            return !trim($data) === '';
+        }
+
+        return !empty($data);
     }
 
     /**

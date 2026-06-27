@@ -201,7 +201,6 @@ class FileCacheStore implements CacheerInterface
 
         $raw = $this->fileManager->serialize($this->fileManager->readFile($cacheFile), false);
 
-        // v5.0.0 envelope format
         if (is_array($raw) && isset($raw['expires_at'], $raw['data'])) {
             if (time() > $raw['expires_at']) {
                 $this->fileManager->removeFile($cacheFile);
@@ -213,7 +212,6 @@ class FileCacheStore implements CacheerInterface
             return $raw['data'];
         }
 
-        // Legacy v4.x format: fall back to filemtime-based TTL check
         if (filemtime($cacheFile) <= (time() - $ttlSeconds)) {
             $this->status->record('cacheFile not found, does not exist or has expired.', false, 'info');
             return null;
@@ -327,9 +325,6 @@ class FileCacheStore implements CacheerInterface
 
     /**
      * Stores an item in the cache with a specific TTL.
-     *
-     * Since v5.0.0 the data is wrapped in a metadata envelope so the expiry
-     * time is stored alongside the payload, enabling true per-item TTL support.
      *
      * @param string $cacheKey
      * @param mixed $cacheData

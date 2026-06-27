@@ -35,6 +35,11 @@
       "Silviooosilva\\CacheerPhp\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
   "authors": [
     {
       "name": "Sílvio Silva",
@@ -53,7 +58,12 @@
     "ext-zlib": "*"
   },
   "require-dev": {
-    "phpunit/phpunit": "^11.2",
-    "friendsofphp/php-cs-fixer": "^3.94"
+    "friendsofphp/php-cs-fixer": "^3.94",
+    "pestphp/pest": "^4.7"
+  },
+  "config": {
+    "allow-plugins": {
+      "pestphp/pest-plugin": true
+    }
   }
 }

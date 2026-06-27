@@ -13,14 +13,9 @@ use Predis\Client;
 class RedisCacheManager
 {
     /**
-     * @var Predis\Client
+     * @var \Predis\Client
      */
     private static $redis;
-
-    /**
-     * @param string $namespace
-     */
-    private static $namespace;
 
     /**
      * Connects to the Redis server using the configuration defined in REDIS_CONNECTION_CONFIG.
@@ -38,7 +33,6 @@ class RedisCacheManager
           'database' => 0,
         ]);
         self::auth();
-        self::$namespace = REDIS_CONNECTION_CONFIG['REDIS_NAMESPACE'] ?? 'Cache';
         return self::$redis;
     }
 
