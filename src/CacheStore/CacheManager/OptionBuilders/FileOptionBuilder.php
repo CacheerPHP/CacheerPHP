@@ -149,7 +149,7 @@ final class FileOptionBuilder
      */
     private function isValidAndNotNull(mixed $data)
     {
-         if (!is_null($data)) {
+        if (!is_null($data)) {
             return true;
         }
 
