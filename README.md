@@ -389,7 +389,7 @@ $cache->forever('key', 'value');                        // No expiration
 
 ```sh
 composer install
-vendor/bin/phpunit
+vendor/bin/pest
 ```
 
 ---
