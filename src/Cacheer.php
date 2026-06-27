@@ -225,7 +225,7 @@ final class Cacheer
      * Enable AES-256-CBC encryption for cached data.
      *
      * @param string $key
-     * @return $this
+     * @return Cacheer
      */
     public function useEncryption(string $key): Cacheer
     {
@@ -237,7 +237,7 @@ final class Cacheer
      * Enable or disable gzip compression of cached values.
      *
      * @param bool $status
-     * @return $this
+     * @return Cacheer
      */
     public function useCompression(bool $status = true): Cacheer
     {
@@ -371,16 +371,31 @@ final class Cacheer
         $this->setMessage($message, $success);
     }
 
+    /**
+     * Returns whether the output formatter is enabled.
+     *
+     * @return bool
+     */
     public function isFormatted(): bool
     {
         return $this->formatted;
     }
 
+    /**
+     * Returns whether gzip compression is enabled for cached values.
+     *
+     * @return bool
+     */
     public function isCompressionEnabled(): bool
     {
         return $this->compression;
     }
 
+    /**
+     * Returns the encryption key if encryption is enabled, or null otherwise.
+     *
+     * @return string|null
+     */
     public function getEncryptionKey(): ?string
     {
         return $this->encryptionKey;
