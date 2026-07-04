@@ -9,8 +9,10 @@ use Silviooosilva\CacheerPhp\Contracts\CacheEventListener;
 use Silviooosilva\CacheerPhp\Events\CacheEventDispatcher;
 use Silviooosilva\CacheerPhp\Helpers\CacheConfig;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
 use Silviooosilva\CacheerPhp\Service\CacheMutator;
 use Silviooosilva\CacheerPhp\Service\CacheRetriever;
+use Silviooosilva\CacheerPhp\Support\CacheLock;
 use Silviooosilva\CacheerPhp\Support\PendingCache;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
 use Silviooosilva\CacheerPhp\Utils\CacheDriver;
@@ -63,10 +65,12 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  * @method bool tag(string $tag, string ...$keys)
  * @method static bool flushTag(string $tag)
  * @method bool flushTag(string $tag)
- * @method static mixed remember(string $cacheKey, int|string|\DateInterval|null $ttl, Closure $callback)
- * @method mixed remember(string $cacheKey, int|string|\DateInterval|null $ttl, Closure $callback)
- * @method static mixed rememberForever(string $cacheKey, Closure $callback)
- * @method mixed rememberForever(string $cacheKey, Closure $callback)
+ * @method static mixed remember(string $cacheKey, int|string|\DateInterval|null $ttl, Closure $callback, string $namespace = '')
+ * @method mixed remember(string $cacheKey, int|string|\DateInterval|null $ttl, Closure $callback, string $namespace = '')
+ * @method static mixed rememberForever(string $cacheKey, Closure $callback, string $namespace = '')
+ * @method mixed rememberForever(string $cacheKey, Closure $callback, string $namespace = '')
+ * @method static mixed flexible(string $cacheKey, int $fresh, int $stale, Closure $callback, string $namespace = '')
+ * @method mixed flexible(string $cacheKey, int $fresh, int $stale, Closure $callback, string $namespace = '')
  * @method static bool renewCache(string $cacheKey, int|string|\DateInterval|null $ttl = 3600, string $namespace = '')
  * @method bool renewCache(string $cacheKey, int|string|\DateInterval|null $ttl = 3600, string $namespace = '')
  * @method static \Silviooosilva\CacheerPhp\Helpers\CacheConfig setConfig()
@@ -75,6 +79,8 @@ use Silviooosilva\CacheerPhp\Utils\CacheDriver;
  * @method \Silviooosilva\CacheerPhp\Utils\CacheDriver setDriver()
  * @method static void setUp(array $options)
  * @method void setUp(array $options)
+ * @method static \Silviooosilva\CacheerPhp\Support\CacheLock lock(string $name, int $ttl = 60)
+ * @method \Silviooosilva\CacheerPhp\Support\CacheLock lock(string $name, int $ttl = 60)
  */
 final class Cacheer
 {
@@ -166,6 +172,10 @@ final class Cacheer
 
         if ($method === 'setDriver') {
             return new CacheDriver($this);
+        }
+
+        if ($method === 'lock') {
+            return $this->buildLock(...$parameters);
         }
 
         $delegates = [$this->mutator, $this->retriever, $this->config];
@@ -473,7 +483,33 @@ final class Cacheer
      */
     public function withoutNamespace(): PendingCache
     {
-        return new PendingCache($this, '');
+        return new PendingCache($this);
+    }
+
+    /**
+     * Build a distributed lock scoped to the active cache store.
+     *
+     * Routed through __call / __callStatic as lock() (see the @method tags) so
+     * it works both on an instance and via the static facade. Returns a
+     * CacheLock you can acquire()/release(), block() on, or run a callback
+     * through. Backed natively by the current driver (Redis SET NX, a DB locks
+     * table, or file flock).
+     *
+     * @param string $name Lock name.
+     * @param int    $ttl  Lock lifetime in seconds.
+     * @return CacheLock
+     * @throws BadMethodCallException When the active driver does not support locking.
+     */
+    private function buildLock(string $name, int $ttl = 60): CacheLock
+    {
+        if (!$this->cacheStore instanceof LockProviderInterface) {
+            throw new BadMethodCallException(sprintf(
+                'The active cache driver (%s) does not support locking.',
+                get_class($this->cacheStore),
+            ));
+        }
+
+        return new CacheLock($this->cacheStore, $name, $ttl);
     }
 
     /**

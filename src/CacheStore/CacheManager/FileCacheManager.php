@@ -133,4 +133,21 @@ class FileCacheManager
     {
         return is_dir($dir);
     }
+
+    /**
+     * Absolute path of the lock file for a given lock name.
+     *
+     * @param string $cacheDir
+     * @param string $name
+     * @return string
+     */
+    public function lockFilePath(string $name, ?string $cacheDir = null): string
+    {
+        $dir = $cacheDir . DIRECTORY_SEPARATOR . 'cacheer-locks';
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        return $dir . DIRECTORY_SEPARATOR . sha1($name) . '.lock';
+    }
 }
