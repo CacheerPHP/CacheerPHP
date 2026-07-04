@@ -211,7 +211,7 @@ class CacheRetriever
             throw CacheInvalidArgumentException::create(sprintf(
                 'flexible() requires 0 <= $fresh < $stale; got $fresh=%d, $stale=%d.',
                 $fresh,
-                $stale
+                $stale,
             ));
         }
 

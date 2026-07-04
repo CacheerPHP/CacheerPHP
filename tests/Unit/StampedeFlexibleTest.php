@@ -148,10 +148,10 @@ it('rejects invalid flexible() horizons', function (int $fresh, int $stale) {
     expect(fn () => $cache->flexible('k', $fresh, $stale, fn () => 'x'))
         ->toThrow(CacheInvalidArgumentException::class);
 })->with([
-    'equal horizons'   => [5, 5],
+    'equal horizons'    => [5, 5],
     'stale below fresh' => [10, 5],
-    'negative fresh'   => [-1, 10],
-    'negative stale'   => [5, -1],
+    'negative fresh'    => [-1, 10],
+    'negative stale'    => [5, -1],
 ]);
 
 /**
