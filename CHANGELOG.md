@@ -5,6 +5,57 @@ All notable changes to CacheerPHP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2026-06-27
+
+A **fully backwards-compatible** feature release focused on safe concurrency.
+Every existing method, signature, and return type continues to work as before;
+the new guarantees are automatic and the new parameters are optional.
+
+### Added
+- **Distributed locks** — `Cacheer::lock(string $name, int $ttl = 60)` returns a
+  `Silviooosilva\CacheerPhp\Support\CacheLock` with:
+  - `acquire()` / `release()` (owner-scoped), `block(int $seconds, ?Closure)`,
+    `get(?Closure)`, and `owner()`.
+  - Available on both an instance and the static facade (`Cacheer::lock(...)`).
+  - Backed natively by each driver via the new
+    `Silviooosilva\CacheerPhp\Interface\LockProviderInterface`: Redis
+    (`SET … NX EX` + compare-and-delete Lua), Database (a `cacheer_locks` table
+    whose primary key is the atomic gate), File (`flock(LOCK_EX | LOCK_NB)`),
+    and Array (in-process).
+- **`flexible()` — stale-while-revalidate**: `flexible(string $key, int $fresh,
+  int $stale, Closure $callback, string $namespace = '')`. Serves fresh values
+  directly, serves stale values while a single worker refreshes, and recomputes
+  once older than `$stale`. Also available via the fluent namespace context.
+
+### Changed
+- **`increment()` / `decrement()` are now atomic** — the read-modify-write is
+  serialised on a per-key single-flight lock, so concurrent counter updates no
+  longer lose increments on lockable drivers (File, Database, Redis). Signatures
+  and return values are unchanged.
+- **`remember()` / `rememberForever()` are now stampede-safe** — a concurrent
+  miss runs the callback once (single-flight) instead of once per request.
+  `remember()` gained an optional trailing `string $namespace = ''` parameter,
+  and the fluent `in('ns')->remember(...)` path now shares this implementation.
+- `composer.json` — `version` set to `5.2.0`.
+
+### Fixed
+- **File lock mutual exclusion**: the file lock no longer deletes its lock file
+  on release. Unlinking allowed a new acquirer to lock a fresh inode while
+  another process still held the old one, briefly admitting two holders into the
+  critical section (lost updates under concurrency).
+- **Database falsy-value writes**: `CacheDatabaseRepository::store()` decided
+  INSERT vs UPDATE with `!empty(retrieve())`, so writing over a stored `0`,
+  `false`, or `''` wrongly took the INSERT path and violated the unique
+  `(cacheKey, cacheNamespace)` index. It now uses a strict null check.
+
+### Compatibility
+- All existing public method signatures and return types — **unchanged**
+  (new method parameters are optional).
+- Cache file format, database cache schema, Redis key layout — **unchanged**.
+  Locks use a separate keyspace (`cacheer_locks` table / `cacheer:lock:*` keys /
+  a `cacheer-locks/` directory) and never collide with cached values.
+- PSR-16 adapter, encryption, compression — **unchanged**.
+
 ## [5.1.0] - 2026-05-07
 
 A **fully backwards-compatible** feature release. Every method, signature, and
