@@ -27,21 +27,40 @@ if (!file_exists($envFile)) {
 $dotenv = Dotenv::createImmutable($rootPath);
 $dotenv->load();
 
-$connectionValue = strtolower($_ENV['DB_CONNECTION'] ?? DatabaseDriver::MYSQL->value);
+/**
+ * Read a configuration value from any environment source.
+ *
+ * With Dotenv's immutable loader, a variable already present in the real
+ * environment (e.g. exported in Docker/CI, or propagated to ParaTest worker
+ * processes) is NOT copied into $_ENV. Reading only $_ENV would then miss it
+ * and silently fall back to the default. Check $_ENV, $_SERVER, and getenv().
+ */
+$envValue = static function (string $key, ?string $default = null): ?string {
+    if (array_key_exists($key, $_ENV)) {
+        return $_ENV[$key];
+    }
+    if (array_key_exists($key, $_SERVER)) {
+        return $_SERVER[$key];
+    }
+    $value = getenv($key);
+    return $value === false ? $default : $value;
+};
+
+$connectionValue = strtolower($envValue('DB_CONNECTION', DatabaseDriver::MYSQL->value));
 $connectionDriver = DatabaseDriver::tryFrom($connectionValue) ?? DatabaseDriver::MYSQL;
-$Host = $_ENV['DB_HOST'] ?? 'localhost';
-$Port = $_ENV['DB_PORT'] ?? '3306';
-$DBName = $_ENV['DB_DATABASE'] ?? 'cacheer_db';
-$User = $_ENV['DB_USERNAME'] ?? 'root';
-$Password = $_ENV['DB_PASSWORD'] ?? '';
+$Host = $envValue('DB_HOST', 'localhost');
+$Port = $envValue('DB_PORT', '3306');
+$DBName = $envValue('DB_DATABASE', 'cacheer_db');
+$User = $envValue('DB_USERNAME', 'root');
+$Password = $envValue('DB_PASSWORD', '');
 
 // Retrieve Redis environment variables
-$redisClient = $_ENV['REDIS_CLIENT'] ?? '';
-$redisHost = $_ENV['REDIS_HOST'] ?? 'localhost';
-$redisPassword = $_ENV['REDIS_PASSWORD'] ?? '';
-$redisPort = $_ENV['REDIS_PORT'] ?? '6379';
-$redisNamespace = $_ENV['REDIS_NAMESPACE'] ?? '';
-$cacheTable = $_ENV['CACHEER_TABLE'] ?? 'cacheer_table';
+$redisClient = $envValue('REDIS_CLIENT', '');
+$redisHost = $envValue('REDIS_HOST', 'localhost');
+$redisPassword = $envValue('REDIS_PASSWORD', '');
+$redisPort = $envValue('REDIS_PORT', '6379');
+$redisNamespace = $envValue('REDIS_NAMESPACE', '');
+$cacheTable = $envValue('CACHEER_TABLE', 'cacheer_table');
 
 Connect::setConnection($connectionDriver);
 
@@ -60,7 +79,7 @@ $mysqlConfig = [
     'username' => $User,
     'passwd'   => $Password,
     'options'  => array_replace(
-        [PDO::MYSQL_ATTR_INIT_COMMAND => 'SET NAMES utf8'],
+        [Pdo\Mysql::ATTR_INIT_COMMAND => 'SET NAMES utf8'],
         $commonPdoOptions,
     ),
 ];
