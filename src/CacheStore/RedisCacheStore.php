@@ -17,6 +17,7 @@ use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Interface\CacheReadStoreInterface;
 use Silviooosilva\CacheerPhp\Interface\CacheWriteStoreInterface;
+use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
 use Silviooosilva\CacheerPhp\Interface\TaggableCacheStoreInterface;
 
 /**
@@ -27,7 +28,7 @@ use Silviooosilva\CacheerPhp\Interface\TaggableCacheStoreInterface;
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, CacheWriteStoreInterface, TaggableCacheStoreInterface
+class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, CacheWriteStoreInterface, TaggableCacheStoreInterface, LockProviderInterface
 {
     /**
      * @var mixed
@@ -403,5 +404,47 @@ class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, Cach
         } catch (Exception $e) {
             throw CacheRedisException::create($e->getMessage());
         }
+    }
+
+    /**
+     * Acquire a distributed lock with SET NX EX (atomic in Redis).
+     *
+     * @param string $name
+     * @param string $owner
+     * @param int    $ttl
+     * @return bool
+     */
+    public function lockAcquire(string $name, string $owner, int $ttl): bool
+    {
+        $result = $this->redis->set($this->lockKey($name), $owner, 'EX', max(1, $ttl), 'NX');
+
+        return $result !== null && (string) $result === 'OK';
+    }
+
+    /**
+     * Release a lock only if still owned by $owner, atomically via a Lua script
+     * (compare-and-delete) so we never delete a lock re-acquired by someone else.
+     *
+     * @param string $name
+     * @param string $owner
+     * @return bool
+     */
+    public function lockRelease(string $name, string $owner): bool
+    {
+        $script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
+        $deleted = $this->redis->eval($script, 1, $this->lockKey($name), $owner);
+
+        return (int) $deleted === 1;
+    }
+
+    /**
+     * Namespaced Redis key for a lock.
+     *
+     * @param string $name
+     * @return string
+     */
+    private function lockKey(string $name): string
+    {
+        return 'cacheer:lock:' . $name;
     }
 }

@@ -5,6 +5,7 @@ namespace Silviooosilva\CacheerPhp\CacheStore;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\FileCacheFlusher;
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\FileCacheManager;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheBatchProcessor;
+use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheLock;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCachePathBuilder;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
@@ -12,18 +13,24 @@ use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
 
 /**
  * Class FileCacheStore
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class FileCacheStore implements CacheerInterface
+class FileCacheStore implements CacheerInterface, LockProviderInterface
 {
     /**
      * @var string
      */
     private string $cacheDir;
+
+    /**
+     * @var FileCacheLock
+     */
+    private FileCacheLock $lock;
 
     /**
      * @var FileCachePathBuilder
@@ -79,6 +86,7 @@ class FileCacheStore implements CacheerInterface
         $this->batchProcessor = new FileCacheBatchProcessor($this);
         $this->flusher = new FileCacheFlusher($this->fileManager, $this->cacheDir);
         $this->tagIndex = new FileCacheTagIndex($this->fileManager, $this->cacheDir, $this->status);
+        $this->lock = new FileCacheLock($this->fileManager, $this->cacheDir);
 
         if (isset($options['expirationTime'])) {
             $this->defaultTTL = (int) CacheerHelper::convertExpirationToSeconds((string) $options['expirationTime']);
@@ -430,5 +438,32 @@ class FileCacheStore implements CacheerInterface
     {
         $this->fileManager->createDirectory($cacheDir);
         $this->cacheDir = realpath($cacheDir) ?: $cacheDir;
+    }
+
+    /**
+     * Acquire a cross-process lock via an exclusive, non-blocking flock on a
+     * dedicated lock file. The handle is held until release() (or process exit,
+     * which auto-releases — so locks never orphan).
+     *
+     * @param string $name
+     * @param string $owner
+     * @param int    $ttl
+     * @return bool
+     */
+    public function lockAcquire(string $name, string $owner, int $ttl): bool
+    {
+        return $this->lock->acquire($name, $owner, $ttl);
+    }
+
+    /**
+     * Release a held flock lock if owned by $owner.
+     *
+     * @param string $name
+     * @param string $owner
+     * @return bool
+     */
+    public function lockRelease(string $name, string $owner): bool
+    {
+        return $this->lock->release($name, $owner);
     }
 }

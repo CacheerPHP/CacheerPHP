@@ -9,6 +9,7 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
 
 /**
  * Class ArrayCacheStore
@@ -19,7 +20,7 @@ use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class ArrayCacheStore implements CacheerInterface
+class ArrayCacheStore implements CacheerInterface, LockProviderInterface
 {
     /**
      * Internal storage: keyspace_key => ['cacheData' => encoded, 'expirationTime' => int]
@@ -27,6 +28,13 @@ class ArrayCacheStore implements CacheerInterface
      * @var array
      */
     private array $arrayStore = [];
+
+    /**
+     * Lock storage: name => ['owner' => string, 'expires' => int].
+     *
+     * @var array<string,array{owner:string,expires:int}>
+     */
+    private array $locks = [];
 
     /**
      * @var OperationStatus
@@ -369,5 +377,43 @@ class ArrayCacheStore implements CacheerInterface
         $this->tagIndex->flush($tag, function (string $cacheKey, string $namespace): void {
             $this->clearCache($cacheKey, $namespace);
         });
+    }
+
+    /**
+     * Acquire an in-process lock. Scoped to this store instance (the array
+     * driver is single-process by nature).
+     *
+     * @param string $name
+     * @param string $owner
+     * @param int    $ttl
+     * @return bool
+     */
+    public function lockAcquire(string $name, string $owner, int $ttl): bool
+    {
+        $existing = $this->locks[$name] ?? null;
+        if ($existing !== null && $existing['expires'] > time() && $existing['owner'] !== $owner) {
+            return false;
+        }
+
+        $this->locks[$name] = ['owner' => $owner, 'expires' => time() + max(1, $ttl)];
+        return true;
+    }
+
+    /**
+     * Release an in-process lock if still held by $owner.
+     *
+     * @param string $name
+     * @param string $owner
+     * @return bool
+     */
+    public function lockRelease(string $name, string $owner): bool
+    {
+        $existing = $this->locks[$name] ?? null;
+        if ($existing !== null && $existing['owner'] === $owner) {
+            unset($this->locks[$name]);
+            return true;
+        }
+
+        return false;
     }
 }

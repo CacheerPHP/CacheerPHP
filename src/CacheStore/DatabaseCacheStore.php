@@ -14,6 +14,7 @@ use Silviooosilva\CacheerPhp\Helpers\CacheDatabaseHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\FlushHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
+use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
 use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
 
 /**
@@ -21,12 +22,17 @@ use Silviooosilva\CacheerPhp\Repositories\CacheDatabaseRepository;
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  */
-class DatabaseCacheStore implements CacheerInterface
+class DatabaseCacheStore implements CacheerInterface, LockProviderInterface
 {
     /**
      * @var OperationStatus
      */
     private OperationStatus $status;
+
+    /**
+     * @var bool Whether the locks table has been ensured this request.
+     */
+    private bool $lockTableReady = false;
 
     /**
      * @var CacheDatabaseRepository
@@ -322,5 +328,108 @@ class DatabaseCacheStore implements CacheerInterface
         }
 
         $this->status->record("Failed to renew Cache with key {$cacheKey}", false, 'info');
+    }
+
+    /**
+     * Acquire a distributed lock backed by a dedicated locks table. The
+     * PRIMARY KEY on lock_name is the atomic gate: a competing INSERT fails.
+     *
+     * @param string $name
+     * @param string $owner
+     * @param int    $ttl
+     * @return bool
+     */
+    public function lockAcquire(string $name, string $owner, int $ttl): bool
+    {
+        $pdo = $this->lockPdo();
+        if (is_null($pdo)) {
+            return false;
+        }
+
+        $this->ensureLockTable($pdo);
+
+        $key = $this->hashLockName($name);
+        $now = time();
+        $clear = $pdo->prepare('DELETE FROM cacheer_locks WHERE lock_name = :name AND expires_at < :now');
+        $clear->execute([':name' => $key, ':now' => $now]);
+
+        try {
+            $insert = $pdo->prepare(
+                'INSERT INTO cacheer_locks (lock_name, owner, expires_at) VALUES (:name, :owner, :expires)',
+            );
+            return $insert->execute([':name' => $key, ':owner' => $owner, ':expires' => $now + max(1, $ttl)]) === true;
+        } catch (\PDOException) {
+            // Unique/primary-key violation → the lock is already held.
+            return false;
+        }
+    }
+
+    /**
+     * Release a lock only if still owned by $owner.
+     *
+     * @param string $name
+     * @param string $owner
+     * @return bool
+     */
+    public function lockRelease(string $name, string $owner): bool
+    {
+        $pdo = $this->lockPdo();
+        if ($pdo === null) {
+            return false;
+        }
+
+        $stmt = $pdo->prepare('DELETE FROM cacheer_locks WHERE lock_name = :name AND owner = :owner');
+        $stmt->execute([':name' => $this->hashLockName($name), ':owner' => $owner]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Hash the lock name to a fixed-length key for storage.
+     *
+     * Lock names are built from namespace + cache key (and can be user-supplied
+     * via Cacheer::lock()), so they may exceed the lock_name column. Storing the
+     * raw name would let long names be truncated (MySQL) or rejected (strict
+     * MySQL/Postgres), causing collisions or acquire failures. The 64-char
+     * sha256 always fits and stays collision-free.
+     *
+     * @param string $name
+     * @return string
+     */
+    private function hashLockName(string $name): string
+    {
+        return hash('sha256', $name);
+    }
+
+    /**
+     * Resolve the shared PDO connection, or null when unavailable.
+     *
+     * @return \PDO|null
+     */
+    private function lockPdo(): ?\PDO
+    {
+        $pdo = Connect::getInstance();
+        return $pdo instanceof \PDO ? $pdo : null;
+    }
+
+    /**
+     * Lazily create the locks table (idempotent, cross-dialect).
+     *
+     * @param \PDO $pdo
+     * @return void
+     */
+    private function ensureLockTable(\PDO $pdo): void
+    {
+        if ($this->lockTableReady) {
+            return;
+        }
+
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS cacheer_locks ('
+            . 'lock_name VARCHAR(255) PRIMARY KEY, '
+            . 'owner VARCHAR(255) NOT NULL, '
+            . 'expires_at BIGINT NOT NULL)',
+        );
+        $this->lockTableReady = true;
     }
 }

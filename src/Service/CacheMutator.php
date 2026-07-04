@@ -6,6 +6,8 @@ use DateInterval;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
+use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
+use Silviooosilva\CacheerPhp\Support\CacheLock;
 
 /**
  * Class CacheMutator
@@ -154,6 +156,40 @@ class CacheMutator
      * @return bool
      */
     public function increment(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|DateInterval|null $ttl = null): bool
+    {
+        $store = $this->cacheer->getCacheStore();
+
+        // The counter is read-modify-written, which races across concurrent
+        // processes and loses updates. When the driver can lock, serialize the
+        // update on a per-key lock so every increment is applied exactly once.
+        if ($store instanceof LockProviderInterface) {
+            $lock = new CacheLock($store, 'cacheer:incr:' . $namespace . ':' . $cacheKey, 10);
+
+            if ($lock->block(30)) {
+                try {
+                    return $this->applyIncrement($cacheKey, $amount, $namespace, $default, $ttl);
+                } finally {
+                    $lock->release();
+                }
+            }
+        }
+
+        // No lock support, or the lock could not be obtained: best-effort update
+        // (never worse than the historical, unguarded behaviour).
+        return $this->applyIncrement($cacheKey, $amount, $namespace, $default, $ttl);
+    }
+
+    /**
+     * Read-modify-write body of increment(), without locking.
+     *
+     * @param string                       $cacheKey
+     * @param int                          $amount
+     * @param string                       $namespace
+     * @param int|null                     $default
+     * @param int|string|DateInterval|null $ttl
+     * @return bool
+     */
+    private function applyIncrement(string $cacheKey, int $amount, string $namespace, ?int $default, int|string|DateInterval|null $ttl): bool
     {
         $effectiveTtl = $ttl ?? CacheTimeConstants::CACHE_FOREVER_TTL->value;
         $cacheData = $this->cacheer->getCache($cacheKey, $namespace);

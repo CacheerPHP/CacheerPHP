@@ -44,7 +44,11 @@ class CacheDatabaseRepository
      */
     public function store(string $cacheKey, mixed $cacheData, string $namespace, string|int $ttl = 3600): bool
     {
-        if (!empty($this->retrieve($cacheKey, $namespace))) {
+        // Use a strict null check, not !empty(): a stored falsy value (0, '',
+        // false) is still an existing row and must be UPDATEd, otherwise the
+        // INSERT path collides with the unique (cacheKey, cacheNamespace) index.
+
+        if (!is_null($this->retrieve($cacheKey, $namespace))) {
             return $this->update($cacheKey, $cacheData, $namespace);
         }
 
@@ -272,7 +276,7 @@ class CacheDatabaseRepository
     /**
     * Gets the current date and time based on the database driver.
     *
-    * @param string $driver
+    * @param ?DatabaseDriver $driver
     * @return string
     */
     private function getCurrentDateTime(?DatabaseDriver $driver): string

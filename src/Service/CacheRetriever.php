@@ -7,7 +7,10 @@ use DateInterval;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
+use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
+use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
+use Silviooosilva\CacheerPhp\Support\CacheLock;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
 
 /**
@@ -21,6 +24,17 @@ use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
  */
 class CacheRetriever
 {
+    /**
+     * Lifetime (seconds) of the single-flight lock used by remember()/flexible().
+     */
+    private const SINGLE_FLIGHT_LOCK_TTL = 30;
+
+    /**
+     * Max time (seconds) a waiter blocks for the single-flight lock before
+     * falling back to an unguarded compute.
+     */
+    private const SINGLE_FLIGHT_WAIT = 10;
+
     /**
      * @var Cacheer
      */
@@ -112,26 +126,51 @@ class CacheRetriever
     /**
      * Retrieves a cache item, or executes a callback to compute and store it.
      *
+     * On a miss the recompute is guarded by a per-key single-flight lock, so a
+     * burst of concurrent misses runs the callback exactly once (cache-stampede
+     * protection) on any lockable driver. Waiters re-check the cache after the
+     * lock and return the freshly-stored value. If the driver can't lock, or the
+     * lock isn't obtained in time, it falls back to an unguarded compute — never
+     * worse than the historical behaviour.
+     *
      * Uses isSuccess() — not empty() — so falsy values (0, '', false, []) stored
      * in the cache are returned as-is without re-invoking the callback.
      *
      * @param string $cacheKey
      * @param int|string|\DateInterval|null $ttl
      * @param Closure $callback
+     * @param string $namespace
      * @return mixed
      * @throws CacheFileException
      */
-    public function remember(string $cacheKey, int|string|DateInterval|null $ttl, Closure $callback): mixed
+    public function remember(string $cacheKey, int|string|DateInterval|null $ttl, Closure $callback, string $namespace = ''): mixed
     {
-        $cachedData = $this->getCache($cacheKey, ttl: is_int($ttl) ? $ttl : 3600);
+        $readTtl = is_int($ttl) ? $ttl : 3600;
 
+        $cachedData = $this->getCache($cacheKey, $namespace, $readTtl);
         if ($this->cacheer->isSuccess()) {
             return $cachedData;
         }
 
-        $cacheData = $callback();
-        $this->cacheer->putCache($cacheKey, $cacheData, ttl: $ttl);
-        return $cacheData;
+        $store = $this->cacheer->getCacheStore();
+        if ($store instanceof LockProviderInterface) {
+            $lock = new CacheLock($store, 'cacheer:remember:' . $namespace . ':' . $cacheKey, self::SINGLE_FLIGHT_LOCK_TTL);
+
+            if ($lock->block(self::SINGLE_FLIGHT_WAIT)) {
+                try {
+                    // Double-check: a concurrent worker may have populated it while we waited.
+                    $cachedData = $this->getCache($cacheKey, $namespace, $readTtl);
+                    if ($this->cacheer->isSuccess()) {
+                        return $cachedData;
+                    }
+                    return $this->computeAndStore($cacheKey, $namespace, $ttl, $callback);
+                } finally {
+                    $lock->release();
+                }
+            }
+        }
+
+        return $this->computeAndStore($cacheKey, $namespace, $ttl, $callback);
     }
 
     /**
@@ -139,12 +178,88 @@ class CacheRetriever
      *
      * @param string $cacheKey
      * @param Closure $callback
+     * @param string $namespace
      * @return mixed
      * @throws CacheFileException
      */
-    public function rememberForever(string $cacheKey, Closure $callback): mixed
+    public function rememberForever(string $cacheKey, Closure $callback, string $namespace = ''): mixed
     {
-        return $this->remember($cacheKey, CacheTimeConstants::CACHE_FOREVER_TTL->value, $callback);
+        return $this->remember($cacheKey, CacheTimeConstants::CACHE_FOREVER_TTL->value, $callback, $namespace);
+    }
+
+    /**
+     * Stale-while-revalidate get-or-compute.
+     *
+     * Stores the value in an envelope with two horizons: it is served directly
+     * while *fresh* (< $fresh seconds old); served immediately but refreshed in
+     * the background while *stale* ($fresh..$stale seconds); and recomputed once
+     * it is older than $stale. The stale refresh and the cold recompute are both
+     * single-flight, so concurrent requests never stampede the callback.
+     *
+     * @param string  $cacheKey
+     * @param int     $fresh     Seconds the value is served without refreshing.
+     * @param int     $stale     Seconds the value may still be served (must be > $fresh).
+     * @param Closure $callback
+     * @param string  $namespace
+     * @return mixed
+     * @throws CacheFileException
+     * @throws CacheInvalidArgumentException When the horizons are invalid (need 0 <= $fresh < $stale).
+     */
+    public function flexible(string $cacheKey, int $fresh, int $stale, Closure $callback, string $namespace = ''): mixed
+    {
+        if ($fresh < 0 || $stale <= $fresh) {
+            throw CacheInvalidArgumentException::create(sprintf(
+                'flexible() requires 0 <= $fresh < $stale; got $fresh=%d, $stale=%d.',
+                $fresh,
+                $stale,
+            ));
+        }
+
+        $envelope = $this->readRaw($cacheKey, $namespace, $stale);
+
+        if ($this->cacheer->isSuccess() && $this->isSwrEnvelope($envelope)) {
+            $now = time();
+
+            if ($now < (int) $envelope['fresh_until']) {
+                return $this->formatValue($envelope['value']);
+            }
+
+            if ($now < (int) $envelope['stale_until']) {
+                // Stale but usable: one request refreshes, everyone else serves stale.
+                $store = $this->cacheer->getCacheStore();
+                if ($store instanceof LockProviderInterface) {
+                    $lock = new CacheLock($store, $this->flexibleLockName($namespace, $cacheKey), self::SINGLE_FLIGHT_LOCK_TTL);
+                    if ($lock->acquire()) {
+                        try {
+                            return $this->formatValue($this->storeFlexible($cacheKey, $namespace, $fresh, $stale, $callback));
+                        } finally {
+                            $lock->release();
+                        }
+                    }
+                }
+
+                return $this->formatValue($envelope['value']);
+            }
+        }
+
+        // Cold (or fully expired): compute under a blocking single-flight lock.
+        $store = $this->cacheer->getCacheStore();
+        if ($store instanceof LockProviderInterface) {
+            $lock = new CacheLock($store, $this->flexibleLockName($namespace, $cacheKey), self::SINGLE_FLIGHT_LOCK_TTL);
+            if ($lock->block(self::SINGLE_FLIGHT_WAIT)) {
+                try {
+                    $envelope = $this->readRaw($cacheKey, $namespace, $stale);
+                    if ($this->cacheer->isSuccess() && $this->isSwrEnvelope($envelope) && time() < (int) $envelope['fresh_until']) {
+                        return $this->formatValue($envelope['value']);
+                    }
+                    return $this->formatValue($this->storeFlexible($cacheKey, $namespace, $fresh, $stale, $callback));
+                } finally {
+                    $lock->release();
+                }
+            }
+        }
+
+        return $this->formatValue($this->storeFlexible($cacheKey, $namespace, $fresh, $stale, $callback));
     }
 
     /**
@@ -207,5 +322,110 @@ class CacheRetriever
         }
 
         return $this->cacheer->isFormatted() ? new CacheDataFormatter($cachedData) : $cachedData;
+    }
+
+    /**
+     * Run the callback and store the result. Shared miss path for remember().
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @param int|string|DateInterval|null $ttl
+     * @param Closure $callback
+     * @return mixed
+     */
+    private function computeAndStore(string $cacheKey, string $namespace, int|string|DateInterval|null $ttl, Closure $callback): mixed
+    {
+        $value = $callback();
+        $this->cacheer->putCache($cacheKey, $value, $namespace, $ttl);
+        return $value;
+    }
+
+    /**
+     * Compute and store a stale-while-revalidate envelope. Returns the value.
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @param int $fresh
+     * @param int $stale
+     * @param Closure $callback
+     * @return mixed
+     */
+    private function storeFlexible(string $cacheKey, string $namespace, int $fresh, int $stale, Closure $callback): mixed
+    {
+        $value = $callback();
+        $now = time();
+        $envelope = [
+            '__swr'       => true,
+            'value'       => $value,
+            'fresh_until' => $now + $fresh,
+            'stale_until' => $now + $stale,
+        ];
+
+        // The cache TTL matches the stale horizon: once it expires the next read
+        // is a true miss and the value is recomputed.
+        $this->cacheer->putCache($cacheKey, $envelope, $namespace, $stale);
+
+        return $value;
+    }
+
+    /**
+     * Read a value applying decompression/decryption but NOT the output
+     * formatter, so callers can inspect the raw stored payload (e.g. SWR
+     * envelopes). Check isSuccess() afterwards for hit/miss.
+     *
+     * @param string $cacheKey
+     * @param string $namespace
+     * @param int|string $ttl
+     * @return mixed
+     * @throws CacheFileException
+     */
+    private function readRaw(string $cacheKey, string $namespace = '', int|string $ttl = 3600): mixed
+    {
+        $cacheData = $this->cacheer->getCacheStore()->getCache($cacheKey, $namespace, $ttl);
+        $this->cacheer->syncState();
+
+        if ($this->cacheer->isSuccess() && ($this->cacheer->isCompressionEnabled() || $this->cacheer->getEncryptionKey() !== null)) {
+            $cacheData = CacheerHelper::recoverFromStorage($cacheData, $this->cacheer->isCompressionEnabled(), $this->cacheer->getEncryptionKey());
+        }
+
+        return $cacheData;
+    }
+
+    /**
+     * Apply the output formatter to a value when it is enabled.
+     *
+     * @param mixed $value
+     * @return mixed
+     */
+    private function formatValue(mixed $value): mixed
+    {
+        return $this->cacheer->isFormatted() ? new CacheDataFormatter($value) : $value;
+    }
+
+    /**
+     * Whether a raw value is a stale-while-revalidate envelope.
+     *
+     * @param mixed $value
+     * @return bool
+     */
+    private function isSwrEnvelope(mixed $value): bool
+    {
+        return is_array($value)
+            && ($value['__swr'] ?? false) === true
+            && array_key_exists('value', $value)
+            && array_key_exists('fresh_until', $value)
+            && array_key_exists('stale_until', $value);
+    }
+
+    /**
+     * Single-flight lock name for a flexible() key.
+     *
+     * @param string $namespace
+     * @param string $cacheKey
+     * @return string
+     */
+    private function flexibleLockName(string $namespace, string $cacheKey): string
+    {
+        return 'cacheer:flexible:' . $namespace . ':' . $cacheKey;
     }
 }

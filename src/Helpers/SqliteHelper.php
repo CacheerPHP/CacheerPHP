@@ -32,7 +32,7 @@ class SqliteHelper
     {
         $rootPath = EnvHelper::getRootPath();
         $databaseDir = is_null($path) ? $rootPath . '/database' : $rootPath . '/' . $path;
-        $dbFile = $databaseDir . '/' . self::checkExtension($database);
+        $dbFile = $databaseDir . '/' . self::checkExtension(self::isolatePerWorker($database));
 
         if (!is_dir($databaseDir)) {
             self::createDatabaseDir($databaseDir);
@@ -42,6 +42,30 @@ class SqliteHelper
         }
 
         return $dbFile;
+    }
+
+    /**
+    * When running under ParaTest, each worker process gets its own SQLite
+    * file (keyed by the TEST_TOKEN it sets) so parallel test runs don't share
+    * database state. Outside ParaTest the name is returned unchanged, so normal
+    * and production usage is unaffected.
+    *
+    * @param string $database
+    * @return string
+    */
+    private static function isolatePerWorker(string $database): string
+    {
+        $token = getenv('TEST_TOKEN');
+        if ($token === false || $token === '') {
+            return $database;
+        }
+
+        $token = preg_replace('/[^A-Za-z0-9_]/', '', (string) $token);
+        if (str_contains($database, '.sqlite')) {
+            return str_replace('.sqlite', '.' . $token . '.sqlite', $database);
+        }
+
+        return $database . '.' . $token;
     }
 
     /**
