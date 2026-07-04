@@ -189,18 +189,21 @@ final class PendingCache
      */
     public function remember(string $key, int|string|DateInterval|null $ttl, Closure $callback): mixed
     {
-        if ($this->namespace === '') {
-            return $this->cacheer->remember($key, $ttl, $callback);
-        }
+        return $this->cacheer->remember($key, $ttl, $callback, $this->namespace);
+    }
 
-        $cached = $this->cacheer->getCache($key, $this->namespace);
-        if ($this->cacheer->isSuccess()) {
-            return $cached;
-        }
-
-        $value = $callback();
-        $this->cacheer->putCache($key, $value, $this->namespace, $ttl);
-        return $value;
+    /**
+     * Stale-while-revalidate get-or-compute under the bound namespace.
+     *
+     * @param string  $key
+     * @param int     $fresh
+     * @param int     $stale
+     * @param Closure $callback
+     * @return mixed
+     */
+    public function flexible(string $key, int $fresh, int $stale, Closure $callback): mixed
+    {
+        return $this->cacheer->flexible($key, $fresh, $stale, $callback, $this->namespace);
     }
 
     /**
