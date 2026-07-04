@@ -7,6 +7,7 @@ use DateInterval;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
+use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
 use Silviooosilva\CacheerPhp\Support\CacheLock;
@@ -202,9 +203,18 @@ class CacheRetriever
      * @param string  $namespace
      * @return mixed
      * @throws CacheFileException
+     * @throws CacheInvalidArgumentException When the horizons are invalid (need 0 <= $fresh < $stale).
      */
     public function flexible(string $cacheKey, int $fresh, int $stale, Closure $callback, string $namespace = ''): mixed
     {
+        if ($fresh < 0 || $stale <= $fresh) {
+            throw CacheInvalidArgumentException::create(sprintf(
+                'flexible() requires 0 <= $fresh < $stale; got $fresh=%d, $stale=%d.',
+                $fresh,
+                $stale
+            ));
+        }
+
         $envelope = $this->readRaw($cacheKey, $namespace, $stale);
 
         if ($this->cacheer->isSuccess() && $this->isSwrEnvelope($envelope)) {

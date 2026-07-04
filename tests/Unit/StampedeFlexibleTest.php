@@ -2,6 +2,7 @@
 
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Core\Connect;
+use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
 
 /*
 |--------------------------------------------------------------------------
@@ -67,12 +68,20 @@ it('runs remember() callback once under a concurrent miss', function () {
         $pids[] = $pid;
     }
 
+    // Every child asserts it saw 'computed-value' via its exit code; a child
+    // that failed (or was killed by a signal) must not be silently ignored.
+    $childFailures = 0;
     foreach ($pids as $pid) {
         pcntl_waitpid($pid, $status);
+        if (!pcntl_wifexited($status) || pcntl_wexitstatus($status) !== 0) {
+            $childFailures++;
+        }
     }
 
-    // The callback ran exactly once despite six concurrent misses.
-    expect(strlen((string) file_get_contents($counter)))->toBe(1)
+    // Every worker got the value, and the callback ran exactly once despite
+    // six concurrent misses.
+    expect($childFailures)->toBe(0)
+        ->and(strlen((string) file_get_contents($counter)))->toBe(1)
         ->and((new Cacheer(['cacheDir' => $dir]))->getCache('expensive'))->toBe('computed-value');
 });
 
@@ -100,18 +109,20 @@ it('serves stale then refreshes a flexible() value', function () {
         return 'v' . $calls;
     };
 
-    expect($cache->flexible('k', 1, 30, $callback))->toBe('v1'); // cold → compute
-    expect($cache->flexible('k', 1, 30, $callback))->toBe('v1'); // fresh
+    // A 2s fresh window leaves margin so the immediate re-read below can't
+    // straddle a 1s wall-clock boundary and be misread as stale.
+    expect($cache->flexible('k', 2, 30, $callback))->toBe('v1'); // cold → compute
+    expect($cache->flexible('k', 2, 30, $callback))->toBe('v1'); // still fresh
     expect($calls)->toBe(1);
 
-    sleep(2); // 1 < 2 < 30 → stale window
+    sleep(3); // now past fresh_until (2s), well within stale (30s)
 
     // A single caller wins the refresh lock and recomputes inline.
-    expect($cache->flexible('k', 1, 30, $callback))->toBe('v2')
+    expect($cache->flexible('k', 2, 30, $callback))->toBe('v2')
         ->and($calls)->toBe(2);
 
-    // Now fresh again — no further recompute.
-    expect($cache->flexible('k', 1, 30, $callback))->toBe('v2')
+    // Fresh again after the refresh — no further recompute.
+    expect($cache->flexible('k', 2, 30, $callback))->toBe('v2')
         ->and($calls)->toBe(2);
 });
 
@@ -130,6 +141,18 @@ it('recomputes a flexible() value after the stale horizon', function () {
     expect($cache->flexible('k2', 1, 2, $callback))->toBe('v2')
         ->and($calls)->toBe(2);
 });
+
+it('rejects invalid flexible() horizons', function (int $fresh, int $stale) {
+    $cache = sf_cache('array');
+
+    expect(fn () => $cache->flexible('k', $fresh, $stale, fn () => 'x'))
+        ->toThrow(CacheInvalidArgumentException::class);
+})->with([
+    'equal horizons'   => [5, 5],
+    'stale below fresh' => [10, 5],
+    'negative fresh'   => [-1, 10],
+    'negative stale'   => [5, -1],
+]);
 
 /**
  * Build a Cacheer for the given driver.
