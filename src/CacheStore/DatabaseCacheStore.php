@@ -348,15 +348,16 @@ class DatabaseCacheStore implements CacheerInterface, LockProviderInterface
 
         $this->ensureLockTable($pdo);
 
+        $key = $this->hashLockName($name);
         $now = time();
         $clear = $pdo->prepare('DELETE FROM cacheer_locks WHERE lock_name = :name AND expires_at < :now');
-        $clear->execute([':name' => $name, ':now' => $now]);
+        $clear->execute([':name' => $key, ':now' => $now]);
 
         try {
             $insert = $pdo->prepare(
                 'INSERT INTO cacheer_locks (lock_name, owner, expires_at) VALUES (:name, :owner, :expires)',
             );
-            return $insert->execute([':name' => $name, ':owner' => $owner, ':expires' => $now + max(1, $ttl)]) === true;
+            return $insert->execute([':name' => $key, ':owner' => $owner, ':expires' => $now + max(1, $ttl)]) === true;
         } catch (\PDOException) {
             // Unique/primary-key violation → the lock is already held.
             return false;
@@ -378,9 +379,26 @@ class DatabaseCacheStore implements CacheerInterface, LockProviderInterface
         }
 
         $stmt = $pdo->prepare('DELETE FROM cacheer_locks WHERE lock_name = :name AND owner = :owner');
-        $stmt->execute([':name' => $name, ':owner' => $owner]);
+        $stmt->execute([':name' => $this->hashLockName($name), ':owner' => $owner]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Hash the lock name to a fixed-length key for storage.
+     *
+     * Lock names are built from namespace + cache key (and can be user-supplied
+     * via Cacheer::lock()), so they may exceed the lock_name column. Storing the
+     * raw name would let long names be truncated (MySQL) or rejected (strict
+     * MySQL/Postgres), causing collisions or acquire failures. The 64-char
+     * sha256 always fits and stays collision-free.
+     *
+     * @param string $name
+     * @return string
+     */
+    private function hashLockName(string $name): string
+    {
+        return hash('sha256', $name);
     }
 
     /**

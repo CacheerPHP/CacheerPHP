@@ -142,6 +142,22 @@ it('exposes lock() through the static facade', function () {
         ->and($lock->release())->toBeTrue();
 });
 
+it('stores the DB lock name as a fixed-length hash so long names are safe', function () {
+    $cache = lock_cache('database');
+    $longName = str_repeat('k', 300); // exceeds VARCHAR(255)
+
+    $lock = $cache->lock($longName, 30);
+    expect($lock->acquire())->toBeTrue();
+
+    $stored = Connect::getInstance()->query('SELECT lock_name FROM cacheer_locks')->fetchColumn();
+
+    expect($stored)->toBe(hash('sha256', $longName)) // stored as the sha256 hash
+        ->and(strlen((string) $stored))->toBe(64)    // fixed length — fits any column
+        ->and($stored)->not->toBe($longName);        // never the raw (long) name
+
+    $lock->release();
+});
+
 /**
  * Build a Cacheer configured for the given driver.
  */
