@@ -137,11 +137,11 @@ class FileCacheManager
     /**
      * Absolute path of the lock file for a given lock name.
      *
-     * @param string $cacheDir
      * @param string $name
+     * @param string $cacheDir
      * @return string
      */
-    public function lockFilePath(string $name, ?string $cacheDir = null): string
+    public function lockFilePath(string $name, string $cacheDir): string
     {
         $dir = $cacheDir . DIRECTORY_SEPARATOR . 'cacheer-locks';
         if (!is_dir($dir)) {
