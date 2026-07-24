@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3', '8.4', '8.5']
+        php: ['8.3', '8.4', '8.5']
 
     steps:
       - name: Checkout code
@@ -74,6 +74,9 @@ jobs:
         run: composer test:contract
         env:
           DB_CONNECTION: sqlite
+
+      - name: Run v6 kernel tests
+        run: composer test:kernel
 
   parallel:
     name: Parallel isolation
@@ -132,7 +135,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.3'
           extensions: pdo, pdo_sqlite, openssl, zlib
           coverage: none
 
@@ -143,6 +146,7 @@ jobs:
         run: |
           composer test:unit
           composer test:contract
+          composer test:kernel
         env:
           DB_CONNECTION: sqlite
 
@@ -189,7 +193,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.5']
+        php: ['8.3', '8.5']
 
     services:
       redis:

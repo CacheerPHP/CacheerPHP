@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Injectable production/fake clocks for deterministic expiration and lock tests.
 - PHPStan level-5 analysis with a clean, suppression-free starting point.
 - Six-class benchmark payload matrix and regression comparison command.
+- Explicit, instance-first v6 `Cache` and immutable `ScopedCache` APIs.
+- Typed v6 `Key`, `Scope`, `Ttl`, and `CacheEntry` value objects.
+- Minimal v6 `Store` contract with accepted optional capability interfaces.
+- Service-free v6 `ArrayStore` reference implementation and Kernel test suite.
+- Typed v6 exception hierarchy that retains original backend failures.
+- Accepted RFCs for the PHP baseline, public API, store contracts, TTL, keys,
+  and scopes.
 
 ### Changed
 
@@ -35,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lowest supported dependency set, exercises concurrency, and uploads benchmark
   artifacts.
 - Unit expiration tests advance a fake clock instead of sleeping.
+- The v6 PHP baseline is now PHP 8.3, with PHP 8.3–8.5 in the CI matrix.
 
 ### Fixed
 

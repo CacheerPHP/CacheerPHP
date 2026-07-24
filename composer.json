@@ -42,6 +42,7 @@
     "test:contract": "@php vendor/bin/pest --testsuite=Contract --colors=always",
     "test:concurrency": "@php vendor/bin/pest --testsuite=Concurrency --colors=always",
     "test:benchmark": "@php vendor/bin/pest --testsuite=Benchmark --colors=always",
+    "test:kernel": "@php vendor/bin/pest --testsuite=Kernel --colors=always",
     "test:conformance": [
       "@test:contract",
       "@test:integration"
@@ -65,7 +66,7 @@
     }
   ],
   "require": {
-    "php": ">=8.2",
+    "php": ">=8.3",
     "vlucas/phpdotenv": "^5.6",
     "predis/predis": "^2.3",
     "psr/simple-cache": "^3.0",

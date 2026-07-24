@@ -34,6 +34,26 @@ Most PHP caching solutions are either too minimal or buried inside a framework. 
 
 ---
 
+## V6 Kernel Preview
+
+The `6.x` development branch includes the new explicit, instance-first kernel:
+
+```php
+use Silviooosilva\CacheerPhp\Cache;
+use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+
+$cache = new Cache(new ArrayStore());
+
+$cache->set('user:42', $user, ttl: '10 minutes');
+$user = $cache->get('user:42');
+```
+
+The existing `Cacheer` API remains available during the compatibility window.
+See [`docs/MILESTONE_2_KERNEL.md`](docs/MILESTONE_2_KERNEL.md) for scopes,
+cached `null`, batch operations, and the new store contract.
+
+---
+
 ## Quick Start
 
 ```sh

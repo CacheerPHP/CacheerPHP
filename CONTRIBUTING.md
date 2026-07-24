@@ -6,9 +6,8 @@ Thank you for your interest in contributing to CacheerPHP! Please read the guide
 
 ## Requirements
 
-- PHP >= 8.2
+- PHP >= 8.3
 - Composer
-- Node.js / npm (used to run code style tooling)
 - Redis, MySQL, or PostgreSQL only when working on their integration suites
 
 ---
@@ -30,13 +29,13 @@ This project enforces a consistent code style using [PHP-CS-Fixer](https://githu
 **Running the linter is mandatory before every pull request.**
 
 ```bash
-npm run lint:fix
+composer fix
 ```
 
 To check for violations without applying fixes:
 
 ```bash
-npm run lint:check
+composer lint
 ```
 
 ### Rules enforced
@@ -78,9 +77,10 @@ Run it in parallel to verify worker isolation:
 composer test:parallel
 ```
 
-Run the reusable store contract and concurrency suites:
+Run the v6 kernel, reusable store contract, and concurrency suites:
 
 ```bash
+composer test:kernel
 composer test:contract
 composer test:concurrency
 ```

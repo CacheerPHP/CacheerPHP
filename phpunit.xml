@@ -18,6 +18,9 @@
         <testsuite name="Benchmark">
             <directory>tests/Benchmark</directory>
         </testsuite>
+        <testsuite name="Kernel">
+            <directory>tests/Kernel</directory>
+        </testsuite>
     </testsuites>
     <php>
         <env name="DB_CONNECTION" value="sqlite"/>
