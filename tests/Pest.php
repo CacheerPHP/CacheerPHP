@@ -1,6 +1,45 @@
 <?php
 
+use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 use Tests\TestCase;
+
+/*
+|--------------------------------------------------------------------------
+| Fresh per-worker local state
+|--------------------------------------------------------------------------
+|
+| ParaTest workers reuse token-scoped SQLite files and default file-cache
+| directories between runs. Clean only the current worker's resources before
+| tests start. Service-backed resources are owned by their integration base
+| classes and are never contacted from this service-free bootstrap.
+|
+*/
+
+(static function (): void {
+    $token = getenv('TEST_TOKEN');
+    if ($token === false || $token === '') {
+        return;
+    }
+
+    $safeToken = preg_replace('/[^A-Za-z0-9_]/', '', (string) $token);
+    $root = EnvHelper::getRootPath();
+    $database = $root . '/database/database.' . $safeToken . '.sqlite';
+
+    if (is_file($database)) {
+        @unlink($database);
+    }
+
+    $cacheDirectory = $root . '/CacheerPHP/Cache_' . $safeToken;
+    if (!is_dir($cacheDirectory)) {
+        return;
+    }
+
+    foreach (glob($cacheDirectory . '/*') ?: [] as $file) {
+        if (is_file($file)) {
+            @unlink($file);
+        }
+    }
+})();
 
 /*
 |--------------------------------------------------------------------------

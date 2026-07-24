@@ -143,11 +143,15 @@ class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, Cach
     /**
      * Flushes all cache items in Redis.
      *
+     * Scoped to the currently selected logical database (FLUSHDB) rather than
+     * the whole server (FLUSHALL), so other databases on the same Redis
+     * instance are left untouched.
+     *
      * @return void
      */
     public function flushCache(): void
     {
-        if ($this->redis->flushall()) {
+        if ($this->redis->flushdb()) {
             $this->status->record('Cache flushed successfully', true);
         } else {
             $this->status->record('Something went wrong. Please, try again.', false);

@@ -124,19 +124,18 @@ class FileCacheStoreTest extends TestCase
         $driver = new CacheDriver($cacheer);
 
         $projectRoot = EnvHelper::getRootPath();
-        $expectedCacheDir = $projectRoot . DIRECTORY_SEPARATOR . 'CacheerPHP' . DIRECTORY_SEPARATOR . 'Cache';
-
-        if (is_dir($expectedCacheDir)) {
-            $this->removeDirectoryRecursively($expectedCacheDir);
-        }
+        $baseCacheDir = $projectRoot . DIRECTORY_SEPARATOR . 'CacheerPHP' . DIRECTORY_SEPARATOR . 'Cache';
 
         $driver->useDefaultDriver();
 
-        $this->assertDirectoryExists($expectedCacheDir);
+        // Under ParaTest the default dir is isolated per worker (Cache_<token>),
+        // so assert on the directory Cacheer actually resolved rather than a
+        // fixed path — deleting the shared base dir would break sibling workers.
+        $resolvedCacheDir = $cacheer->getOption('cacheDir');
 
-        if (is_dir($expectedCacheDir)) {
-            $this->removeDirectoryRecursively($expectedCacheDir);
-        }
+        $this->assertIsString($resolvedCacheDir);
+        $this->assertStringStartsWith($baseCacheDir, $resolvedCacheDir);
+        $this->assertDirectoryExists($resolvedCacheDir);
     }
 
     public function testPutCacheWithNamespace()

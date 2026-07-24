@@ -105,7 +105,7 @@ class CacheDriver
 
         if (!isset($option)) {
             $projectRoot = EnvHelper::getRootPath();
-            $cacheDir = $projectRoot . DIRECTORY_SEPARATOR . 'CacheerPHP' . DIRECTORY_SEPARATOR . 'Cache';
+            $cacheDir = $projectRoot . DIRECTORY_SEPARATOR . 'CacheerPHP' . DIRECTORY_SEPARATOR . 'Cache' . $this->workerSuffix();
             if ($this->isDir($cacheDir)) {
                 $this->cacheer->setOption('cacheDir', $cacheDir);
             } else {
@@ -128,5 +128,24 @@ class CacheDriver
             return true;
         }
         return mkdir($dirName, 0755, true);
+    }
+
+    /**
+    * Per-worker suffix for the auto-created default cache directory.
+    *
+    * Under ParaTest each worker sets a TEST_TOKEN; giving each its own default
+    * cache directory keeps parallel test runs from sharing (and flushing) the
+    * same files. Outside ParaTest the suffix is empty, so normal and production
+    * usage is unaffected. Mirrors SqliteHelper's per-worker isolation.
+    *
+    * @return string
+    */
+    private function workerSuffix(): string
+    {
+        $token = getenv('TEST_TOKEN');
+        if ($token === false || $token === '') {
+            return '';
+        }
+        return '_' . preg_replace('/[^A-Za-z0-9_]/', '', (string) $token);
     }
 }
