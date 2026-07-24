@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Core;
 
 use PDO;
 use PDOException;
+use Silviooosilva\CacheerPhp\Boot\RuntimeConfig;
 use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 use Silviooosilva\CacheerPhp\Exceptions\ConnectionException;
 
@@ -16,8 +17,11 @@ class Connect
 {
     /**
     * Active database driver for new connections.
+    *
+    * Null until first use: resolved lazily from DB_CONNECTION (or the mysql
+    * default) so that merely autoloading the library never reads any config.
     */
-    public static DatabaseDriver $connection = DatabaseDriver::SQLITE;
+    private static ?DatabaseDriver $connection = null;
 
     /**
     * Holds the last error encountered during connection attempts.
@@ -70,7 +74,7 @@ class Connect
      */
     public static function getConnection(): DatabaseDriver
     {
-        return self::$connection;
+        return self::$connection ??= RuntimeConfig::defaultDatabaseDriver();
     }
 
     /**

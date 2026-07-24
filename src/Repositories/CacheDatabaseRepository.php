@@ -198,6 +198,11 @@ class CacheDatabaseRepository
                     SET expirationTime = DATETIME(expirationTime, '+' || :ttl || ' seconds')
                     WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > :currentTime";
         }
+        if ($driver === DatabaseDriver::PGSQL) {
+            return "UPDATE {$this->table}
+                    SET expirationTime = expirationTime + (:ttl * INTERVAL '1 second')
+                    WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > :currentTime";
+        }
         return "UPDATE {$this->table}
                 SET expirationTime = DATE_ADD(expirationTime, INTERVAL :ttl SECOND)
                 WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > :currentTime";
