@@ -2,11 +2,21 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
+use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
+
 /**
  * Handles namespace/key formatting and expiration checks for array cache.
  */
 final class ArrayCacheKeyspace
 {
+    private Clock $clock;
+
+    public function __construct(?Clock $clock = null)
+    {
+        $this->clock = $clock ?? new SystemClock();
+    }
+
     /**
      * @param string $cacheKey
      * @param string $namespace
@@ -37,7 +47,7 @@ final class ArrayCacheKeyspace
     public function isExpired(array $cacheData): bool
     {
         $expirationTime = $cacheData['expirationTime'] ?? 0;
-        $now = time();
+        $now = $this->clock->now();
         return $expirationTime !== 0 && $now >= $expirationTime;
     }
 }

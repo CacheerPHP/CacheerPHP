@@ -4,7 +4,6 @@ namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
 use Silviooosilva\CacheerPhp\Exceptions\CacheRedisException;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
-use Silviooosilva\CacheerPhp\Helpers\CacheRedisHelper;
 
 /**
  * Handles chunked writes to Redis for large batches.
@@ -23,8 +22,6 @@ final class RedisBatchWriter extends AbstractBatchWriter
         CacheerHelper::validateCacheItem($item, fn ($msg) => CacheRedisException::create($msg));
         $cacheKey = $item['cacheKey'];
         $cacheData = $item['cacheData'];
-        $mergedData = CacheRedisHelper::mergeCacheData($cacheData);
-
-        $putItem($cacheKey, $mergedData, $namespace);
+        $putItem($cacheKey, $cacheData, $namespace);
     }
 }

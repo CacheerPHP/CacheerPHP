@@ -88,6 +88,16 @@ class Connect
     }
 
     /**
+     * Records the underlying PDO failure for diagnostics.
+     *
+     * @internal
+     */
+    public static function recordError(PDOException $error): void
+    {
+        self::$error = $error;
+    }
+
+    /**
      * Prevents instantiation of the Connect class.
      * This class is designed to be used statically, so it cannot be instantiated.
      *

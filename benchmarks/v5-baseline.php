@@ -15,65 +15,71 @@ $driverNames = array_values(array_filter(array_map(
 $runId = bin2hex(random_bytes(6));
 $namespace = 'cacheer-benchmark-' . $runId;
 $temporaryDirectory = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $namespace;
-$payload = str_repeat('cacheer-', 128);
+$payloads = require __DIR__ . '/payloads.php';
 $results = [];
 
 foreach ($driverNames as $driverName) {
-    try {
-        $cache = createCache($driverName, $temporaryDirectory);
-        $keys = [];
+    foreach ($payloads as $payloadName => $payload) {
+        $sampleIterations = sampleIterations($payloadName, $iterations);
 
-        $write = measure(function () use ($cache, $iterations, $namespace, $payload, &$keys): void {
-            for ($index = 0; $index < $iterations; $index++) {
-                $key = 'entry-' . $index;
-                $keys[] = $key;
-                if (!$cache->putCache($key, $payload, $namespace, 3600)) {
-                    throw new RuntimeException('Write failed for key ' . $key);
+        try {
+            $cache = createCache($driverName, $temporaryDirectory);
+            $keys = [];
+
+            $write = measure(function () use ($cache, $sampleIterations, $namespace, $payloadName, $payload, &$keys): void {
+                for ($index = 0; $index < $sampleIterations; $index++) {
+                    $key = $payloadName . '-entry-' . $index;
+                    $keys[] = $key;
+                    if (!$cache->putCache($key, $payload, $namespace, 3600)) {
+                        throw new RuntimeException('Write failed for key ' . $key);
+                    }
                 }
-            }
-        });
+            });
 
-        $read = measure(function () use ($cache, $keys, $namespace, $payload): void {
-            foreach ($keys as $key) {
-                if ($cache->getCache($key, $namespace) !== $payload) {
-                    throw new RuntimeException('Read mismatch for key ' . $key);
+            $read = measure(function () use ($cache, $keys, $namespace, $payload): void {
+                foreach ($keys as $key) {
+                    if ($cache->getCache($key, $namespace) != $payload) {
+                        throw new RuntimeException('Read mismatch for key ' . $key);
+                    }
                 }
-            }
-        });
+            });
 
-        $delete = measure(function () use ($cache, $keys, $namespace): void {
-            foreach ($keys as $key) {
-                if (!$cache->clearCache($key, $namespace)) {
-                    throw new RuntimeException('Delete failed for key ' . $key);
+            $delete = measure(function () use ($cache, $keys, $namespace): void {
+                foreach ($keys as $key) {
+                    if (!$cache->clearCache($key, $namespace)) {
+                        throw new RuntimeException('Delete failed for key ' . $key);
+                    }
                 }
-            }
-        });
+            });
 
-        $results[$driverName] = [
-            'write_ops_per_second'  => operationsPerSecond($iterations, $write),
-            'read_ops_per_second'   => operationsPerSecond($iterations, $read),
-            'delete_ops_per_second' => operationsPerSecond($iterations, $delete),
-            'write_seconds'         => round($write, 6),
-            'read_seconds'          => round($read, 6),
-            'delete_seconds'        => round($delete, 6),
-        ];
-    } catch (Throwable $exception) {
-        $results[$driverName] = [
-            'error' => $exception->getMessage(),
-        ];
+            $results[$driverName][$payloadName] = [
+                'iterations'            => $sampleIterations,
+                'payload_bytes'         => strlen(serialize($payload)),
+                'write_ops_per_second'  => operationsPerSecond($sampleIterations, $write),
+                'read_ops_per_second'   => operationsPerSecond($sampleIterations, $read),
+                'delete_ops_per_second' => operationsPerSecond($sampleIterations, $delete),
+                'write_seconds'         => round($write, 6),
+                'read_seconds'          => round($read, 6),
+                'delete_seconds'        => round($delete, 6),
+            ];
+        } catch (Throwable $exception) {
+            $results[$driverName][$payloadName] = [
+                'error' => $exception->getMessage(),
+            ];
+        }
     }
 }
 
 removeDirectory($temporaryDirectory);
 
 echo json_encode([
-    'format'        => 'cacheer-v5-baseline-v1',
-    'generated_at'  => gmdate(DATE_ATOM),
-    'php'           => PHP_VERSION,
-    'platform'      => PHP_OS_FAMILY,
-    'iterations'    => $iterations,
-    'payload_bytes' => strlen($payload),
-    'results'       => $results,
+    'format'       => 'cacheer-v5-baseline-v2',
+    'generated_at' => gmdate(DATE_ATOM),
+    'php'          => PHP_VERSION,
+    'platform'     => PHP_OS_FAMILY,
+    'iterations'   => $iterations,
+    'payloads'     => array_keys($payloads),
+    'results'      => $results,
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL;
 
 /**
@@ -90,6 +96,15 @@ function measure(Closure $operation): float
 function operationsPerSecond(int $iterations, float $seconds): int
 {
     return $seconds <= 0.0 ? 0 : (int) round($iterations / $seconds);
+}
+
+function sampleIterations(string $payloadName, int $iterations): int
+{
+    return match ($payloadName) {
+        '1_mb'   => min($iterations, 10),
+        '100_kb' => min($iterations, 50),
+        default  => $iterations,
+    };
 }
 
 function createCache(string $driver, string $temporaryDirectory): Cacheer

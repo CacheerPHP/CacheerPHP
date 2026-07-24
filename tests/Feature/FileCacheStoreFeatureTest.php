@@ -2,6 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 use Silviooosilva\CacheerPhp\Cacheer;
+use Tests\Support\FakeClock;
 
 class FileCacheStoreFeatureTest extends TestCase
 {
@@ -14,6 +15,7 @@ class FileCacheStoreFeatureTest extends TestCase
      * @var string
      */
     private $cacheDir;
+    private FakeClock $clock;
 
     protected function setUp(): void
     {
@@ -21,7 +23,8 @@ class FileCacheStoreFeatureTest extends TestCase
         if (!file_exists($this->cacheDir) || !is_dir($this->cacheDir)) {
             mkdir($this->cacheDir, 0755, true);
         }
-        $this->cache = new Cacheer(['cacheDir' => $this->cacheDir]);
+        $this->clock = new FakeClock();
+        $this->cache = new Cacheer(['cacheDir' => $this->cacheDir, 'clock' => $this->clock]);
     }
 
     protected function tearDown(): void
@@ -34,6 +37,7 @@ class FileCacheStoreFeatureTest extends TestCase
         $options = [
             'cacheDir'   => $this->cacheDir,
             'flushAfter' => '10 seconds',
+            'clock'      => $this->clock,
         ];
 
         $this->cache = new Cacheer($options);
@@ -42,7 +46,7 @@ class FileCacheStoreFeatureTest extends TestCase
         $this->assertEquals('test_data', $this->cache->getCache('test_key'));
         $this->assertTrue($this->cache->isSuccess());
 
-        sleep(11);
+        $this->clock->advance(11);
 
         $this->cache = new Cacheer($options);
         $this->cache->getCache('test_key');

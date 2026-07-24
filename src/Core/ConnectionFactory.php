@@ -37,7 +37,8 @@ class ConnectionFactory
                 self::resolveOptions($dbConf['options'] ?? []),
             );
         } catch (PDOException $exception) {
-            throw ConnectionException::create($exception->getMessage(), $exception->getCode(), $exception->getPrevious());
+            Connect::recordError($exception);
+            throw ConnectionException::create($exception->getMessage(), $exception->getCode(), $exception);
         }
     }
 

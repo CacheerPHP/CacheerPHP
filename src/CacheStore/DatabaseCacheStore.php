@@ -178,10 +178,10 @@ class DatabaseCacheStore implements CacheerInterface, LockProviderInterface
      */
     public function getCache(string $cacheKey, string $namespace = '', string|int $ttl = 3600): mixed
     {
-        $cacheData = $this->cacheRepository->retrieve($cacheKey, $namespace);
-        if ($cacheData !== null) {
+        $entry = $this->cacheRepository->retrieveEntry($cacheKey, $namespace);
+        if ($entry['found']) {
             $this->status->record('Cache retrieved successfully', true);
-            return $cacheData;
+            return $entry['value'];
         }
         $this->status->record('CacheData not found, does not exists or expired', false, 'info');
         return null;
@@ -217,7 +217,7 @@ class DatabaseCacheStore implements CacheerInterface, LockProviderInterface
         $cacheData = [];
         foreach ($cacheKeys as $cacheKey) {
             $data = $this->getCache($cacheKey, $namespace, $ttl);
-            if ($data !== null) {
+            if ($this->isSuccess()) {
                 $cacheData[$cacheKey] = $data;
             }
         }
@@ -250,7 +250,7 @@ class DatabaseCacheStore implements CacheerInterface, LockProviderInterface
     {
         $cacheData = $this->getCache($cacheKey, $namespace);
 
-        if ($cacheData !== null) {
+        if ($this->isSuccess()) {
             $this->status->record("Cache key: {$cacheKey} exists and it's available from database driver.", true);
             return true;
         }

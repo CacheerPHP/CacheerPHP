@@ -3,7 +3,6 @@
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
 use Silviooosilva\CacheerPhp\Exceptions\CacheDatabaseException;
-use Silviooosilva\CacheerPhp\Helpers\CacheDatabaseHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 
 /**
@@ -23,7 +22,6 @@ final class DatabaseBatchWriter extends AbstractBatchWriter
         CacheerHelper::validateCacheItem($item, fn ($msg) => CacheDatabaseException::create($msg));
         $cacheKey = $item['cacheKey'];
         $cacheData = $item['cacheData'];
-        $mergedData = CacheDatabaseHelper::mergeCacheData($cacheData);
-        $putItem($cacheKey, $mergedData, $namespace);
+        $putItem($cacheKey, $cacheData, $namespace);
     }
 }

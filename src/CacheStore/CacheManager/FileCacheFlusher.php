@@ -2,7 +2,9 @@
 
 namespace Silviooosilva\CacheerPhp\CacheStore\CacheManager;
 
+use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
  * Class FileCacheFlusher
@@ -26,17 +28,20 @@ class FileCacheFlusher
     */
     private string $lastFlushTimeFile;
 
+    private Clock $clock;
+
     /**
      * FileCacheFlusher constructor.
      *
      * @param FileCacheManager $fileManager
      * @param string $cacheDir
      */
-    public function __construct(FileCacheManager $fileManager, string $cacheDir)
+    public function __construct(FileCacheManager $fileManager, string $cacheDir, ?Clock $clock = null)
     {
         $this->fileManager = $fileManager;
         $this->cacheDir = $cacheDir;
         $this->lastFlushTimeFile = "$cacheDir/last_flush_time";
+        $this->clock = $clock ?? new SystemClock();
     }
 
     /**
@@ -47,7 +52,7 @@ class FileCacheFlusher
     public function flushCache(): void
     {
         $this->fileManager->clearDirectory($this->cacheDir);
-        file_put_contents($this->lastFlushTimeFile, time());
+        file_put_contents($this->lastFlushTimeFile, $this->clock->now());
     }
 
     /**
@@ -75,15 +80,15 @@ class FileCacheFlusher
         $flushAfterSeconds = CacheerHelper::convertExpirationToSeconds($flushAfter);
 
         if (!$this->fileManager->fileExists($this->lastFlushTimeFile)) {
-            $this->fileManager->writeFile($this->lastFlushTimeFile, time());
+            $this->fileManager->writeFile($this->lastFlushTimeFile, (string) $this->clock->now());
             return;
         }
 
         $lastFlushTime = (int) $this->fileManager->readFile($this->lastFlushTimeFile);
 
-        if ((time() - $lastFlushTime) >= $flushAfterSeconds) {
+        if (($this->clock->now() - $lastFlushTime) >= $flushAfterSeconds) {
             $this->flushCache();
-            $this->fileManager->writeFile($this->lastFlushTimeFile, time());
+            $this->fileManager->writeFile($this->lastFlushTimeFile, (string) $this->clock->now());
         }
     }
 }

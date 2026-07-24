@@ -163,7 +163,7 @@ class CacheMutator
         // processes and loses updates. When the driver can lock, serialize the
         // update on a per-key lock so every increment is applied exactly once.
         if ($store instanceof LockProviderInterface) {
-            $lock = new CacheLock($store, 'cacheer:incr:' . $namespace . ':' . $cacheKey, 10);
+            $lock = new CacheLock($store, 'cacheer:incr:' . $namespace . ':' . $cacheKey, 10, null, $this->cacheer->getClock());
 
             if ($lock->block(30)) {
                 try {
@@ -338,7 +338,7 @@ class CacheMutator
         }
 
         if ($ttl instanceof DateInterval) {
-            $now = new \DateTimeImmutable();
+            $now = (new \DateTimeImmutable())->setTimestamp($this->cacheer->getClock()->now());
             $future = $now->add($ttl);
             return max(0, $future->getTimestamp() - $now->getTimestamp());
         }

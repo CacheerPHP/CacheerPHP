@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Service-free unit and parallel test commands.
 - Repeatable v5 performance baseline runner and persisted-format documentation.
 - CacheerPHP 6.x execution roadmap.
+- Unit, Contract, Integration, Concurrency, and Benchmark test suites.
+- Reusable store conformance tests shared by Array, File, Redis, and Database.
+- Injectable production/fake clocks for deterministic expiration and lock tests.
+- PHPStan level-5 analysis with a clean, suppression-free starting point.
+- Six-class benchmark payload matrix and regression comparison command.
 
 ### Changed
 
@@ -26,12 +31,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PHP versions.
 - The Composer `version` field was removed; release tags remain the version
   source for Packagist.
+- CI now audits dependencies, runs static analysis and contracts, resolves the
+  lowest supported dependency set, exercises concurrency, and uploads benchmark
+  artifacts.
+- Unit expiration tests advance a fake clock instead of sleeping.
 
 ### Fixed
 
 - PostgreSQL migrations no longer execute the MySQL-only `USE` statement, and
   TTL renewal now uses PostgreSQL interval syntax.
 - Runtime Redis configuration now includes the selected logical database.
+- Cached `null` and batch scalar values retain their hit semantics in File and
+  Database and Redis stores.
+- Database expiration comparisons use explicit application timestamps
+  consistently across SQLite, MySQL, and PostgreSQL.
 
 ## [5.2.0] - 2026-06-27
 

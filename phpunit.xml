@@ -6,8 +6,17 @@
             <directory>tests/Unit</directory>
             <directory>tests/Feature</directory>
         </testsuite>
+        <testsuite name="Contract">
+            <directory>tests/Contract</directory>
+        </testsuite>
         <testsuite name="Integration">
             <directory>tests/Integration</directory>
+        </testsuite>
+        <testsuite name="Concurrency">
+            <directory>tests/Concurrency</directory>
+        </testsuite>
+        <testsuite name="Benchmark">
+            <directory>tests/Benchmark</directory>
         </testsuite>
     </testsuites>
     <php>

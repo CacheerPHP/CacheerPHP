@@ -55,7 +55,7 @@ class CacheFileException extends BaseException
     /**
      * Converts the exception to a JSON serializable format.
      *
-     * @return string
+     * @return array
      */
     public function jsonSerialize(): array
     {

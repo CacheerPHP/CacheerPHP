@@ -154,7 +154,7 @@ class CacheRetriever
 
         $store = $this->cacheer->getCacheStore();
         if ($store instanceof LockProviderInterface) {
-            $lock = new CacheLock($store, 'cacheer:remember:' . $namespace . ':' . $cacheKey, self::SINGLE_FLIGHT_LOCK_TTL);
+            $lock = new CacheLock($store, 'cacheer:remember:' . $namespace . ':' . $cacheKey, self::SINGLE_FLIGHT_LOCK_TTL, null, $this->cacheer->getClock());
 
             if ($lock->block(self::SINGLE_FLIGHT_WAIT)) {
                 try {
@@ -218,7 +218,7 @@ class CacheRetriever
         $envelope = $this->readRaw($cacheKey, $namespace, $stale);
 
         if ($this->cacheer->isSuccess() && $this->isSwrEnvelope($envelope)) {
-            $now = time();
+            $now = $this->cacheer->getClock()->now();
 
             if ($now < (int) $envelope['fresh_until']) {
                 return $this->formatValue($envelope['value']);
@@ -228,7 +228,7 @@ class CacheRetriever
                 // Stale but usable: one request refreshes, everyone else serves stale.
                 $store = $this->cacheer->getCacheStore();
                 if ($store instanceof LockProviderInterface) {
-                    $lock = new CacheLock($store, $this->flexibleLockName($namespace, $cacheKey), self::SINGLE_FLIGHT_LOCK_TTL);
+                    $lock = new CacheLock($store, $this->flexibleLockName($namespace, $cacheKey), self::SINGLE_FLIGHT_LOCK_TTL, null, $this->cacheer->getClock());
                     if ($lock->acquire()) {
                         try {
                             return $this->formatValue($this->storeFlexible($cacheKey, $namespace, $fresh, $stale, $callback));
@@ -245,11 +245,11 @@ class CacheRetriever
         // Cold (or fully expired): compute under a blocking single-flight lock.
         $store = $this->cacheer->getCacheStore();
         if ($store instanceof LockProviderInterface) {
-            $lock = new CacheLock($store, $this->flexibleLockName($namespace, $cacheKey), self::SINGLE_FLIGHT_LOCK_TTL);
+            $lock = new CacheLock($store, $this->flexibleLockName($namespace, $cacheKey), self::SINGLE_FLIGHT_LOCK_TTL, null, $this->cacheer->getClock());
             if ($lock->block(self::SINGLE_FLIGHT_WAIT)) {
                 try {
                     $envelope = $this->readRaw($cacheKey, $namespace, $stale);
-                    if ($this->cacheer->isSuccess() && $this->isSwrEnvelope($envelope) && time() < (int) $envelope['fresh_until']) {
+                    if ($this->cacheer->isSuccess() && $this->isSwrEnvelope($envelope) && $this->cacheer->getClock()->now() < (int) $envelope['fresh_until']) {
                         return $this->formatValue($envelope['value']);
                     }
                     return $this->formatValue($this->storeFlexible($cacheKey, $namespace, $fresh, $stale, $callback));
@@ -353,7 +353,7 @@ class CacheRetriever
     private function storeFlexible(string $cacheKey, string $namespace, int $fresh, int $stale, Closure $callback): mixed
     {
         $value = $callback();
-        $now = time();
+        $now = $this->cacheer->getClock()->now();
         $envelope = [
             '__swr'       => true,
             'value'       => $value,

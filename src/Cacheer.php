@@ -6,6 +6,7 @@ use BadMethodCallException;
 use Closure;
 use RuntimeException;
 use Silviooosilva\CacheerPhp\Contracts\CacheEventListener;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Events\CacheEventDispatcher;
 use Silviooosilva\CacheerPhp\Helpers\CacheConfig;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
@@ -14,6 +15,7 @@ use Silviooosilva\CacheerPhp\Service\CacheMutator;
 use Silviooosilva\CacheerPhp\Service\CacheRetriever;
 use Silviooosilva\CacheerPhp\Support\CacheLock;
 use Silviooosilva\CacheerPhp\Support\PendingCache;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
 use Silviooosilva\CacheerPhp\Utils\CacheDriver;
 
@@ -135,6 +137,11 @@ final class Cacheer
     private CacheConfig $config;
 
     /**
+    * @var Clock
+    */
+    private Clock $clock;
+
+    /**
     * @var Cacheer|null
     */
     private static ?Cacheer $staticInstance = null;
@@ -149,6 +156,8 @@ final class Cacheer
     public function __construct(array $options = [], bool $formatted = false)
     {
         $this->formatted = $formatted;
+        $this->clock = ($options['clock'] ?? null) instanceof Clock ? $options['clock'] : new SystemClock();
+        unset($options['clock']);
         $this->options = $options;
         $this->retriever = new CacheRetriever($this);
         $this->mutator = new CacheMutator($this);
@@ -182,11 +191,11 @@ final class Cacheer
 
         foreach ($delegates as $delegate) {
             if (method_exists($delegate, $method)) {
-                $start = microtime(true);
+                $start = $this->clock->nowFloat();
                 $result = $delegate->{$method}(...$parameters);
                 if (CacheEventDispatcher::hasListeners()) {
                     $parts = explode('\\', get_class($this->cacheStore));
-                    CacheEventDispatcher::dispatch($method, $this->isSuccess(), $parameters, (microtime(true) - $start) * 1000.0, end($parts), $result);
+                    CacheEventDispatcher::dispatch($method, $this->isSuccess(), $parameters, ($this->clock->nowFloat() - $start) * 1000.0, end($parts), $result);
                 }
                 return $result;
             }
@@ -314,6 +323,16 @@ final class Cacheer
     }
 
     /**
+     * Returns the time source shared by the facade, services, and stores.
+     *
+     * @return Clock
+     */
+    public function getClock(): Clock
+    {
+        return $this->clock;
+    }
+
+    /**
      * Sets a single option key/value pair.
      *
      * @param string $key
@@ -336,6 +355,7 @@ final class Cacheer
      */
     public function setOptions(array $options): void
     {
+        unset($options['clock']);
         $this->options = $options;
     }
 
@@ -509,7 +529,7 @@ final class Cacheer
             ));
         }
 
-        return new CacheLock($this->cacheStore, $name, $ttl);
+        return new CacheLock($this->cacheStore, $name, $ttl, null, $this->clock);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Silviooosilva\CacheerPhp\Support;
 
 use Closure;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
 
 /**
@@ -22,6 +23,8 @@ final class CacheLock
      */
     private string $owner;
 
+    private Clock $clock;
+
     /**
      * @param LockProviderInterface $provider The store backing the lock.
      * @param string                $name     Lock name.
@@ -33,8 +36,10 @@ final class CacheLock
         private readonly string $name,
         private readonly int $ttl = 60,
         ?string $owner = null,
+        ?Clock $clock = null,
     ) {
         $this->owner = $owner ?? bin2hex(random_bytes(16));
+        $this->clock = $clock ?? new SystemClock();
     }
 
     /**
@@ -95,11 +100,11 @@ final class CacheLock
      */
     public function block(int $seconds, ?Closure $callback = null): mixed
     {
-        $deadline = microtime(true) + $seconds;
+        $deadline = $this->clock->nowFloat() + $seconds;
         $acquired = $this->acquire();
 
-        while (!$acquired && microtime(true) < $deadline) {
-            usleep(50_000); // 50ms — fine enough to keep contended counters moving
+        while (!$acquired && $this->clock->nowFloat() < $deadline) {
+            $this->clock->sleep(50_000);
             $acquired = $this->acquire();
         }
 

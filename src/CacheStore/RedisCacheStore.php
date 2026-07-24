@@ -98,6 +98,10 @@ class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, Cach
     {
         $cacheFullKey = $this->buildKey($cacheKey, $namespace);
         $existingData = $this->getCache($cacheKey, $namespace);
+        if (!$this->isSuccess()) {
+            return false;
+        }
+
         $mergedData = CacheRedisHelper::arrayIdentifier($existingData, $cacheData);
         $serializedData = CacheRedisHelper::serialize($mergedData);
 
@@ -221,7 +225,7 @@ class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, Cach
         foreach ($keys as $fullKey) {
             $cacheKey = substr($fullKey, $prefixLen);
             $cacheData = $this->getCache($cacheKey, $namespace);
-            if ($cacheData !== null) {
+            if ($this->isSuccess()) {
                 $results[$cacheKey] = $cacheData;
             }
         }
@@ -248,7 +252,7 @@ class RedisCacheStore implements CacheerInterface, CacheReadStoreInterface, Cach
         $results = [];
         foreach ($cacheKeys as $cacheKey) {
             $cacheData = $this->getCache($cacheKey, $namespace, $ttl);
-            if ($cacheData !== null) {
+            if ($this->isSuccess()) {
                 $results[$cacheKey] = $cacheData;
             }
         }

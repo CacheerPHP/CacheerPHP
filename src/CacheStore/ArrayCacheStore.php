@@ -7,9 +7,11 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheCodec;
 use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheKeyspace;
 use Silviooosilva\CacheerPhp\CacheStore\Support\ArrayCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Enums\CacheTimeConstants;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
  * Class ArrayCacheStore
@@ -56,15 +58,18 @@ class ArrayCacheStore implements CacheerInterface, LockProviderInterface
      */
     private ArrayCacheTagIndex $tagIndex;
 
+    private Clock $clock;
+
     /**
      * ArrayCacheStore constructor.
      *
      * @param string $logPath Path to the log file.
      */
-    public function __construct(string $logPath)
+    public function __construct(string $logPath, ?Clock $clock = null)
     {
+        $this->clock = $clock ?? new SystemClock();
         $this->status = OperationStatus::create($logPath, 'array');
-        $this->keyspace = new ArrayCacheKeyspace();
+        $this->keyspace = new ArrayCacheKeyspace($this->clock);
         $this->codec = new ArrayCacheCodec();
         $this->tagIndex = new ArrayCacheTagIndex($this->keyspace, $this->status);
     }
@@ -310,7 +315,7 @@ class ArrayCacheStore implements CacheerInterface, LockProviderInterface
 
         $this->arrayStore[$arrayStoreKey] = [
             'cacheData'      => $this->codec->encode($cacheData),
-            'expirationTime' => time() + (int) $ttl,
+            'expirationTime' => $this->clock->now() + (int) $ttl,
         ];
 
         $this->status->record('Cache stored successfully', true);
@@ -348,8 +353,8 @@ class ArrayCacheStore implements CacheerInterface, LockProviderInterface
         $arrayStoreKey = $this->keyspace->build($cacheKey, $namespace);
 
         if (isset($this->arrayStore[$arrayStoreKey])) {
-            $ttlSeconds = is_numeric($ttl) ? (int) $ttl : strtotime($ttl) - time();
-            $this->arrayStore[$arrayStoreKey]['expirationTime'] = time() + $ttlSeconds;
+            $ttlSeconds = is_numeric($ttl) ? (int) $ttl : strtotime($ttl, $this->clock->now()) - $this->clock->now();
+            $this->arrayStore[$arrayStoreKey]['expirationTime'] = $this->clock->now() + $ttlSeconds;
             $this->status->record("cacheKey: {$cacheKey} renewed successfully", true);
         }
     }
@@ -391,11 +396,11 @@ class ArrayCacheStore implements CacheerInterface, LockProviderInterface
     public function lockAcquire(string $name, string $owner, int $ttl): bool
     {
         $existing = $this->locks[$name] ?? null;
-        if ($existing !== null && $existing['expires'] > time() && $existing['owner'] !== $owner) {
+        if ($existing !== null && $existing['expires'] > $this->clock->now() && $existing['owner'] !== $owner) {
             return false;
         }
 
-        $this->locks[$name] = ['owner' => $owner, 'expires' => time() + max(1, $ttl)];
+        $this->locks[$name] = ['owner' => $owner, 'expires' => $this->clock->now() + max(1, $ttl)];
         return true;
     }
 

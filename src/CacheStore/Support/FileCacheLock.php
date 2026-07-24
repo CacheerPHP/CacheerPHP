@@ -3,6 +3,8 @@
 namespace Silviooosilva\CacheerPhp\CacheStore\Support;
 
 use Silviooosilva\CacheerPhp\CacheStore\CacheManager\FileCacheManager;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
  * Class FileCacheLock
@@ -27,6 +29,8 @@ class FileCacheLock
      */
     private string $cacheDir;
 
+    private Clock $clock;
+
     /**
      * Held flock handles: name => ['handle' => resource, 'owner' => string].
      *
@@ -38,10 +42,11 @@ class FileCacheLock
      * @param FileCacheManager $fileManager
      * @param string           $cacheDir Directory the cache (and its lock files) live in.
      */
-    public function __construct(FileCacheManager $fileManager, string $cacheDir)
+    public function __construct(FileCacheManager $fileManager, string $cacheDir, ?Clock $clock = null)
     {
         $this->fileManager = $fileManager;
         $this->cacheDir = $cacheDir;
+        $this->clock = $clock ?? new SystemClock();
     }
 
     /**
@@ -73,7 +78,7 @@ class FileCacheLock
         }
 
         @ftruncate($handle, 0);
-        @fwrite($handle, $owner . '|' . (time() + max(1, $ttl)));
+        @fwrite($handle, $owner . '|' . ($this->clock->now() + max(1, $ttl)));
         @fflush($handle);
         $this->lockHandles[$name] = ['handle' => $handle, 'owner' => $owner];
 

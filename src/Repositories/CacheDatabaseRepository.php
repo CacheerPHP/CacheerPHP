@@ -48,7 +48,7 @@ class CacheDatabaseRepository
         // false) is still an existing row and must be UPDATEd, otherwise the
         // INSERT path collides with the unique (cacheKey, cacheNamespace) index.
 
-        if (!is_null($this->retrieve($cacheKey, $namespace))) {
+        if ($this->retrieveEntry($cacheKey, $namespace)['found']) {
             return $this->update($cacheKey, $cacheData, $namespace);
         }
 
@@ -79,20 +79,34 @@ class CacheDatabaseRepository
      */
     public function retrieve(string $cacheKey, string $namespace = ''): mixed
     {
-        $driver = $this->getDriver();
-        $nowFunction = $this->getCurrentDateTime($driver);
+        return $this->retrieveEntry($cacheKey, $namespace)['value'];
+    }
+
+    /**
+     * Retrieves a cache value together with an explicit hit marker.
+     *
+     * @return array{found:bool,value:mixed}
+     */
+    public function retrieveEntry(string $cacheKey, string $namespace = ''): array
+    {
+        $currentTime = date('Y-m-d H:i:s');
 
         $stmt = $this->connection->prepare(
             "SELECT cacheData FROM {$this->table} 
-            WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > $nowFunction
+            WHERE cacheKey = :cacheKey AND cacheNamespace = :namespace AND expirationTime > :currentTime
             LIMIT 1",
         );
         $stmt->bindValue(':cacheKey', $cacheKey);
         $stmt->bindValue(':namespace', $namespace);
+        $stmt->bindValue(':currentTime', $currentTime);
         $stmt->execute();
 
         $data = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (!empty($data)) ? $this->serialize($data['cacheData'], false) : null;
+        if ($data === false) {
+            return ['found' => false, 'value' => null];
+        }
+
+        return ['found' => true, 'value' => $this->serialize($data['cacheData'], false)];
     }
 
     /**
@@ -102,14 +116,14 @@ class CacheDatabaseRepository
      */
     public function getAll(string $namespace = ''): array
     {
-        $driver = $this->getDriver();
-        $nowFunction = $this->getCurrentDateTime($driver);
+        $currentTime = date('Y-m-d H:i:s');
 
         $stmt = $this->connection->prepare(
             "SELECT cacheKey, cacheData FROM {$this->table} 
-            WHERE cacheNamespace = :namespace AND expirationTime > $nowFunction",
+            WHERE cacheNamespace = :namespace AND expirationTime > :currentTime",
         );
         $stmt->bindValue(':namespace', $namespace);
+        $stmt->bindValue(':currentTime', $currentTime);
         $stmt->execute();
 
         $results = [];
@@ -276,17 +290,6 @@ class CacheDatabaseRepository
     private function serialize(mixed $data, bool $serialize = true): mixed
     {
         return $serialize ? serialize($data) : unserialize($data);
-    }
-
-    /**
-    * Gets the current date and time based on the database driver.
-    *
-    * @param ?DatabaseDriver $driver
-    * @return string
-    */
-    private function getCurrentDateTime(?DatabaseDriver $driver): string
-    {
-        return ($driver === DatabaseDriver::SQLITE) ? "DATETIME('now', 'localtime')" : 'NOW()';
     }
 
     /**

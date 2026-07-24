@@ -64,7 +64,9 @@ class CacheDriver
     public function useFileDriver(): Cacheer
     {
         $this->cacheer->setOption('loggerPath', $this->logPath);
-        $this->cacheer->setCacheStore(new FileCacheStore($this->cacheer->getOptions()));
+        $options = $this->cacheer->getOptions();
+        $options['clock'] = $this->cacheer->getClock();
+        $this->cacheer->setCacheStore(new FileCacheStore($options));
         return $this->cacheer;
     }
 
@@ -88,7 +90,7 @@ class CacheDriver
      */
     public function useArrayDriver(): Cacheer
     {
-        $this->cacheer->setCacheStore(new ArrayCacheStore($this->logPath));
+        $this->cacheer->setCacheStore(new ArrayCacheStore($this->logPath, $this->cacheer->getClock()));
         return $this->cacheer;
     }
 

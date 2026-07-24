@@ -3,14 +3,17 @@
 use PHPUnit\Framework\TestCase;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\CacheStore\ArrayCacheStore;
+use Tests\Support\FakeClock;
 
 class ArrayCacheStoreTest extends TestCase
 {
     private $cache;
+    private FakeClock $clock;
 
     protected function setUp(): void
     {
-        $this->cache = new Cacheer();
+        $this->clock = new FakeClock();
+        $this->cache = new Cacheer(['clock' => $this->clock]);
         $this->cache->setDriver()->useArrayDriver();
         $this->cache->setConfig()->setTimeZone('America/Toronto');
     }
@@ -44,7 +47,7 @@ class ArrayCacheStoreTest extends TestCase
         $cacheData = ['name' => 'Expired User', 'email' => 'expired@example.com'];
 
         $this->cache->putCache($cacheKey, $cacheData, '', 1);
-        sleep(3);
+        $this->clock->advance(3);
 
         $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
         $this->assertEmpty($this->cache->getCache($cacheKey));
@@ -117,7 +120,7 @@ class ArrayCacheStoreTest extends TestCase
         // Define TTL de 10 seg para que a chave ainda exista quando renovarmos
         $this->cache->putCache($cacheKey, $cacheData, '', 120);
         $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
-        sleep(2);
+        $this->clock->advance(2);
 
         // Verifica que a chave existe antes de renovar
         $this->assertNotEmpty($this->cache->getCache($cacheKey));
@@ -135,7 +138,7 @@ class ArrayCacheStoreTest extends TestCase
 
         $this->cache->putCache($cacheKey, $cacheData, $namespace, 120);
         $this->assertEquals('Cache stored successfully', $this->cache->getMessage());
-        sleep(2);
+        $this->clock->advance(2);
 
         $this->assertNotEmpty($this->cache->getCache($cacheKey, $namespace));
 

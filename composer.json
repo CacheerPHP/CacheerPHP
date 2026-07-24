@@ -39,12 +39,22 @@
   "scripts": {
     "test": "@test:unit",
     "test:unit": "@php vendor/bin/pest --testsuite=Unit --colors=always",
+    "test:contract": "@php vendor/bin/pest --testsuite=Contract --colors=always",
+    "test:concurrency": "@php vendor/bin/pest --testsuite=Concurrency --colors=always",
+    "test:benchmark": "@php vendor/bin/pest --testsuite=Benchmark --colors=always",
+    "test:conformance": [
+      "@test:contract",
+      "@test:integration"
+    ],
     "test:parallel": "@php vendor/bin/pest --testsuite=Unit --parallel --colors=always",
     "test:integration": "@php vendor/bin/pest --testsuite=Integration --colors=always",
     "test:integration:redis": "@php vendor/bin/pest tests/Integration/Redis --colors=always",
     "test:integration:database": "@php vendor/bin/pest tests/Integration/Database --colors=always",
     "test:all": "@php vendor/bin/pest --colors=always",
     "benchmark:baseline": "@php benchmarks/v5-baseline.php",
+    "benchmark:compare": "@php benchmarks/compare.php",
+    "analyse": "@php vendor/bin/phpstan analyse --configuration=phpstan.neon --no-progress",
+    "lint": "@php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --allow-risky=yes --dry-run --diff",
     "fix": "@php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --allow-risky=yes"
   },
   "authors": [
@@ -66,7 +76,8 @@
   },
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.94",
-    "pestphp/pest": "^3.8 || ^4.7"
+    "pestphp/pest": "^3.8 || ^4.7",
+    "phpstan/phpstan": "^2.1"
   },
   "config": {
     "allow-plugins": {

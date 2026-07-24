@@ -2,6 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 use Silviooosilva\CacheerPhp\Cacheer;
+use Tests\Support\FakeClock;
 
 /**
  * Verifies the optional $default and $ttl parameters on increment() / decrement().
@@ -19,10 +20,12 @@ use Silviooosilva\CacheerPhp\Cacheer;
 class IncrementWithDefaultTest extends TestCase
 {
     private Cacheer $cache;
+    private FakeClock $clock;
 
     protected function setUp(): void
     {
-        $this->cache = new Cacheer();
+        $this->clock = new FakeClock();
+        $this->cache = new Cacheer(['clock' => $this->clock]);
         $this->cache->setDriver()->useArrayDriver();
     }
 
@@ -116,8 +119,7 @@ class IncrementWithDefaultTest extends TestCase
         $this->assertTrue($this->cache->increment('rate', 1, '', 0, 1));
         $this->assertSame(1, $this->cache->getCache('rate'));
 
-        // Sleep past the TTL and confirm the key has expired.
-        sleep(2);
+        $this->clock->advance(2);
         $this->assertFalse($this->cache->has('rate'));
     }
 }

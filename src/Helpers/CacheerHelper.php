@@ -47,7 +47,7 @@ class CacheerHelper
      */
     public static function validateCacheItem(array $item, ?callable $exceptionFactory = null): void
     {
-        if (!isset($item['cacheKey']) || !isset($item['cacheData'])) {
+        if (!array_key_exists('cacheKey', $item) || !array_key_exists('cacheData', $item)) {
             if ($exceptionFactory) {
                 throw $exceptionFactory("Each item must contain 'cacheKey' and 'cacheData'");
             }

@@ -395,14 +395,20 @@ composer test
 ```
 
 The default test command requires no Redis, MySQL, or PostgreSQL service.
-Driver integrations have explicit commands:
+Milestone 1 also provides explicit conformance, concurrency, static-analysis,
+and benchmark commands:
 
 ```sh
+composer test:contract
+composer test:concurrency
 composer test:integration:redis
 composer test:integration:database
+composer analyse
+composer benchmark:baseline
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete test and CI workflow.
+See [the safety-net guide](docs/MILESTONE_1_SAFETY_NET.md) and
+[CONTRIBUTING.md](CONTRIBUTING.md) for the complete test and CI workflow.
 
 ---
 

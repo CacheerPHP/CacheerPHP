@@ -78,6 +78,13 @@ Run it in parallel to verify worker isolation:
 composer test:parallel
 ```
 
+Run the reusable store contract and concurrency suites:
+
+```bash
+composer test:contract
+composer test:concurrency
+```
+
 Service-backed tests live under `tests/Integration`:
 
 ```bash
@@ -97,6 +104,13 @@ To run every available suite:
 composer test:all
 ```
 
+Run static analysis and the benchmark payload schema:
+
+```bash
+composer analyse
+composer test:benchmark
+```
+
 Do not document a fixed test count here. The passing count changes whenever
 coverage is added; the command's exit status is the source of truth.
 
@@ -108,6 +122,8 @@ Before opening a PR, make sure you have:
 
 - [ ] Run `npm run lint:fix` and committed the result
 - [ ] Run `composer test` and confirmed the service-free suite passes
+- [ ] Run `composer test:contract` and `composer analyse`
+- [ ] Run `composer test:concurrency` for locking or invalidation changes
 - [ ] Run the relevant integration suite for driver changes
 - [ ] Added or updated tests for any changed behavior
 - [ ] Kept changes focused — one concern per PR

@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   quality:
-    name: Metadata and code style
+    name: Metadata, security, style, and static analysis
     runs-on: ubuntu-latest
 
     steps:
@@ -33,8 +33,14 @@ jobs:
       - name: Validate Composer metadata
         run: composer validate --strict --no-check-lock
 
+      - name: Audit resolved dependencies
+        run: composer audit
+
       - name: Check code style
-        run: npm run lint:check
+        run: composer lint
+
+      - name: Run PHPStan
+        run: composer analyse
 
   unit:
     name: Unit / PHP ${{ matrix.php }}
@@ -64,6 +70,11 @@ jobs:
         env:
           DB_CONNECTION: sqlite
 
+      - name: Run store contracts
+        run: composer test:contract
+        env:
+          DB_CONNECTION: sqlite
+
   parallel:
     name: Parallel isolation
     runs-on: ubuntu-latest
@@ -86,6 +97,90 @@ jobs:
         run: composer test:parallel
         env:
           DB_CONNECTION: sqlite
+
+  concurrency-tests:
+    name: Concurrency harnesses
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pcntl, pdo, pdo_sqlite, openssl, zlib
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run concurrency suite
+        run: composer test:concurrency
+        env:
+          DB_CONNECTION: sqlite
+
+  lowest-dependencies:
+    name: Lowest supported dependencies
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, pdo_sqlite, openssl, zlib
+          coverage: none
+
+      - name: Resolve lowest supported dependencies
+        run: composer update --prefer-lowest --prefer-stable --no-interaction --no-progress
+
+      - name: Run unit and contract suites
+        run: |
+          composer test:unit
+          composer test:contract
+        env:
+          DB_CONNECTION: sqlite
+
+  benchmark:
+    name: Baseline benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo, pdo_sqlite, openssl, zlib
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run payload matrix
+        run: |
+          mkdir -p build/benchmarks
+          composer benchmark:baseline > build/benchmarks/v5-baseline.json
+        env:
+          CACHEER_BENCH_DRIVERS: array,file
+          CACHEER_BENCH_ITERATIONS: 100
+
+      - name: Validate benchmark schema
+        run: composer test:benchmark
+
+      - name: Upload benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: v5-baseline-${{ github.sha }}
+          path: build/benchmarks/v5-baseline.json
+          if-no-files-found: error
 
   redis:
     name: Redis / PHP ${{ matrix.php }}

@@ -16,6 +16,7 @@ use Psr\SimpleCache\InvalidArgumentException as PsrInvalidArgumentException;
  *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
+ * @final
  */
 class CacheInvalidArgumentException extends \InvalidArgumentException implements PsrInvalidArgumentException
 {

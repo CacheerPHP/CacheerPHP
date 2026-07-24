@@ -9,11 +9,13 @@ use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheLock;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCachePathBuilder;
 use Silviooosilva\CacheerPhp\CacheStore\Support\FileCacheTagIndex;
 use Silviooosilva\CacheerPhp\CacheStore\Support\OperationStatus;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Exceptions\CacheFileException;
 use Silviooosilva\CacheerPhp\Helpers\CacheerHelper;
 use Silviooosilva\CacheerPhp\Helpers\CacheFileHelper;
 use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
 use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
  * Class FileCacheStore
@@ -67,6 +69,8 @@ class FileCacheStore implements CacheerInterface, LockProviderInterface
      */
     private FileCacheTagIndex $tagIndex;
 
+    private Clock $clock;
+
     /**
      * FileCacheStore constructor.
      *
@@ -75,6 +79,7 @@ class FileCacheStore implements CacheerInterface, LockProviderInterface
      */
     public function __construct(array $options = [])
     {
+        $this->clock = ($options['clock'] ?? null) instanceof Clock ? $options['clock'] : new SystemClock();
         $this->fileManager = new FileCacheManager();
         $loggerPath = $options['loggerPath'] ?? 'cacheer.log';
         $this->status = OperationStatus::create($loggerPath, 'file');
@@ -84,9 +89,9 @@ class FileCacheStore implements CacheerInterface, LockProviderInterface
 
         $this->pathBuilder = new FileCachePathBuilder($this->fileManager, $this->cacheDir);
         $this->batchProcessor = new FileCacheBatchProcessor($this);
-        $this->flusher = new FileCacheFlusher($this->fileManager, $this->cacheDir);
+        $this->flusher = new FileCacheFlusher($this->fileManager, $this->cacheDir, $this->clock);
         $this->tagIndex = new FileCacheTagIndex($this->fileManager, $this->cacheDir, $this->status);
-        $this->lock = new FileCacheLock($this->fileManager, $this->cacheDir);
+        $this->lock = new FileCacheLock($this->fileManager, $this->cacheDir, $this->clock);
 
         if (isset($options['expirationTime'])) {
             $this->defaultTTL = (int) CacheerHelper::convertExpirationToSeconds((string) $options['expirationTime']);
@@ -209,8 +214,8 @@ class FileCacheStore implements CacheerInterface, LockProviderInterface
 
         $raw = $this->fileManager->serialize($this->fileManager->readFile($cacheFile), false);
 
-        if (is_array($raw) && isset($raw['expires_at'], $raw['data'])) {
-            if (time() > $raw['expires_at']) {
+        if (is_array($raw) && isset($raw['expires_at']) && array_key_exists('data', $raw)) {
+            if ($this->clock->now() > $raw['expires_at']) {
                 $this->fileManager->removeFile($cacheFile);
                 $this->status->record('cacheFile not found, does not exist or has expired.', false, 'info');
                 return null;
@@ -220,7 +225,7 @@ class FileCacheStore implements CacheerInterface, LockProviderInterface
             return $raw['data'];
         }
 
-        if (filemtime($cacheFile) <= (time() - $ttlSeconds)) {
+        if (filemtime($cacheFile) <= ($this->clock->now() - $ttlSeconds)) {
             $this->status->record('cacheFile not found, does not exist or has expired.', false, 'info');
             return null;
         }
@@ -289,8 +294,8 @@ class FileCacheStore implements CacheerInterface, LockProviderInterface
     {
         $raw = $this->fileManager->serialize($this->fileManager->readFile($file), false);
 
-        if (is_array($raw) && isset($raw['expires_at'], $raw['data'])) {
-            return time() > $raw['expires_at'] ? null : $raw['data'];
+        if (is_array($raw) && isset($raw['expires_at']) && array_key_exists('data', $raw)) {
+            return $this->clock->now() > $raw['expires_at'] ? null : $raw['data'];
         }
 
         return $raw;
@@ -348,7 +353,7 @@ class FileCacheStore implements CacheerInterface, LockProviderInterface
 
         $envelope = [
             'data'       => $cacheData,
-            'expires_at' => time() + $ttlSeconds,
+            'expires_at' => $this->clock->now() + $ttlSeconds,
             'ttl'        => $ttlSeconds,
         ];
 

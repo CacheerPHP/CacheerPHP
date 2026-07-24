@@ -4,11 +4,13 @@ use PHPUnit\Framework\TestCase;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Helpers\EnvHelper;
 use Silviooosilva\CacheerPhp\Utils\CacheDriver;
+use Tests\Support\FakeClock;
 
 class FileCacheStoreTest extends TestCase
 {
     private $cache;
     private $cacheDir;
+    private FakeClock $clock;
 
     protected function setUp(): void
     {
@@ -17,8 +19,10 @@ class FileCacheStoreTest extends TestCase
             mkdir($this->cacheDir, 0755, true);
         }
 
+        $this->clock = new FakeClock();
         $options = [
             'cacheDir' => $this->cacheDir,
+            'clock'    => $this->clock,
         ];
 
         $this->cache = new Cacheer($options);
@@ -58,7 +62,7 @@ class FileCacheStoreTest extends TestCase
         // In v5.0.0 the expiry is stored in the file envelope, so we must use
         // a short TTL at write time (not at read time as in the legacy driver).
         $this->cache->putCache($cacheKey, $data, '', 1);
-        sleep(2);
+        $this->clock->advance(2);
         $this->cache->getCache($cacheKey);
         $this->assertFalse($this->cache->isSuccess());
         $this->assertEquals('cacheFile not found, does not exist or has expired.', $this->cache->getMessage());

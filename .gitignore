@@ -6,6 +6,7 @@
 /composer.lock
 /database
 /CacheerPHP
+/var/phpstan/
 cacheer.log
 /tests/Unit/cache
 /tests/Feature/cache/last_flush_time

@@ -3,6 +3,7 @@
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Core\Connect;
 use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
+use Tests\Support\FakeClock;
 
 /*
 |--------------------------------------------------------------------------
@@ -86,7 +87,8 @@ it('runs remember() callback once under a concurrent miss', function () {
 });
 
 it('serves a fresh flexible() value without recomputing', function (string $driver) {
-    $cache = sf_cache($driver);
+    $clock = new FakeClock();
+    $cache = sf_cache($driver, $clock);
     $calls = 0;
     $callback = function () use (&$calls) {
         $calls++;
@@ -102,7 +104,8 @@ it('serves a fresh flexible() value without recomputing', function (string $driv
 })->with('swr drivers');
 
 it('serves stale then refreshes a flexible() value', function () {
-    $cache = sf_cache('file');
+    $clock = new FakeClock();
+    $cache = sf_cache('file', $clock);
     $calls = 0;
     $callback = function () use (&$calls) {
         $calls++;
@@ -115,7 +118,7 @@ it('serves stale then refreshes a flexible() value', function () {
     expect($cache->flexible('k', 2, 30, $callback))->toBe('v1'); // still fresh
     expect($calls)->toBe(1);
 
-    sleep(3); // now past fresh_until (2s), well within stale (30s)
+    $clock->advance(3);
 
     // A single caller wins the refresh lock and recomputes inline.
     expect($cache->flexible('k', 2, 30, $callback))->toBe('v2')
@@ -127,7 +130,8 @@ it('serves stale then refreshes a flexible() value', function () {
 });
 
 it('recomputes a flexible() value after the stale horizon', function () {
-    $cache = sf_cache('file');
+    $clock = new FakeClock();
+    $cache = sf_cache('file', $clock);
     $calls = 0;
     $callback = function () use (&$calls) {
         $calls++;
@@ -136,7 +140,7 @@ it('recomputes a flexible() value after the stale horizon', function () {
 
     expect($cache->flexible('k2', 1, 2, $callback))->toBe('v1');
 
-    sleep(3); // past stale_until (2s) → hard miss
+    $clock->advance(3);
 
     expect($cache->flexible('k2', 1, 2, $callback))->toBe('v2')
         ->and($calls)->toBe(2);
@@ -157,13 +161,15 @@ it('rejects invalid flexible() horizons', function (int $fresh, int $stale) {
 /**
  * Build a Cacheer for the given driver.
  */
-function sf_cache(string $driver): Cacheer
+function sf_cache(string $driver, ?FakeClock $clock = null): Cacheer
 {
+    $clock ??= new FakeClock();
+
     if ($driver === 'file') {
-        return new Cacheer(['cacheDir' => sf_tempdir()]);
+        return new Cacheer(['cacheDir' => sf_tempdir(), 'clock' => $clock]);
     }
 
-    $cache = new Cacheer();
+    $cache = new Cacheer(['clock' => $clock]);
     $cache->setDriver()->useArrayDriver();
     return $cache;
 }
