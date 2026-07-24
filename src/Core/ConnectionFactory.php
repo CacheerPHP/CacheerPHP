@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Core;
 
 use PDO;
 use PDOException;
+use Silviooosilva\CacheerPhp\Boot\RuntimeConfig;
 use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 use Silviooosilva\CacheerPhp\Exceptions\ConnectionException;
 
@@ -24,7 +25,7 @@ class ConnectionFactory
     public static function createConnection(?array $database = null): ?PDO
     {
         $connection = Connect::getConnection();
-        $dbConf = $database ?? CACHEER_DATABASE_CONFIG[$connection->value];
+        $dbConf = $database ?? RuntimeConfig::database($connection);
         $driver = self::resolveDriver($dbConf, $connection);
         $dbConf['driver'] = $driver->dsnName();
 

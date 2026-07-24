@@ -30,7 +30,7 @@ Most PHP caching solutions are either too minimal or buried inside a framework. 
 - **Tags & namespaces** — Group and invalidate related entries effortlessly
 - **Human-readable TTL** — Write `"2 hours"` instead of `7200`
 - **Static & instance API** — Use whichever style fits your codebase
-- **150+ tests** — Battle-tested with PHPUnit
+- **200+ tests** — Unit, integration and concurrency coverage with Pest
 
 ---
 
@@ -106,7 +106,9 @@ $cache->setDriver()->useArrayDriver();     // In-memory (great for tests)
 
 ### Environment variables
 
-Copy the example file and adjust:
+Environment variables are optional and are resolved lazily when a database or
+Redis driver is selected. You may copy the example file when environment-based
+configuration is convenient:
 
 ```sh
 cp .env.example .env
@@ -389,14 +391,25 @@ $cache->forever('key', 'value');                        // No expiration
 
 ```sh
 composer install
-vendor/bin/pest
+composer test
 ```
+
+The default test command requires no Redis, MySQL, or PostgreSQL service.
+Driver integrations have explicit commands:
+
+```sh
+composer test:integration:redis
+composer test:integration:database
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete test and CI workflow.
 
 ---
 
 ## Documentation
 
 Full documentation is available at [CacheerPHP Documentation](https://cacheerphp.com/docs/en/getting-started/).
+The planned 6.x work is tracked in [ROADMAP.md](ROADMAP.md).
 
 ---
 

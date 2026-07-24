@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\Core;
 
 use PDO;
 use PDOException;
+use Silviooosilva\CacheerPhp\Boot\RuntimeConfig;
 use Silviooosilva\CacheerPhp\Enums\DatabaseDriver;
 
 /**
@@ -22,7 +23,6 @@ class MigrationManager
     public static function migrate(PDO $connection, ?string $tableName = null): void
     {
         try {
-            self::prepareDatabase($connection);
             $queries = self::getMigrationQueries($connection, $tableName);
             foreach ($queries as $query) {
                 if (trim($query)) {
@@ -31,21 +31,6 @@ class MigrationManager
             }
         } catch (PDOException $exception) {
             throw new PDOException($exception->getMessage(), $exception->getCode());
-        }
-    }
-
-    /**
-     * Prepares the database connection for migration.
-     *
-     * @param PDO $connection
-     * @return void
-     */
-    private static function prepareDatabase(PDO $connection): void
-    {
-        $driver = DatabaseDriver::tryFrom($connection->getAttribute(PDO::ATTR_DRIVER_NAME));
-        if ($driver !== DatabaseDriver::SQLITE) {
-            $dbname = CACHEER_DATABASE_CONFIG[Connect::getConnection()->value]['dbname'];
-            $connection->exec("USE $dbname");
         }
     }
 
@@ -84,10 +69,7 @@ class MigrationManager
         if ($tableName) {
             return $tableName;
         }
-        if (defined('CACHEER_TABLE')) {
-            return CACHEER_TABLE;
-        }
-        return 'cacheer_table';
+        return RuntimeConfig::table();
     }
 
     /**

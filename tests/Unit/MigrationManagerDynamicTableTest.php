@@ -53,7 +53,7 @@ class MigrationManagerDynamicTableTest extends TestCase
 
     public function test_default_constant_table_exists()
     {
-        // With boot autoload, the default CACHEER_TABLE should be created via Connect::getInstance()
+        // The default table (RuntimeConfig::table()) should be created via Connect::getInstance()
         $stmt = $this->pdo?->query("SELECT name FROM sqlite_master WHERE type='table' AND name = 'cacheer_table'");
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         $this->assertNotFalse($row);

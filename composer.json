@@ -1,6 +1,5 @@
 {
   "name": "silviooosilva/cacheer-php",
-  "version": "5.2.0",
   "description": "CacheerPHP is a minimalist package for caching in PHP, offering a simple interface for storing and retrieving cached data using multiple backends.",
   "keywords": [
     "cache",
@@ -28,9 +27,6 @@
   "type": "library",
   "license": "MIT",
   "autoload": {
-    "files": [
-      "src/Boot/Configs.php"
-    ],
     "psr-4": {
       "Silviooosilva\\CacheerPhp\\": "src/"
     }
@@ -41,8 +37,14 @@
     }
   },
   "scripts": {
-    "test": "@php vendor/bin/pest --colors=always",
-    "test:parallel": "@php vendor/bin/pest --parallel --colors=always",
+    "test": "@test:unit",
+    "test:unit": "@php vendor/bin/pest --testsuite=Unit --colors=always",
+    "test:parallel": "@php vendor/bin/pest --testsuite=Unit --parallel --colors=always",
+    "test:integration": "@php vendor/bin/pest --testsuite=Integration --colors=always",
+    "test:integration:redis": "@php vendor/bin/pest tests/Integration/Redis --colors=always",
+    "test:integration:database": "@php vendor/bin/pest tests/Integration/Database --colors=always",
+    "test:all": "@php vendor/bin/pest --colors=always",
+    "benchmark:baseline": "@php benchmarks/v5-baseline.php",
     "fix": "@php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --allow-risky=yes"
   },
   "authors": [
@@ -64,7 +66,7 @@
   },
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.94",
-    "pestphp/pest": "^4.7"
+    "pestphp/pest": "^3.8 || ^4.7"
   },
   "config": {
     "allow-plugins": {

@@ -4,6 +4,7 @@ namespace Silviooosilva\CacheerPhp\CacheStore\CacheManager;
 
 use Predis\Autoloader;
 use Predis\Client;
+use Silviooosilva\CacheerPhp\Boot\RuntimeConfig;
 
 /**
  * Class RedisCacheManager
@@ -18,19 +19,21 @@ class RedisCacheManager
     private static $redis;
 
     /**
-     * Connects to the Redis server using the configuration defined in REDIS_CONNECTION_CONFIG.
+     * Connects to the Redis server using the lazily resolved Redis configuration.
      *
     * @return Client
     */
     public static function connect()
     {
+        $config = RuntimeConfig::redis();
+
         Autoloader::register();
         self::$redis = new Client([
           'scheme'   => 'tcp',
-          'host'     => REDIS_CONNECTION_CONFIG['REDIS_HOST'],
-          'port'     => REDIS_CONNECTION_CONFIG['REDIS_PORT'],
-          'password' => REDIS_CONNECTION_CONFIG['REDIS_PASSWORD'],
-          'database' => 0,
+          'host'     => $config['host'],
+          'port'     => $config['port'],
+          'password' => $config['password'],
+          'database' => $config['database'],
         ]);
         self::auth();
         return self::$redis;
@@ -43,8 +46,9 @@ class RedisCacheManager
     */
     private static function auth(): void
     {
-        if (is_string(REDIS_CONNECTION_CONFIG['REDIS_PASSWORD']) && REDIS_CONNECTION_CONFIG['REDIS_PASSWORD'] !== '') {
-            self::$redis->auth(REDIS_CONNECTION_CONFIG['REDIS_PASSWORD']);
+        $password = RuntimeConfig::redis()['password'];
+        if ($password !== '') {
+            self::$redis->auth($password);
         }
     }
 
