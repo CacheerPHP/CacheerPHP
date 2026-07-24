@@ -9,6 +9,7 @@ Thank you for your interest in contributing to CacheerPHP! Please read the guide
 - PHP >= 8.2
 - Composer
 - Node.js / npm (used to run code style tooling)
+- Redis, MySQL, or PostgreSQL only when working on their integration suites
 
 ---
 
@@ -64,13 +65,40 @@ npm run lint:check
 
 ## Running Tests
 
-All tests must pass before submitting a pull request.
+The default suite is service-free. It covers unit, feature, file, array, and
+SQLite-backed behavior:
 
 ```bash
-vendor/bin/phpunit tests/Unit
+composer test
 ```
 
-Expected result: **142 tests passing**.
+Run it in parallel to verify worker isolation:
+
+```bash
+composer test:parallel
+```
+
+Service-backed tests live under `tests/Integration`:
+
+```bash
+composer test:integration
+composer test:integration:redis
+composer test:integration:database
+```
+
+Unavailable services are reported as skipped during local development. CI sets
+`CACHEER_REQUIRE_REDIS=1` or `CACHEER_REQUIRE_DATABASE=1`, which makes a missing
+service fail instead. MySQL and PostgreSQL jobs provide their connection details
+through `DB_*`; Redis uses `REDIS_*`.
+
+To run every available suite:
+
+```bash
+composer test:all
+```
+
+Do not document a fixed test count here. The passing count changes whenever
+coverage is added; the command's exit status is the source of truth.
 
 ---
 
@@ -79,7 +107,8 @@ Expected result: **142 tests passing**.
 Before opening a PR, make sure you have:
 
 - [ ] Run `npm run lint:fix` and committed the result
-- [ ] Run `vendor/bin/phpunit tests/Unit` and confirmed all tests pass
+- [ ] Run `composer test` and confirmed the service-free suite passes
+- [ ] Run the relevant integration suite for driver changes
 - [ ] Added or updated tests for any changed behavior
 - [ ] Kept changes focused — one concern per PR
 - [ ] Written a clear PR description explaining what changed and why

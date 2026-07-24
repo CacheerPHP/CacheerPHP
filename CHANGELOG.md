@@ -5,6 +5,34 @@ All notable changes to CacheerPHP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Lazy `RuntimeConfig` resolution: autoloading CacheerPHP no longer requires a
+  project `.env` file or creates database resources.
+- Dedicated Redis, MySQL, PostgreSQL, and SQLite integration boundaries.
+- Service-free unit and parallel test commands.
+- Repeatable v5 performance baseline runner and persisted-format documentation.
+- CacheerPHP 6.x execution roadmap.
+
+### Changed
+
+- Redis integration tests now skip clearly when Redis is unavailable locally
+  and fail when CI marks Redis as required.
+- Redis `flushCache()` uses `FLUSHDB` instead of clearing the entire server.
+- Parallel workers isolate default file, SQLite, and Redis resources.
+- Development dependencies support both Pest 3 on PHP 8.2 and Pest 4 on newer
+  PHP versions.
+- The Composer `version` field was removed; release tags remain the version
+  source for Packagist.
+
+### Fixed
+
+- PostgreSQL migrations no longer execute the MySQL-only `USE` statement, and
+  TTL renewal now uses PostgreSQL interval syntax.
+- Runtime Redis configuration now includes the selected logical database.
+
 ## [5.2.0] - 2026-06-27
 
 A **fully backwards-compatible** feature release focused on safe concurrency.
