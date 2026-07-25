@@ -11,6 +11,7 @@ cacheer.log
 /tests/Unit/cache
 /tests/Feature/cache/last_flush_time
 /Examples/InternalTests/
+/docs/
  
 # OS/editor
 .DS_Store
