@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Silviooosilva\CacheerPhp\Kernel;
 
 use DateInterval;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Core\CacheOperations;
+use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
  * Explicit, instance-first v6 cache API.
@@ -18,6 +21,17 @@ final readonly class Cache
     public function __construct(private Store $store)
     {
         $this->operations = new CacheOperations($store, Scope::root());
+    }
+
+    /**
+     * Named constructor for the in-process array store: a dependency-free cache
+     * that lives for the current request. Ideal for tests and short-lived CLI
+     * runs. Persistent named constructors (file, redis, database) arrive with
+     * their stores in Milestone 4.
+     */
+    public static function inMemory(?Clock $clock = null): self
+    {
+        return new self(new ArrayStore($clock ?? new SystemClock()));
     }
 
     public function entry(string|Key $key): CacheEntry

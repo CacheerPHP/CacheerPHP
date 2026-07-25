@@ -21,6 +21,9 @@
         <testsuite name="Kernel">
             <directory>tests/Kernel</directory>
         </testsuite>
+        <testsuite name="Storage">
+            <directory>tests/Storage</directory>
+        </testsuite>
     </testsuites>
     <php>
         <env name="DB_CONNECTION" value="sqlite"/>
