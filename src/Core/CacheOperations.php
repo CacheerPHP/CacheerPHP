@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Silviooosilva\CacheerPhp\Core;
 
 use DateInterval;
+use InvalidArgumentException;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
+use Silviooosilva\CacheerPhp\Contracts\LockingStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Exceptions\CacheException;
 use Silviooosilva\CacheerPhp\Exceptions\InvalidKeyException;
@@ -16,6 +20,8 @@ use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Support\SyncDeferredExecutor;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 use Throwable;
 use UnexpectedValueException;
 
@@ -29,6 +35,8 @@ final readonly class CacheOperations
     public function __construct(
         private Store $store,
         private Scope $scope,
+        private Clock $clock = new SystemClock(),
+        private DeferredExecutor $executor = new SyncDeferredExecutor(),
     ) {
     }
 
@@ -93,15 +101,43 @@ final readonly class CacheOperations
         Ttl|DateInterval|int|string|null $ttl,
         callable $callback,
     ): mixed {
-        $entry = $this->entry($key);
+        $key = $this->key($key);
+        $entry = $this->fetch($key);
         if ($entry->isHit()) {
             return $entry->value();
         }
 
-        $value = $callback();
-        $this->set($key, $value, $ttl);
+        return $this->singleFlight($key, Ttl::from($ttl), $callback);
+    }
 
-        return $value;
+    /**
+     * Stale-while-revalidate: within $fresh seconds a value is served directly;
+     * between $fresh and $stale the stale value is served while a single worker
+     * refreshes it (deferred via the executor); past $stale it is recomputed
+     * synchronously. A cached value must still be present, so this composes with
+     * a hard TTL of $stale.
+     */
+    public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): mixed
+    {
+        if ($fresh < 1 || $stale <= $fresh) {
+            throw new InvalidArgumentException('flexible() requires 0 < fresh < stale.');
+        }
+
+        $key = $this->key($key);
+        $entry = $this->fetch($key);
+
+        if ($entry->isHit()) {
+            $freshUntil = ($entry->createdAt() ?? $this->clock->now()) + $fresh;
+            if ($this->clock->now() < $freshUntil) {
+                return $entry->value();
+            }
+
+            $this->scheduleRefresh($key, $stale, $callback);
+
+            return $entry->value();
+        }
+
+        return $this->singleFlight($key, Ttl::seconds($stale), $callback);
     }
 
     /**
@@ -226,6 +262,85 @@ final readonly class CacheOperations
         $key = is_string($key) ? Key::named($key) : $key;
 
         return $key->within($this->scope);
+    }
+
+    private function fetch(Key $key): CacheEntry
+    {
+        return $this->run('get', $key, fn (): CacheEntry => $this->store->get($key));
+    }
+
+    private function put(Key $key, mixed $value, Ttl $ttl): void
+    {
+        $this->run('set', $key, function () use ($key, $value, $ttl): void {
+            $this->store->set($key, $value, $ttl);
+        });
+    }
+
+    /**
+     * Compute-and-store a value at most once across concurrent callers. When the
+     * store can lock, one caller computes while the rest wait and read the
+     * result; otherwise it degrades to a plain compute-and-store.
+     *
+     * @param callable(): mixed $callback
+     */
+    private function singleFlight(Key $key, Ttl $ttl, callable $callback): mixed
+    {
+        if (!$this->store instanceof LockingStore) {
+            return $this->compute($key, $ttl, $callback);
+        }
+
+        $lock = $this->store->lock('cacheer:sf:' . hash('sha256', $key->identity()), Ttl::seconds(30));
+
+        if (!$lock->block(5.0)) {
+            return $this->compute($key, $ttl, $callback);
+        }
+
+        try {
+            $entry = $this->fetch($key);
+            if ($entry->isHit()) {
+                return $entry->value();
+            }
+
+            return $this->compute($key, $ttl, $callback);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * @param callable(): mixed $callback
+     */
+    private function compute(Key $key, Ttl $ttl, callable $callback): mixed
+    {
+        $value = $callback();
+        $this->put($key, $value, $ttl);
+
+        return $value;
+    }
+
+    /**
+     * @param callable(): mixed $callback
+     */
+    private function scheduleRefresh(Key $key, int $stale, callable $callback): void
+    {
+        $this->executor->defer(function () use ($key, $stale, $callback): void {
+            if (!$this->store instanceof LockingStore) {
+                $this->compute($key, Ttl::seconds($stale), $callback);
+
+                return;
+            }
+
+            $lock = $this->store->lock('cacheer:swr:' . hash('sha256', $key->identity()), Ttl::seconds(30));
+            if (!$lock->acquire()) {
+                return;
+            }
+
+            try {
+                $this->compute($key, Ttl::seconds($stale), $callback);
+            } finally {
+                $lock->release();
+            }
+        });
     }
 
     /**

@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Silviooosilva\CacheerPhp\Kernel;
 
 use DateInterval;
+use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Core\CacheOperations;
+use Silviooosilva\CacheerPhp\Support\SyncDeferredExecutor;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
  * Immutable cache view that prefixes every operation with a typed scope.
@@ -15,11 +19,19 @@ final readonly class ScopedCache
 {
     private CacheOperations $operations;
 
+    private Clock $clock;
+
+    private DeferredExecutor $executor;
+
     public function __construct(
         private Store $store,
         private Scope $scope,
+        ?Clock $clock = null,
+        ?DeferredExecutor $executor = null,
     ) {
-        $this->operations = new CacheOperations($store, $scope);
+        $this->clock = $clock ?? new SystemClock();
+        $this->executor = $executor ?? new SyncDeferredExecutor();
+        $this->operations = new CacheOperations($store, $scope, $this->clock, $this->executor);
     }
 
     public function name(): Scope
@@ -68,6 +80,11 @@ final readonly class ScopedCache
         return $this->operations->remember($key, $ttl, $callback);
     }
 
+    public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): mixed
+    {
+        return $this->operations->flexible($key, $fresh, $stale, $callback);
+    }
+
     /**
      * @param iterable<string|Key> $keys
      * @return array<string, mixed>
@@ -100,6 +117,8 @@ final readonly class ScopedCache
         return new self(
             $this->store,
             $this->operations->nestedScope($scope),
+            $this->clock,
+            $this->executor,
         );
     }
 }
