@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace Silviooosilva\CacheerPhp\Kernel;
 
 use DateInterval;
+use PDO;
+use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Contracts\RedisConnection;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Core\CacheOperations;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+use Silviooosilva\CacheerPhp\Stores\DatabaseStore;
+use Silviooosilva\CacheerPhp\Stores\FileStore;
+use Silviooosilva\CacheerPhp\Stores\RedisStore;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
@@ -25,13 +31,46 @@ final readonly class Cache
 
     /**
      * Named constructor for the in-process array store: a dependency-free cache
-     * that lives for the current request. Ideal for tests and short-lived CLI
-     * runs. Persistent named constructors (file, redis, database) arrive with
-     * their stores in Milestone 4.
+     * that lives for the current request. Ideal for tests and short-lived CLI runs.
      */
     public static function inMemory(?Clock $clock = null): self
     {
         return new self(new ArrayStore($clock ?? new SystemClock()));
+    }
+
+    /**
+     * Named constructor for the filesystem store: persistent, dependency-free,
+     * and safe to install without Redis or a database.
+     */
+    public static function file(string $directory, ?PipelineConfig $pipeline = null, ?Clock $clock = null): self
+    {
+        return new self(new FileStore($directory, $pipeline?->codec(), clock: $clock ?? new SystemClock()));
+    }
+
+    /**
+     * Named constructor for the database store. The PDO connection is injected;
+     * create the schema explicitly with DatabaseStoreSchema::migrate() first.
+     */
+    public static function database(
+        PDO $pdo,
+        string $table = 'cacheer_store',
+        ?PipelineConfig $pipeline = null,
+        ?Clock $clock = null,
+    ): self {
+        return new self(new DatabaseStore($pdo, $table, $pipeline?->codec(), clock: $clock ?? new SystemClock()));
+    }
+
+    /**
+     * Named constructor for the Redis store, driven by an injected connection
+     * adapter (PredisConnection, PhpRedisConnection, or a custom one).
+     */
+    public static function redis(
+        RedisConnection $connection,
+        string $prefix = 'cacheer',
+        ?PipelineConfig $pipeline = null,
+        ?Clock $clock = null,
+    ): self {
+        return new self(new RedisStore($connection, $prefix, $pipeline?->codec(), clock: $clock ?? new SystemClock()));
     }
 
     public function entry(string|Key $key): CacheEntry

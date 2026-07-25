@@ -2,6 +2,9 @@ parameters:
     level: 5
     paths:
         - src
+    excludePaths:
+        # Requires ext-redis (\Redis); analyzed in CI where the extension is present.
+        - src/Stores/Support/PhpRedisConnection.php
     tmpDir: var/phpstan
     reportUnmatchedIgnoredErrors: true
     rememberPossiblyImpureFunctionValues: false

@@ -4,18 +4,26 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Stores;
 
+use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
 use Silviooosilva\CacheerPhp\Contracts\InspectableStore;
+use Silviooosilva\CacheerPhp\Contracts\Lock;
+use Silviooosilva\CacheerPhp\Contracts\LockingStore;
 use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
+use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
+use Silviooosilva\CacheerPhp\Exceptions\StoreOperationFailedException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Stores\Support\InProcessLock;
+use Silviooosilva\CacheerPhp\Stores\Support\InProcessLockRegistry;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
+use UnexpectedValueException;
 
 /**
  * Service-free executable reference for the v6 store contracts.
@@ -26,15 +34,26 @@ final class ArrayStore implements
     TouchStore,
     PrunableStore,
     InspectableStore,
-    FlushableScopeStore
+    FlushableScopeStore,
+    TaggableStore,
+    AtomicStore,
+    LockingStore
 {
     /**
      * @var array<string, CacheEntry>
      */
     private array $items = [];
 
+    /**
+     * @var array<string, array<string, true>>
+     */
+    private array $tags = [];
+
+    private readonly InProcessLockRegistry $locks;
+
     public function __construct(private readonly Clock $clock = new SystemClock())
     {
+        $this->locks = new InProcessLockRegistry($this->clock);
     }
 
     public function get(Key $key): CacheEntry
@@ -187,5 +206,72 @@ final class ArrayStore implements
                 unset($this->items[$identity]);
             }
         }
+    }
+
+    public function tag(Key $key, string ...$tags): void
+    {
+        foreach ($tags as $tag) {
+            $this->tags[$tag][$key->identity()] = true;
+        }
+    }
+
+    public function clearTag(string $tag): int
+    {
+        $removed = 0;
+
+        foreach (array_keys($this->tags[$tag] ?? []) as $identity) {
+            if (isset($this->items[$identity])) {
+                unset($this->items[$identity]);
+                $removed++;
+            }
+        }
+
+        unset($this->tags[$tag]);
+
+        return $removed;
+    }
+
+    public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
+    {
+        $entry = $this->get($key);
+
+        if ($entry->isHit()) {
+            $current = $entry->value();
+            if (!is_int($current)) {
+                throw new StoreOperationFailedException(
+                    'increment',
+                    $key,
+                    new UnexpectedValueException('Cannot increment a non-integer cache value.'),
+                );
+            }
+            $next = $current + $amount;
+            $expiresAt = $ttl?->expiresAt($this->clock) ?? $entry->expiresAt();
+        } else {
+            $next = ($initial ?? 0) + $amount;
+            $expiresAt = $ttl?->expiresAt($this->clock);
+        }
+
+        $this->items[$key->identity()] = CacheEntry::hit($key, $next, $this->clock->now(), $expiresAt);
+
+        return $next;
+    }
+
+    public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
+    {
+        $entry = $this->get($key);
+
+        if ($entry->isMiss() || $entry->value() !== $expected) {
+            return false;
+        }
+
+        $expiresAt = $ttl?->expiresAt($this->clock) ?? $entry->expiresAt();
+        $this->items[$key->identity()] = CacheEntry::hit($key, $value, $this->clock->now(), $expiresAt);
+
+        return true;
+    }
+
+    public function lock(string $name, Ttl $ttl): Lock
+    {
+        return new InProcessLock($this->locks, $this->clock, $name, $ttl);
     }
 }
