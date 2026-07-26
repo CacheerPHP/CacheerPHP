@@ -1,0 +1,40 @@
+name: Performance report
+description: Report a regression or share benchmark results.
+labels: ["performance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Benchmark results are only actionable with the environment and
+        methodology included. Numbers without a reproducible setup can't be
+        accepted.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: PHP version and build, OS, CPU, store/backend and its version, and dataset size.
+    validations:
+      required: true
+  - type: textarea
+    id: methodology
+    attributes:
+      label: Methodology
+      description: >
+        Exact commands (e.g. composer benchmark:compare), iteration counts,
+        warmup, and how you isolated the measurement.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Results
+      description: Before/after numbers. Include variance, not just a single run.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: A script or branch others can run to reproduce the numbers.
+    validations:
+      required: true

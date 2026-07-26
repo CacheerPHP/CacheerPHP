@@ -1,0 +1,55 @@
+name: Driver / store proposal
+description: Propose a new built-in store or a community adapter to list as compatible.
+labels: ["driver", "needs-discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A store must pass the shared conformance suite and be honest about its
+        guarantees. See WRITING_A_STORE.md.
+  - type: input
+    id: backend
+    attributes:
+      label: Backend
+      placeholder: "Memcached, DynamoDB, APCu, ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Distribution
+      options:
+        - Built-in store (in this repository)
+        - Community adapter package (listed as compatible)
+    validations:
+      required: true
+  - type: checkboxes
+    id: capabilities
+    attributes:
+      label: Capabilities it will provide
+      options:
+        - label: Core (get/set/delete/clear)
+        - label: BatchStore
+        - label: TouchStore
+        - label: PrunableStore
+        - label: InspectableStore
+        - label: FlushableScopeStore
+        - label: TaggableStore
+        - label: AtomicStore
+        - label: LockingStore
+  - type: textarea
+    id: guarantees
+    attributes:
+      label: Guarantees and failure modes
+      description: >
+        Atomicity/locking semantics, keyspace isolation, and behavior on
+        connection loss, timeouts, and partial failures.
+    validations:
+      required: true
+  - type: checkboxes
+    id: conformance
+    attributes:
+      label: Conformance
+      options:
+        - label: I will provide a conformance test extending StoreConformance, run in CI.
+          required: true

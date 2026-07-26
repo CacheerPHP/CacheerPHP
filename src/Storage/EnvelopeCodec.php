@@ -86,6 +86,16 @@ final class EnvelopeCodec
         return $this->serializer->unserialize($payload);
     }
 
+    /**
+     * True when the blob is not a v6 envelope and a v5 reader is configured to
+     * decode it. Stores use this to detect values that should be rewritten in
+     * the v6 format on read during a migration.
+     */
+    public function isLegacyBlob(string $blob): bool
+    {
+        return $this->v5Reader !== null && !Envelope::isEnvelope($blob);
+    }
+
     private function decodeLegacy(string $blob): mixed
     {
         if ($this->v5Reader === null) {

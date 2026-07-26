@@ -64,6 +64,7 @@ final class DatabaseStore implements
         ?EnvelopeCodec $codec = null,
         ?KeyEncoder $keyEncoder = null,
         ?Clock $clock = null,
+        private readonly bool $migrateLegacyOnRead = false,
     ) {
         DatabaseStoreSchema::assertSafeTableName($this->table);
         $this->driver = (string) $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
@@ -86,7 +87,23 @@ final class DatabaseStore implements
             return CacheEntry::miss($key);
         }
 
-        return CacheEntry::hit($key, $this->decode($row['value']), (int) $row['created_at'], $this->nullableInt($row['expires_at']));
+        $value = $this->decode($row['value']);
+
+        if ($this->migrateLegacyOnRead && $this->codec->isLegacyBlob((string) base64_decode($row['value'], true))) {
+            $this->rewriteLegacy($this->keyEncoder->encode($key), $value);
+        }
+
+        return CacheEntry::hit($key, $value, (int) $row['created_at'], $this->nullableInt($row['expires_at']));
+    }
+
+    /**
+     * Re-encode a v5 value in the v6 envelope in place, preserving its creation
+     * and expiry timestamps.
+     */
+    private function rewriteLegacy(string $encodedKey, mixed $value): void
+    {
+        $statement = $this->pdo->prepare("UPDATE {$this->table} SET value = :value WHERE cache_key = :key");
+        $statement->execute([':value' => $this->encode($value), ':key' => $encodedKey]);
     }
 
     public function set(Key $key, mixed $value, Ttl $ttl): void

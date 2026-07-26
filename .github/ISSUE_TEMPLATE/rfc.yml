@@ -1,0 +1,46 @@
+name: RFC / feature proposal
+description: Propose a new feature or a non-trivial behavior change.
+labels: ["rfc", "needs-discussion"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Substantial changes go through an RFC so the design is agreed before code
+        is written. See the roadmap's quality gates.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can't be done well today, and who is affected?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed design
+      description: The API/behavior you propose. Show call sites.
+      render: php
+    validations:
+      required: true
+  - type: textarea
+    id: capability
+    attributes:
+      label: Contract impact
+      description: >
+        Does this touch the Store contract or a capability interface? Is it a
+        decorator or a core change? What guarantees does it add?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: true
+  - type: textarea
+    id: compat
+    attributes:
+      label: Compatibility and migration
+      description: Backward-compatibility, persisted-envelope impact, and migration notes.
+    validations:
+      required: true

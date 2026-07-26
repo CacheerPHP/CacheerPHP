@@ -1,0 +1,59 @@
+name: Bug report
+description: Report incorrect behavior with a reproducible case.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. A minimal reproduction is worth more than a long
+        description. Do not report security issues here — see SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: CacheerPHP version
+      placeholder: "6.0.0"
+    validations:
+      required: true
+  - type: input
+    id: php
+    attributes:
+      label: PHP version
+      placeholder: "8.3.10"
+    validations:
+      required: true
+  - type: dropdown
+    id: store
+    attributes:
+      label: Store / driver
+      options:
+        - ArrayStore
+        - FileStore
+        - DatabaseStore (SQLite)
+        - DatabaseStore (MySQL/MariaDB)
+        - DatabaseStore (PostgreSQL)
+        - RedisStore
+        - A decorator (Tiered/Resilient/Instrumented)
+        - Custom store
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the exact exception type and message if one is thrown.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: A short script or failing test. Prefer FakeClock over sleeps.
+      render: php
+    validations:
+      required: true
