@@ -4,21 +4,25 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Exceptions;
 
-use Psr\SimpleCache\InvalidArgumentException as PsrInvalidArgumentException;
+use Psr\Cache\InvalidArgumentException as Psr6InvalidArgumentException;
+use Psr\SimpleCache\InvalidArgumentException as Psr16InvalidArgumentException;
 
 /**
  * Class CacheInvalidArgumentException
  *
- * Thrown when a cache key or argument fails PSR-16 validation.
+ * Thrown when a cache key or argument fails PSR key validation.
  *
- * Implements \Psr\SimpleCache\InvalidArgumentException so it can be caught
- * by PSR-16 consumers as required by the specification.
+ * Implements both \Psr\SimpleCache\InvalidArgumentException (PSR-16) and
+ * \Psr\Cache\InvalidArgumentException (PSR-6) so it can be caught by consumers
+ * of either specification as required.
  *
  * @author Sílvio Silva <https://github.com/silviooosilva>
  * @package Silviooosilva\CacheerPhp
  * @final
  */
-class CacheInvalidArgumentException extends \InvalidArgumentException implements PsrInvalidArgumentException
+class CacheInvalidArgumentException extends \InvalidArgumentException implements
+    Psr16InvalidArgumentException,
+    Psr6InvalidArgumentException
 {
     /**
      * Creates a new instance with a formatted message.

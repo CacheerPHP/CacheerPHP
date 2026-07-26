@@ -7,6 +7,7 @@ namespace Silviooosilva\CacheerPhp\Stores;
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
 use Silviooosilva\CacheerPhp\Contracts\InspectableStore;
 use Silviooosilva\CacheerPhp\Contracts\Lock;
@@ -20,6 +21,8 @@ use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Observability\CacheEvent;
+use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
@@ -58,6 +61,7 @@ final class TieredStore implements
         private readonly Clock $clock = new SystemClock(),
         private readonly ?Ttl $l1MaxTtl = null,
         private readonly float $generationCheckSeconds = 5.0,
+        private readonly EventDispatcher $events = new NullEventDispatcher(),
     ) {
     }
 
@@ -225,6 +229,7 @@ final class TieredStore implements
     private function promote(Key $key, CacheEntry $entry): void
     {
         $this->l1->set($key, $entry->value(), $this->promotionTtl($entry));
+        $this->events->dispatch(CacheEvent::promoted('TieredStore', (string) $key));
     }
 
     private function promotionTtl(CacheEntry $entry): Ttl

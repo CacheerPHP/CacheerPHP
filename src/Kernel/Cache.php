@@ -10,12 +10,15 @@ use Silviooosilva\CacheerPhp\Config\CachePolicy;
 use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
+use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
 use Silviooosilva\CacheerPhp\Contracts\RedisConnection;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Core\CacheOperations;
+use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Stores\DatabaseStore;
 use Silviooosilva\CacheerPhp\Stores\FileStore;
+use Silviooosilva\CacheerPhp\Stores\InstrumentedStore;
 use Silviooosilva\CacheerPhp\Stores\RedisStore;
 use Silviooosilva\CacheerPhp\Stores\ResilientStore;
 use Silviooosilva\CacheerPhp\Stores\TieredStore;
@@ -34,14 +37,36 @@ final readonly class Cache
 
     private DeferredExecutor $executor;
 
+    private EventDispatcher $events;
+
     public function __construct(
         private Store $store,
         ?Clock $clock = null,
         ?DeferredExecutor $executor = null,
+        ?EventDispatcher $events = null,
     ) {
         $this->clock = $clock ?? new SystemClock();
         $this->executor = $executor ?? new SyncDeferredExecutor();
-        $this->operations = new CacheOperations($store, Scope::root(), $this->clock, $this->executor);
+        $this->events = $events ?? new NullEventDispatcher();
+        $this->operations = new CacheOperations($store, Scope::root(), $this->clock, $this->executor, $this->events);
+    }
+
+    /**
+     * Named constructor that wraps a store in transparent instrumentation:
+     * every operation is timed and emitted as a typed event through the given
+     * dispatcher (which also carries the kernel's promotion/stale/refresh
+     * events). Value capture is off by default.
+     *
+     * @param (callable(mixed): mixed)|null $redactor
+     */
+    public static function instrumented(
+        Store $store,
+        EventDispatcher $events,
+        bool $captureValues = false,
+        ?callable $redactor = null,
+        ?Clock $clock = null,
+    ): self {
+        return new self(new InstrumentedStore($store, $events, $captureValues, $redactor), $clock, null, $events);
     }
 
     /**
@@ -106,10 +131,12 @@ final readonly class Cache
         ?Ttl $l1MaxTtl = null,
         ?Clock $clock = null,
         ?DeferredExecutor $executor = null,
+        ?EventDispatcher $events = null,
     ): self {
         $clock ??= new SystemClock();
+        $events ??= new NullEventDispatcher();
 
-        return new self(new TieredStore($l1, $l2, $clock, $l1MaxTtl), $clock, $executor);
+        return new self(new TieredStore($l1, $l2, $clock, $l1MaxTtl, events: $events), $clock, $executor, $events);
     }
 
     /**
@@ -222,6 +249,7 @@ final readonly class Cache
             $this->operations->nestedScope($scope),
             $this->clock,
             $this->executor,
+            $this->events,
         );
     }
 }

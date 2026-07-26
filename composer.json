@@ -26,6 +26,9 @@
   "homepage": "https://github.com/silviooosilva",
   "type": "library",
   "license": "MIT",
+  "bin": [
+    "bin/cacheer"
+  ],
   "autoload": {
     "psr-4": {
       "Silviooosilva\\CacheerPhp\\": "src/"
@@ -69,7 +72,9 @@
   "require": {
     "php": ">=8.3",
     "psr/simple-cache": "^3.0",
-    "psr/log": "^3.0"
+    "psr/cache": "^3.0",
+    "psr/log": "^3.0",
+    "psr/event-dispatcher": "^1.0"
   },
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.94",

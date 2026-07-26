@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
+use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
 use Silviooosilva\CacheerPhp\Contracts\LockingStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
@@ -20,6 +21,8 @@ use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Observability\CacheEvent;
+use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
 use Silviooosilva\CacheerPhp\Support\SyncDeferredExecutor;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 use Throwable;
@@ -37,6 +40,7 @@ final readonly class CacheOperations
         private Scope $scope,
         private Clock $clock = new SystemClock(),
         private DeferredExecutor $executor = new SyncDeferredExecutor(),
+        private EventDispatcher $events = new NullEventDispatcher(),
     ) {
     }
 
@@ -132,6 +136,7 @@ final readonly class CacheOperations
                 return $entry->value();
             }
 
+            $this->events->dispatch(CacheEvent::staleServed($this->storeName(), (string) $key));
             $this->scheduleRefresh($key, $stale, $callback);
 
             return $entry->value();
@@ -292,6 +297,8 @@ final readonly class CacheOperations
         $lock = $this->store->lock('cacheer:sf:' . hash('sha256', $key->identity()), Ttl::seconds(30));
 
         if (!$lock->block(5.0)) {
+            $this->events->dispatch(CacheEvent::lockContended($this->storeName(), (string) $key));
+
             return $this->compute($key, $ttl, $callback);
         }
 
@@ -326,6 +333,7 @@ final readonly class CacheOperations
         $this->executor->defer(function () use ($key, $stale, $callback): void {
             if (!$this->store instanceof LockingStore) {
                 $this->compute($key, Ttl::seconds($stale), $callback);
+                $this->events->dispatch(CacheEvent::refreshed($this->storeName(), (string) $key));
 
                 return;
             }
@@ -337,10 +345,16 @@ final readonly class CacheOperations
 
             try {
                 $this->compute($key, Ttl::seconds($stale), $callback);
+                $this->events->dispatch(CacheEvent::refreshed($this->storeName(), (string) $key));
             } finally {
                 $lock->release();
             }
         });
+    }
+
+    private function storeName(): string
+    {
+        return (new \ReflectionClass($this->store))->getShortName();
     }
 
     /**

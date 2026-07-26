@@ -27,6 +27,18 @@ final class DatabaseStoreSchema
         }
     }
 
+    /**
+     * The DDL that migrate() would run, for previews (CLI dry runs) and docs.
+     *
+     * @return list<string>
+     */
+    public static function sqlFor(PDO $pdo, string $table): array
+    {
+        self::assertSafeTableName($table);
+
+        return self::statements($pdo, $table);
+    }
+
     public static function drop(PDO $pdo, string $table): void
     {
         self::assertSafeTableName($table);

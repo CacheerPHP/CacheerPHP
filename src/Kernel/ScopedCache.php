@@ -7,8 +7,10 @@ namespace Silviooosilva\CacheerPhp\Kernel;
 use DateInterval;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
+use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Core\CacheOperations;
+use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
 use Silviooosilva\CacheerPhp\Support\SyncDeferredExecutor;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
@@ -23,15 +25,19 @@ final readonly class ScopedCache
 
     private DeferredExecutor $executor;
 
+    private EventDispatcher $events;
+
     public function __construct(
         private Store $store,
         private Scope $scope,
         ?Clock $clock = null,
         ?DeferredExecutor $executor = null,
+        ?EventDispatcher $events = null,
     ) {
         $this->clock = $clock ?? new SystemClock();
         $this->executor = $executor ?? new SyncDeferredExecutor();
-        $this->operations = new CacheOperations($store, $scope, $this->clock, $this->executor);
+        $this->events = $events ?? new NullEventDispatcher();
+        $this->operations = new CacheOperations($store, $scope, $this->clock, $this->executor, $this->events);
     }
 
     public function name(): Scope
@@ -119,6 +125,7 @@ final readonly class ScopedCache
             $this->operations->nestedScope($scope),
             $this->clock,
             $this->executor,
+            $this->events,
         );
     }
 }

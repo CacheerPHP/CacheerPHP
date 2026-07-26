@@ -1,0 +1,21 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Silviooosilva\CacheerPhp\Console\Application;
+
+$autoloaders = [
+    __DIR__ . '/../vendor/autoload.php',   // running from the package itself
+    __DIR__ . '/../../../autoload.php',     // installed as a dependency
+];
+
+foreach ($autoloaders as $autoloader) {
+    if (is_file($autoloader)) {
+        require $autoloader;
+
+        break;
+    }
+}
+
+exit((new Application())->run($argv));
