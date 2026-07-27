@@ -5,451 +5,239 @@
 </p>
 
 <p align="center">
-  <strong>A modern, fluent PHP caching library with multiple backends, PSR compliance, encryption and zero framework dependencies.</strong>
+  <strong>An explicit, instance-first PHP cache with a tiny core, optional capabilities, and zero framework lock-in.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/silviooosilva/CacheerPHP/releases"><img src="https://img.shields.io/github/release/silviooosilva/CacheerPHP.svg?style=for-the-badge&color=blue" alt="Latest Version"/></a>
   <img src="https://img.shields.io/packagist/dependency-v/silviooosilva/cacheer-php/PHP?style=for-the-badge&color=blue" alt="PHP Version"/>
   <img src="https://img.shields.io/packagist/dt/silviooosilva/cacheer-php?style=for-the-badge&color=blue" alt="Downloads"/>
-  <a href="https://scrutinizer-ci.com/g/silviooosilva/CacheerPHP"><img src="https://img.shields.io/scrutinizer/g/silviooosilva/CacheerPHP.svg?style=for-the-badge&color=blue" alt="Quality Score"/></a>
   <a href="https://github.com/silviooosilva/CacheerPHP"><img src="https://img.shields.io/badge/maintainer-@silviooosilva-blue.svg?style=for-the-badge&color=blue" alt="Maintainer"/></a>
 </p>
 
 ---
 
-## Why CacheerPHP?
+> **CacheerPHP 6.x** is an instance-first rewrite. The engine is a small `Cache`
+> kernel over a minimal `Store` contract; everything else — batching, tags,
+> locks, atomic counters, tiering, resilience, encryption — is an **optional
+> capability** you opt into. There is no global state and no autoload-time side
+> effect. Upgrading from v5? Jump to [Migrating from v5](#migrating-from-v5).
 
-Most PHP caching solutions are either too minimal or buried inside a framework. CacheerPHP gives you a **complete caching toolkit** that works anywhere — from a small script to a full application — with a clean, fluent API and no framework lock-in.
-
-- **4 storage drivers** — File, Database (MySQL/PostgreSQL/SQLite), Redis and in-memory Array
-- **PSR-16 & PSR-3** — Standards-compliant SimpleCache adapter and logger out of the box
-- **AES-256-CBC encryption** — Protect sensitive cached data with a single method call
-- **Gzip compression** — Reduce storage footprint automatically
-- **Fluent OptionBuilder** — Type-safe, IDE-friendly configuration with zero typos
-- **Tags & namespaces** — Group and invalidate related entries effortlessly
-- **Human-readable TTL** — Write `"2 hours"` instead of `7200`
-- **Static & instance API** — Use whichever style fits your codebase
-- **200+ tests** — Unit, integration and concurrency coverage with Pest
-
----
-
-## V6 Kernel Preview
-
-The `6.x` development branch includes the new explicit, instance-first kernel:
-
-```php
-use Silviooosilva\CacheerPhp\Cache;
-use Silviooosilva\CacheerPhp\Stores\ArrayStore;
-
-$cache = new Cache(new ArrayStore());
-
-$cache->set('user:42', $user, ttl: '10 minutes');
-$user = $cache->get('user:42');
-```
-
-The existing `Cacheer` API remains available during the compatibility window.
-See [`docs/MILESTONE_2_KERNEL.md`](docs/MILESTONE_2_KERNEL.md) for scopes,
-cached `null`, batch operations, and the new store contract.
-
----
-
-## Quick Start
+## Five-minute quick start
 
 ```sh
 composer require silviooosilva/cacheer-php
 ```
 
-```php
-use Silviooosilva\CacheerPhp\Cacheer;
-
-$cache = new Cacheer(['cacheDir' => __DIR__ . '/cache']);
-$cache->setDriver()->useFileDriver();
-
-// Write
-$cache->putCache('user:1', ['id' => 1, 'name' => 'John']);
-
-// Read
-$user = $cache->getCache('user:1');
-
-// Check
-if ($cache->has('user:1')) {
-    echo "Cache hit!";
-}
-```
-
-That's it — you're caching. Keep reading for the good stuff.
-
----
-
-## Table of Contents
-
-- [Drivers](#drivers)
-- [Configuration](#configuration)
-- [OptionBuilder](#optionbuilder)
-- [Encryption & Compression](#encryption--compression)
-- [Tags & Namespaces](#tags--namespaces)
-- [PSR-16 SimpleCache](#psr-16-simplecache)
-- [Formatter](#formatter)
-- [API Reference](#api-reference)
-- [Testing](#testing)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [License](#license)
-
----
-
-## Drivers
-
-Switch between backends with a single call:
+The core installs with **no backend clients and no required extensions** —
+`ArrayStore` and `FileStore` work out of the box.
 
 ```php
-$cache->setDriver()->useFileDriver();      // Filesystem
-$cache->setDriver()->useDatabaseDriver();  // MySQL, PostgreSQL, SQLite
-$cache->setDriver()->useRedisDriver();     // Redis
-$cache->setDriver()->useArrayDriver();     // In-memory (great for tests)
+use Silviooosilva\CacheerPhp\Kernel\Cache;
+
+// Dependency-free, in-process. Great for tests and short CLI runs.
+$cache = Cache::inMemory();
+
+// Write with a TTL (seconds, "10 minutes", a DateInterval, or null = forever).
+$cache->set('user:42', ['name' => 'Ada'], ttl: '10 minutes');
+
+// Read (returns your default on a miss).
+$user = $cache->get('user:42', default: null);
+
+// Compute-once: on a miss, run the callback, store it, return it.
+$report = $cache->remember('report:daily', ttl: 3600, callback: function () {
+    return expensive_report();
+});
+
+// Existence and deletion.
+$cache->has('user:42');     // true
+$cache->delete('user:42');
 ```
 
-| Feature | File | Database | Redis | Array |
-|---|:---:|:---:|:---:|:---:|
-| Persistence | Disk | DB | Server | No |
-| Tags | Yes | Yes | Yes | Yes |
-| Namespaces | Yes | Yes | Yes | Yes |
-| Compression | Yes | Yes | Yes | Yes |
-| Encryption | Yes | Yes | Yes | Yes |
-| Auto-flush | Yes | Yes | Yes | - |
-| Best for | Single server | Shared state | High throughput | Testing |
+Swap the store, keep the API:
 
----
+```php
+$cache = Cache::file('/var/cache/app');      // persistent, dependency-free
+$cache = Cache::database($pdo, 'cacheer');   // inject your own PDO
+$cache = Cache::redis($connection);          // predis or phpredis adapter
+```
 
-## Configuration
+## Why v6
 
-### Environment variables
+- **Tiny core, honest capabilities.** A store implements four methods; extra
+  behavior is declared by interface and checked at runtime — a backend never
+  pretends to guarantee something it can't. See [CAPABILITIES.md](CAPABILITIES.md).
+- **Instance-first, no globals.** Construct exactly the cache you need; run
+  several side by side; nothing reads the environment or the clock behind your
+  back.
+- **Scopes instead of stringly namespaces.** `->scope('billing')` is an isolated
+  keyspace you can clear on its own.
+- **Composable decorators.** Tiered (L1/L2), resilient (circuit-breaker
+  fallback), and instrumented (typed events + metrics) all wrap any store.
+- **Stampede protection built in.** `remember()` single-flights across workers;
+  `flexible()` is stale-while-revalidate with a deferred refresh.
+- **Authenticated storage.** Values are serialized → optionally compressed →
+  optionally AES-256-GCM encrypted into a versioned, tamper-evident envelope.
+- **Standards-first.** PSR-16 and PSR-6 adapters, a PSR-3 logging subscriber, and
+  a PSR-14 event bridge ship in the box.
+- **Deterministic tests.** Time is an injected `Clock`; the suite uses a
+  `FakeClock` and needs no `sleep()`.
 
-Environment variables are optional and are resolved lazily when a database or
-Redis driver is selected. You may copy the example file when environment-based
-configuration is convenient:
+## Core recipes
+
+### Scopes
+
+```php
+$cache->scope('reports')->set('daily', $rows);
+$cache->scope('billing')->set('daily', $invoice);   // independent entry
+$cache->scope('reports')->clear();                  // clears only that scope
+```
+
+### Stampede protection & stale-while-revalidate
+
+```php
+// One worker computes on a miss; the rest wait and read the result.
+$value = $cache->remember('key', 3600, fn () => build());
+
+// Serve fresh for 30s, then serve stale while a single worker refreshes,
+// recomputing synchronously after 300s.
+$value = $cache->flexible('feed', fresh: 30, stale: 300, callback: fn () => build());
+```
+
+### Tiering, resilience, observability
+
+```php
+use Silviooosilva\CacheerPhp\Observability\{EventBus, MetricsCollector};
+
+$cache = Cache::tiered($l1, $l2);                 // fast local in front of shared
+$cache = Cache::resilient($primary, $fallback);   // fall back when the breaker trips
+
+$events = new EventBus();
+$metrics = new MetricsCollector();
+$events->listen($metrics->record(...));
+$cache = Cache::instrumented($store, $events);    // typed events; values never captured
+$metrics->snapshot();                             // hit_rate, latency, bytes, ...
+```
+
+### Encryption & compression
+
+```php
+use Silviooosilva\CacheerPhp\Config\PipelineConfig;
+use Silviooosilva\CacheerPhp\Storage\Encryption\Keyring;
+
+$pipeline = PipelineConfig::default()
+    ->withGzip()
+    ->withKeyring(Keyring::fromPassphrases(['current' => $secret], 'current')); // AES-256-GCM
+
+$cache = Cache::file('/var/cache/app', $pipeline);
+```
+
+### Atomic counters, tags, locks (capabilities)
+
+Capabilities live on the store. Use them via the store, or through the
+[`LegacyCacheer`](src/Compat/LegacyCacheer.php) bridge:
+
+```php
+$store->increment(Key::named('visits'));          // AtomicStore
+$store->tag(Key::named('p1'), 'products');         // TaggableStore
+$lock = $store->lock('import', Ttl::seconds(30));  // LockingStore
+```
+
+## PSR adapters
+
+```php
+use Silviooosilva\CacheerPhp\Psr\{Psr16Cache, Psr6Pool};
+
+$psr16 = new Psr16Cache($cache);                   // Psr\SimpleCache\CacheInterface
+$pool  = new Psr6Pool($cache, $clock);             // Psr\Cache\CacheItemPoolInterface
+```
+
+## Operations CLI
 
 ```sh
-cp .env.example .env
+vendor/bin/cacheer doctor        # environment health check
+vendor/bin/cacheer stats         # store + capabilities + entry count
+vendor/bin/cacheer inspect <key> # metadata only, never the value
+vendor/bin/cacheer prune --dry-run
+vendor/bin/cacheer clear --force
+vendor/bin/cacheer migrate --dry-run   # print schema DDL without executing
 ```
 
-```env
-# SQLite (default)
-DB_CONNECTION=sqlite
+Point the CLI at a `cacheer.config.php` that returns a `Store` (or
+`['store' => ..., 'pdo' => ..., 'table' => ...]`).
 
-# MySQL / PostgreSQL
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=cacheer_db
-DB_USERNAME=root
-DB_PASSWORD=secret
+## Migrating from v5
 
-# Redis
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-```
-
-### Plain array
+The [`LegacyCacheer`](src/Compat/LegacyCacheer.php) bridge exposes the v5 method
+surface on top of the v6 engine, so you can upgrade without rewriting every call
+site at once:
 
 ```php
-$cache = new Cacheer([
-    'cacheDir'       => __DIR__ . '/cache',
-    'loggerPath'     => __DIR__ . '/logs/cacheer.log',
-    'expirationTime' => '1 hour',
-    'flushAfter'     => '1 day',
-]);
+use Silviooosilva\CacheerPhp\Compat\LegacyCacheer;
+
+$cache = LegacyCacheer::file('/var/cache');        // or ::inMemory()
+$cache->putCache('user:1', $user, 'accounts', 3600);
+$user = $cache->getCache('user:1', 'accounts');
 ```
 
-### Static API
+- Turn on `emitDeprecations: true` in development to find call sites to migrate
+  (silent by default).
+- Run the optional [`rector.php`](rector.php) set for the straightforward renames.
+- `FileStore`/`DatabaseStore` can **rewrite v5 payloads into the v6 envelope on
+  read** during the migration window.
 
-```php
-Cacheer::setConfig()->setTimeZone('UTC');
-Cacheer::setDriver()->useArrayDriver();
+The full guide, method-by-method mapping, and database migration/rollback steps
+are in **[MIGRATION.md](MIGRATION.md)**.
 
-Cacheer::putCache('key', 'value');
-$value = Cacheer::getCache('key');
-```
+## Building a custom store
 
----
-
-## OptionBuilder
-
-Forget string typos. The `OptionBuilder` gives you a **fluent, type-safe** way to configure each driver with full IDE autocompletion:
-
-```php
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
-
-$options = OptionBuilder::forFile()
-    ->dir(__DIR__ . '/cache')
-    ->loggerPath(__DIR__ . '/logs/cache.log')
-    ->expirationTime('2 hours')
-    ->flushAfter('1 day')
-    ->build();
-
-$cache = new Cacheer($options);
-$cache->setDriver()->useFileDriver();
-```
-
-Each driver has its own builder with driver-specific methods:
-
-```php
-// Redis
-$options = OptionBuilder::forRedis()
-    ->setNamespace('app:')
-    ->loggerPath(__DIR__ . '/logs/cache.log')
-    ->expirationTime('2 hours')
-    ->flushAfter('1 day')
-    ->build();
-
-// Database
-$options = OptionBuilder::forDatabase()
-    ->table('cache_items')
-    ->loggerPath(__DIR__ . '/logs/cache.log')
-    ->expirationTime('30 minutes')
-    ->flushAfter('7 days')
-    ->build();
-```
-
-The `expirationTime()` and `flushAfter()` methods also support the **TimeBuilder** fluent API:
-
-```php
-$options = OptionBuilder::forFile()
-    ->dir(__DIR__ . '/cache')
-    ->expirationTime()->hour(2)
-    ->flushAfter()->day(1)
-    ->build();
-```
-
----
-
-## Encryption & Compression
-
-### Encryption
-
-Protect sensitive cached data with **AES-256-CBC** encryption. Each value gets a unique random IV — no two ciphertexts are alike, even for the same input.
-
-```php
-$cache->useEncryption('your-secret-key-here');
-$cache->putCache('token', 'sensitive-data');
-
-// Stored encrypted, decrypted transparently on read
-$token = $cache->getCache('token'); // "sensitive-data"
-```
-
-### Compression
-
-Reduce storage size with gzip compression — useful for large cached payloads:
-
-```php
-$cache->useCompression();
-$cache->putCache('large-dataset', $hugeArray);
-```
-
-Both can be combined:
-
-```php
-$cache->useCompression();
-$cache->useEncryption('my-key');
-
-// Data is compressed, then encrypted before storage
-$cache->putCache('secure-payload', $data);
-```
-
----
-
-## Tags & Namespaces
-
-### Tags
-
-Group related cache entries and invalidate them all at once:
-
-```php
-$cache->putCache('user:1', $userData);
-$cache->putCache('user:2', $otherUser);
-$cache->tag('users', 'user:1', 'user:2');
-
-// Later — flush everything tagged "users"
-$cache->flushTag('users');
-```
-
-### Namespaces
-
-Logically separate cache entries to avoid key collisions:
-
-```php
-$cache->putCache('config', $appConfig, 'app');
-$cache->putCache('config', $apiConfig, 'api');
-
-$cache->getCache('config', 'app'); // $appConfig
-$cache->getCache('config', 'api'); // $apiConfig
-```
-
----
-
-## PSR-16 SimpleCache
-
-Need a standards-compliant interface? Wrap any `Cacheer` instance with the PSR-16 adapter:
-
-```php
-use Silviooosilva\CacheerPhp\Psr\Psr16CacheAdapter;
-
-$cache = new Cacheer(['cacheDir' => __DIR__ . '/cache']);
-$cache->setDriver()->useFileDriver();
-
-$psr16 = new Psr16CacheAdapter($cache);
-
-$psr16->set('key', 'value', 3600);
-$psr16->get('key');               // "value"
-$psr16->get('missing', 'default'); // "default"
-$psr16->delete('key');
-$psr16->has('key');                // false
-
-// Batch operations
-$psr16->setMultiple(['a' => 1, 'b' => 2]);
-$psr16->getMultiple(['a', 'b', 'c'], 'default');
-$psr16->deleteMultiple(['a', 'b']);
-$psr16->clear();
-```
-
-This adapter works with any library that accepts `Psr\SimpleCache\CacheInterface`.
-
----
-
-## Formatter
-
-Transform cached data on retrieval with the built-in formatter:
-
-```php
-$cache->useFormatter();
-
-$json   = $cache->getCache('user:1')->toJson();    // JSON string
-$array  = $cache->getCache('user:1')->toArray();   // Array
-$object = $cache->getCache('user:1')->toObject();  // stdClass
-$string = $cache->getCache('user:1')->toString();  // String cast
-```
-
----
-
-## API Reference
-
-### Write Operations
-
-| Method | Returns | Description |
-|---|---|---|
-| `putCache($key, $data, $ns, $ttl)` | `bool` | Store a value |
-| `add($key, $data, $ns, $ttl)` | `bool` | Store only if key doesn't exist |
-| `putMany($items, $ns, $batch)` | `bool` | Store multiple key-value pairs |
-| `forever($key, $data)` | `bool` | Store with no expiration |
-| `appendCache($key, $data, $ns)` | `bool` | Append to an existing value |
-| `increment($key, $amount, $ns)` | `bool` | Increment a numeric value |
-| `decrement($key, $amount, $ns)` | `bool` | Decrement a numeric value |
-| `renewCache($key, $ttl, $ns)` | `bool` | Refresh a key's TTL |
-| `remember($key, $ttl, $fn)` | `mixed` | Get or compute and store |
-| `rememberForever($key, $fn)` | `mixed` | Get or compute and store forever |
-
-### Read Operations
-
-| Method | Returns | Description |
-|---|---|---|
-| `getCache($key, $ns)` | `mixed` | Retrieve a cached value |
-| `getMany($keys, $ns)` | `array` | Retrieve multiple values |
-| `getAll($ns)` | `array` | Retrieve all values in namespace |
-| `getAndForget($key, $ns)` | `mixed` | Retrieve and delete (atomic pop) |
-| `has($key, $ns)` | `bool` | Check if a key exists |
-
-### Delete Operations
-
-| Method | Returns | Description |
-|---|---|---|
-| `clearCache($key, $ns)` | `bool` | Delete a single entry |
-| `flushCache()` | `bool` | Delete all entries |
-| `tag($tag, ...$keys)` | `bool` | Associate keys with a tag |
-| `flushTag($tag)` | `bool` | Delete all entries for a tag |
-
-### Configuration & State
-
-| Method | Returns | Description |
-|---|---|---|
-| `setDriver()` | `CacheDriver` | Switch storage backend |
-| `setConfig()` | `CacheConfig` | Access configuration |
-| `useEncryption($key)` | `Cacheer` | Enable AES-256 encryption |
-| `useCompression($on)` | `Cacheer` | Enable gzip compression |
-| `useFormatter()` | `void` | Enable output formatter |
-| `getOption($key, $default)` | `mixed` | Get a config option |
-| `getOptions()` | `array` | Get all config options |
-| `setOption($key, $value)` | `Cacheer` | Set a config option |
-| `stats()` | `array` | Driver, compression & encryption status |
-| `isSuccess()` | `bool` | Last operation succeeded? |
-| `getMessage()` | `string` | Human-readable status message |
-
-### TTL Formats
-
-CacheerPHP accepts TTL in multiple formats:
-
-```php
-$cache->putCache('key', 'value', '', 3600);            // Seconds (int)
-$cache->putCache('key', 'value', '', '2 hours');        // Human-readable string
-$cache->putCache('key', 'value', '', new DateInterval('PT2H')); // DateInterval
-$cache->forever('key', 'value');                        // No expiration
-```
-
----
+Implement four methods, add capability interfaces you can honor, and prove it
+with the shared conformance suite — no need to read the built-in store source.
+See **[WRITING_A_STORE.md](WRITING_A_STORE.md)**.
 
 ## Requirements
 
-- **PHP 8.2+**
-- `ext-pdo` — for database drivers
-- `ext-openssl` — for encryption
-- `ext-zlib` — for compression
-- Redis server — when using the Redis driver
+- **PHP 8.3+**
+- `ext-openssl` — only for AES-256-GCM encryption
+- `ext-zlib` — only for gzip compression
+- `ext-pdo` — only for the database store
+- `predis/predis` or `ext-redis` — only for the Redis store
 
----
+The core installs and runs (Array/File stores) with none of the optional pieces.
 
 ## Testing
 
 ```sh
 composer install
-composer test
+composer test            # service-free unit suite
+composer test:kernel     # v6 kernel
+composer test:contract   # store conformance
+composer analyse         # PHPStan level 5
+composer lint            # php-cs-fixer (dry-run)
 ```
 
-The default test command requires no Redis, MySQL, or PostgreSQL service.
-Milestone 1 also provides explicit conformance, concurrency, static-analysis,
-and benchmark commands:
-
-```sh
-composer test:contract
-composer test:concurrency
-composer test:integration:redis
-composer test:integration:database
-composer analyse
-composer benchmark:baseline
-```
-
-See [the safety-net guide](docs/MILESTONE_1_SAFETY_NET.md) and
-[CONTRIBUTING.md](CONTRIBUTING.md) for the complete test and CI workflow.
-
----
+Redis/MySQL/PostgreSQL integration suites run in CI; locally they skip cleanly
+when the service is absent.
 
 ## Documentation
 
-Full documentation is available at [CacheerPHP Documentation](https://cacheerphp.com/docs/en/getting-started/).
-The planned 6.x work is tracked in [ROADMAP.md](ROADMAP.md).
-
----
+- [MIGRATION.md](MIGRATION.md) — v5 → v6 upgrade guide
+- [CAPABILITIES.md](CAPABILITIES.md) — capability matrix, guarantees, failure modes
+- [WRITING_A_STORE.md](WRITING_A_STORE.md) — third-party store author guide
+- [SECURITY.md](SECURITY.md) — support windows and vulnerability reporting
+- [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) — documented edges
+- Runnable, CI-tested examples in [`examples/v6`](examples/v6)
+- Full docs site: [cacheerphp.com/docs](https://cacheerphp.com/docs/en/getting-started/)
+- The v6 execution plan lives in [ROADMAP.md](ROADMAP.md)
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
-
----
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) and the issue
+and pull-request templates. Substantial changes start with an RFC.
 
 ## License
 
 CacheerPHP is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-
----
 
 ## Support
 

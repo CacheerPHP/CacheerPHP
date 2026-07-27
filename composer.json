@@ -26,6 +26,12 @@
   "homepage": "https://github.com/silviooosilva",
   "type": "library",
   "license": "MIT",
+  "support": {
+    "issues": "https://github.com/silviooosilva/CacheerPHP/issues",
+    "source": "https://github.com/silviooosilva/CacheerPHP",
+    "docs": "https://cacheerphp.com/docs/en/getting-started/",
+    "security": "https://github.com/silviooosilva/CacheerPHP/security/policy"
+  },
   "bin": [
     "bin/cacheer"
   ],
@@ -97,6 +103,11 @@
   "config": {
     "allow-plugins": {
       "pestphp/pest-plugin": true
+    }
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-6.x": "6.0.x-dev"
     }
   }
 }

@@ -5,6 +5,46 @@ All notable changes to CacheerPHP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.0] — Instance-first rewrite (release candidate)
+
+CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cache` kernel
+runs over a minimal four-method `Store` contract; everything else is an optional
+capability. There is no global state and no autoload-time side effect. v5 code
+keeps working through the `LegacyCacheer` bridge during the migration window.
+
+### Highlights
+
+- **Kernel.** Explicit `Cache` and immutable `ScopedCache` over typed `Key`,
+  `Scope`, `Ttl`, and `CacheEntry` value objects; time is an injected `Clock`.
+- **Stores & capabilities.** `ArrayStore`, `FileStore`, `DatabaseStore` (SQLite,
+  MySQL/MariaDB, PostgreSQL), and `RedisStore`, each declaring only the
+  capabilities it can guarantee (batch, touch, prune, inspect, scoped flush,
+  tags, atomic, locks). All pass one shared conformance suite.
+- **Flagship features.** `TieredStore` (L1/L2 with generation coherence),
+  `ResilientStore` (circuit-breaker fallback), single-flight `remember()`,
+  stale-while-revalidate `flexible()`, and typed `CachePolicy` — all composable.
+- **Storage pipeline.** serialize → optional gzip → optional authenticated
+  AES-256-GCM into a versioned, tamper-evident envelope, with key rotation and a
+  v5 compatibility reader plus opt-in rewrite-on-read.
+- **Standards & observability.** PSR-16 and PSR-6 adapters, a PSR-3 logging
+  subscriber, a PSR-14 event bridge, typed cache events, and a `MetricsCollector`
+  (values are never captured).
+- **Operations.** A `cacheer` CLI (`doctor`, `stats`, `inspect`, `prune`,
+  `clear`, `migrate`) with `--dry-run` and `--json`.
+- **Migration.** `LegacyCacheer` bridge with opt-in deprecations, an optional
+  Rector rename set, and end-to-end fresh-install / v5-upgrade rehearsals in CI.
+
+### Breaking changes
+
+- Instance-first: the static/global facade is not part of the core; use an
+  injected `Cache` or the `LegacyCacheer` bridge.
+- `get()` no longer accepts a read-time TTL; positional namespaces become
+  `scope()`; success is a return value or `entry()->isHit()`, not mutable state.
+- Minimum PHP is now **8.3**. Driver clients and extensions are optional
+  (`suggest`); the core installs for Array/File users with none of them.
+- See [MIGRATION.md](MIGRATION.md) for the full mapping and rollback steps, and
+  [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for documented edges.
+
 ## [Unreleased]
 
 ### Added

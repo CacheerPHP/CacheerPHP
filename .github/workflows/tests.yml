@@ -154,6 +154,36 @@ jobs:
         env:
           DB_CONNECTION: sqlite
 
+  release-rehearsal:
+    name: Fresh-install & v5-upgrade rehearsal
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP (core only, no optional extensions)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Install runtime only (no dev, no optional backends)
+        run: composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Fresh install runs with zero optional dependencies
+        run: |
+          php examples/v6/01-quick-start.php
+          php examples/v6/03-legacy-bridge.php
+
+      - name: Install dev tooling
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run fresh-install and v5-upgrade rehearsal suite
+        run: composer test:kernel
+        env:
+          DB_CONNECTION: sqlite
+
   benchmark:
     name: Baseline benchmark
     runs-on: ubuntu-latest
