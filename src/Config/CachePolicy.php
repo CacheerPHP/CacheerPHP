@@ -12,7 +12,7 @@ use Silviooosilva\CacheerPhp\Kernel\Ttl;
  * Immutable description of caching behavior layered over a store: a default TTL,
  * TTL jitter, negative caching, and serve-stale-on-error.
  *
- * Applied by {@see \Silviooosilva\CacheerPhp\Kernel\PolicyCache}. Every with*()
+ * Applied by {@see \Silviooosilva\CacheerPhp\Kernel\PolicyCacheer}. Every with*()
  * method returns a new instance. The jitter source is injectable so tests are
  * deterministic.
  */

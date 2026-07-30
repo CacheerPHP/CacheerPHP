@@ -8,7 +8,7 @@ use DateInterval;
 use PHPUnit\Framework\TestCase;
 use Psr\SimpleCache\CacheInterface;
 use Psr\SimpleCache\InvalidArgumentException;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Psr\Psr16Cache;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Tests\Support\FakeClock;
@@ -22,7 +22,7 @@ final class Psr16CacheTest extends TestCase
     protected function setUp(): void
     {
         $this->clock = new FakeClock();
-        $this->psr = new Psr16Cache(new Cache(new ArrayStore($this->clock), $this->clock));
+        $this->psr = new Psr16Cache(new Cacheer(new ArrayStore($this->clock), $this->clock));
     }
 
     public function testItIsAPsr16Cache(): void

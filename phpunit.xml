@@ -2,18 +2,18 @@
 <phpunit bootstrap="vendor/autoload.php"
          colors="true">
     <testsuites>
+        <!-- The default, service-free suite: the whole v6 library minus the
+             Redis/database integration tests. -->
         <testsuite name="Unit">
-            <directory>tests/Unit</directory>
-            <directory>tests/Feature</directory>
+            <directory>tests/Kernel</directory>
+            <directory>tests/Storage</directory>
+            <directory>tests/Contract</directory>
         </testsuite>
         <testsuite name="Contract">
             <directory>tests/Contract</directory>
         </testsuite>
         <testsuite name="Integration">
             <directory>tests/Integration</directory>
-        </testsuite>
-        <testsuite name="Concurrency">
-            <directory>tests/Concurrency</directory>
         </testsuite>
         <testsuite name="Benchmark">
             <directory>tests/Benchmark</directory>

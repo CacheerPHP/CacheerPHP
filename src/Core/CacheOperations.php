@@ -29,7 +29,7 @@ use Throwable;
 use UnexpectedValueException;
 
 /**
- * Shared instance-only behavior for Cache and ScopedCache.
+ * Shared instance-only behavior for Cacheer and ScopedCacheer.
  *
  * @internal
  */

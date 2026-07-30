@@ -6,9 +6,9 @@ namespace Silviooosilva\CacheerPhp\Psr;
 
 use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
@@ -29,7 +29,7 @@ final class Psr6Pool implements CacheItemPoolInterface
     private array $deferred = [];
 
     public function __construct(
-        private readonly Cache $cache,
+        private readonly Cacheer $cache,
         private readonly Clock $clock = new SystemClock(),
     ) {
     }

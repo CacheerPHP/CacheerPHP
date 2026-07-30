@@ -1,560 +1,297 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Silviooosilva\CacheerPhp;
 
-use BadMethodCallException;
-use Closure;
-use RuntimeException;
-use Silviooosilva\CacheerPhp\Contracts\CacheEventListener;
+use DateInterval;
+use PDO;
+use Silviooosilva\CacheerPhp\Config\CacheerBuilder;
+use Silviooosilva\CacheerPhp\Config\CachePolicy;
+use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
-use Silviooosilva\CacheerPhp\Events\CacheEventDispatcher;
-use Silviooosilva\CacheerPhp\Helpers\CacheConfig;
-use Silviooosilva\CacheerPhp\Interface\CacheerInterface;
-use Silviooosilva\CacheerPhp\Interface\LockProviderInterface;
-use Silviooosilva\CacheerPhp\Service\CacheMutator;
-use Silviooosilva\CacheerPhp\Service\CacheRetriever;
-use Silviooosilva\CacheerPhp\Support\CacheLock;
-use Silviooosilva\CacheerPhp\Support\PendingCache;
+use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
+use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
+use Silviooosilva\CacheerPhp\Contracts\RedisConnection;
+use Silviooosilva\CacheerPhp\Contracts\Store;
+use Silviooosilva\CacheerPhp\Core\CacheOperations;
+use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
+use Silviooosilva\CacheerPhp\Kernel\Key;
+use Silviooosilva\CacheerPhp\Kernel\PolicyCacheer;
+use Silviooosilva\CacheerPhp\Kernel\Scope;
+use Silviooosilva\CacheerPhp\Kernel\ScopedCacheer;
+use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
+use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+use Silviooosilva\CacheerPhp\Stores\DatabaseStore;
+use Silviooosilva\CacheerPhp\Stores\FileStore;
+use Silviooosilva\CacheerPhp\Stores\InstrumentedStore;
+use Silviooosilva\CacheerPhp\Stores\RedisStore;
+use Silviooosilva\CacheerPhp\Stores\ResilientStore;
+use Silviooosilva\CacheerPhp\Stores\TieredStore;
+use Silviooosilva\CacheerPhp\Support\CircuitBreaker;
+use Silviooosilva\CacheerPhp\Support\FormattedCacheer;
+use Silviooosilva\CacheerPhp\Support\SyncDeferredExecutor;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
-use Silviooosilva\CacheerPhp\Utils\CacheDataFormatter;
-use Silviooosilva\CacheerPhp\Utils\CacheDriver;
 
 /**
- * Class Cacheer
+ * The explicit, instance-first v6 cache — the main class of CacheerPHP.
  *
- * @author Sílvio Silva <https://github.com/silviooosilva>
- * @package Silviooosilva\CacheerPhp
- *
- * @method static bool add(string $cacheKey, mixed $cacheData, string $namespace = '', int|string|\DateInterval|null $ttl = 3600)
- * @method bool add(string $cacheKey, mixed $cacheData, string $namespace = '', int|string|\DateInterval|null $ttl = 3600)
- * @method static bool appendCache(string $cacheKey, mixed $cacheData, string $namespace = '')
- * @method bool appendCache(string $cacheKey, mixed $cacheData, string $namespace = '')
- * @method static bool clearCache(string $cacheKey, string $namespace = '')
- * @method bool clearCache(string $cacheKey, string $namespace = '')
- * @method static bool forget(string $cacheKey, string $namespace = '')
- * @method bool forget(string $cacheKey, string $namespace = '')
- * @method static bool decrement(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
- * @method bool decrement(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
- * @method static bool flushCache()
- * @method bool flushCache()
- * @method static bool forever(string $cacheKey, mixed $cacheData)
- * @method bool forever(string $cacheKey, mixed $cacheData)
- * @method static mixed getAndForget(string $cacheKey, string $namespace = '')
- * @method mixed getAndForget(string $cacheKey, string $namespace = '')
- * @method static mixed pull(string $cacheKey, string $namespace = '')
- * @method mixed pull(string $cacheKey, string $namespace = '')
- * @method static CacheDataFormatter|mixed getAll(string $namespace = '')
- * @method CacheDataFormatter|mixed getAll(string $namespace = '')
- * @method static mixed getCache(string $cacheKey, string $namespace = '', int|string $ttl = 3600)
- * @method mixed getCache(string $cacheKey, string $namespace = '', int|string $ttl = 3600)
- * @method static array|CacheDataFormatter getMany(array $cacheKeys, string $namespace = '', int|string $ttl = 3600)
- * @method array|CacheDataFormatter getMany(array $cacheKeys, string $namespace = '', int|string $ttl = 3600)
- * @method static mixed getOption(string $key, mixed $default = null)
- * @method mixed getOption(string $key, mixed $default = null)
- * @method static array getOptions()
- * @method array getOptions()
- * @method static bool has(string $cacheKey, string $namespace = '')
- * @method bool has(string $cacheKey, string $namespace = '')
- * @method static bool missing(string $cacheKey, string $namespace = '')
- * @method bool missing(string $cacheKey, string $namespace = '')
- * @method static bool increment(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
- * @method bool increment(string $cacheKey, int $amount = 1, string $namespace = '', ?int $default = null, int|string|\DateInterval|null $ttl = null)
- * @method static bool putCache(string $cacheKey, mixed $cacheData, string $namespace = '', int|string|\DateInterval|null $ttl = 3600)
- * @method bool putCache(string $cacheKey, mixed $cacheData, string $namespace = '', int|string|\DateInterval|null $ttl = 3600)
- * @method static bool putMany(array $items, string $namespace = '', int $batchSize = 100)
- * @method bool putMany(array $items, string $namespace = '', int $batchSize = 100)
- * @method static bool tag(string $tag, string ...$keys)
- * @method bool tag(string $tag, string ...$keys)
- * @method static bool flushTag(string $tag)
- * @method bool flushTag(string $tag)
- * @method static mixed remember(string $cacheKey, int|string|\DateInterval|null $ttl, Closure $callback, string $namespace = '')
- * @method mixed remember(string $cacheKey, int|string|\DateInterval|null $ttl, Closure $callback, string $namespace = '')
- * @method static mixed rememberForever(string $cacheKey, Closure $callback, string $namespace = '')
- * @method mixed rememberForever(string $cacheKey, Closure $callback, string $namespace = '')
- * @method static mixed flexible(string $cacheKey, int $fresh, int $stale, Closure $callback, string $namespace = '')
- * @method mixed flexible(string $cacheKey, int $fresh, int $stale, Closure $callback, string $namespace = '')
- * @method static bool renewCache(string $cacheKey, int|string|\DateInterval|null $ttl = 3600, string $namespace = '')
- * @method bool renewCache(string $cacheKey, int|string|\DateInterval|null $ttl = 3600, string $namespace = '')
- * @method static \Silviooosilva\CacheerPhp\Helpers\CacheConfig setConfig()
- * @method \Silviooosilva\CacheerPhp\Helpers\CacheConfig setConfig()
- * @method static \Silviooosilva\CacheerPhp\Utils\CacheDriver setDriver()
- * @method \Silviooosilva\CacheerPhp\Utils\CacheDriver setDriver()
- * @method static void setUp(array $options)
- * @method void setUp(array $options)
- * @method static \Silviooosilva\CacheerPhp\Support\CacheLock lock(string $name, int $ttl = 60)
- * @method \Silviooosilva\CacheerPhp\Support\CacheLock lock(string $name, int $ttl = 60)
+ * The distinctive name (over a generic "Cache") keeps imports collision-free
+ * next to a framework's own cache classes. Construct one with a named
+ * constructor and inject it where you need it; there is no global state.
  */
-final class Cacheer
+final readonly class Cacheer
 {
-    /**
-     * @var string
-     */
-    private string $message;
+    private CacheOperations $operations;
 
-    /**
-     * @var bool
-     */
-    private bool $success;
-
-    /**
-     * @var bool
-     */
-    private bool $formatted = false;
-
-    /**
-     * @var bool
-     */
-    private bool $compression = false;
-
-    /**
-     * @var string|null
-     */
-    private ?string $encryptionKey = null;
-
-    /**
-    * @var CacheerInterface
-    */
-    public CacheerInterface $cacheStore;
-
-    /**
-    * @var array
-    */
-    public array $options = [];
-
-    /**
-    * @var CacheRetriever
-    */
-    private CacheRetriever $retriever;
-
-    /**
-    * @var CacheMutator
-    */
-    private CacheMutator $mutator;
-
-    /**
-    * @var CacheConfig
-    */
-    private CacheConfig $config;
-
-    /**
-    * @var Clock
-    */
     private Clock $clock;
 
-    /**
-    * @var Cacheer|null
-    */
-    private static ?Cacheer $staticInstance = null;
+    private DeferredExecutor $executor;
 
-    /**
-     * Cacheer constructor.
-     *
-     * @param array $options
-     * @param bool  $formatted
-     * @throws RuntimeException|\Silviooosilva\CacheerPhp\Exceptions\CacheFileException
-     */
-    public function __construct(array $options = [], bool $formatted = false)
-    {
-        $this->formatted = $formatted;
-        $this->clock = ($options['clock'] ?? null) instanceof Clock ? $options['clock'] : new SystemClock();
-        unset($options['clock']);
-        $this->options = $options;
-        $this->retriever = new CacheRetriever($this);
-        $this->mutator = new CacheMutator($this);
-        $this->config = new CacheConfig($this);
-        $this->setDriver()->useDefaultDriver();
+    private EventDispatcher $events;
+
+    public function __construct(
+        private Store $store,
+        ?Clock $clock = null,
+        ?DeferredExecutor $executor = null,
+        ?EventDispatcher $events = null,
+    ) {
+        $this->clock = $clock ?? new SystemClock();
+        $this->executor = $executor ?? new SyncDeferredExecutor();
+        $this->events = $events ?? new NullEventDispatcher();
+        $this->operations = new CacheOperations($store, Scope::root(), $this->clock, $this->executor, $this->events);
     }
 
     /**
-     * Dynamically handle instance-method calls via delegation to service classes.
+     * Named constructor that wraps a store in transparent instrumentation:
+     * every operation is timed and emitted as a typed event through the given
+     * dispatcher (which also carries the kernel's promotion/stale/refresh
+     * events). Value capture is off by default.
      *
-     * @param string $method
-     * @param array  $parameters
-     * @return mixed
-     * @throws BadMethodCallException
+     * @param (callable(mixed): mixed)|null $redactor
      */
-    public function __call(string $method, array $parameters): mixed
-    {
-        if ($method === 'setConfig') {
-            return new CacheConfig($this);
-        }
-
-        if ($method === 'setDriver') {
-            return new CacheDriver($this);
-        }
-
-        if ($method === 'lock') {
-            return $this->buildLock(...$parameters);
-        }
-
-        $delegates = [$this->mutator, $this->retriever, $this->config];
-
-        foreach ($delegates as $delegate) {
-            if (method_exists($delegate, $method)) {
-                $start = $this->clock->nowFloat();
-                $result = $delegate->{$method}(...$parameters);
-                if (CacheEventDispatcher::hasListeners()) {
-                    $parts = explode('\\', get_class($this->cacheStore));
-                    CacheEventDispatcher::dispatch($method, $this->isSuccess(), $parameters, ($this->clock->nowFloat() - $start) * 1000.0, end($parts), $result);
-                }
-                return $result;
-            }
-        }
-
-        throw new BadMethodCallException("Method {$method} does not exist on Cacheer.");
+    public static function instrumented(
+        Store $store,
+        EventDispatcher $events,
+        bool $captureValues = false,
+        ?callable $redactor = null,
+        ?Clock $clock = null,
+    ): self {
+        return new self(new InstrumentedStore($store, $events, $captureValues, $redactor), $clock, null, $events);
     }
 
     /**
-     * Register a listener that will be notified after every cache operation.
-     *
-     * Listeners are global (shared across all Cacheer instances and static calls).
-     * Register once in your application bootstrap
-     *
-     * @param CacheEventListener $listener
-     * @return void
+     * Start a fluent builder that assembles a store, a storage pipeline, and an
+     * optional default policy into a ready cache — sugar over the named
+     * constructors, PipelineConfig, and CachePolicy. See {@see CacheerBuilder}.
      */
-    public static function addListener(CacheEventListener $listener): void
+    public static function build(): CacheerBuilder
     {
-        CacheEventDispatcher::addListener($listener);
+        return new CacheerBuilder();
     }
 
     /**
-     * Remove all registered event listeners.
-     *
-     * @return void
+     * Named constructor for the in-process array store: a dependency-free cache
+     * that lives for the current request. Ideal for tests and short-lived CLI runs.
      */
-    public static function removeListeners(): void
+    public static function inMemory(?Clock $clock = null): self
     {
-        CacheEventDispatcher::removeListeners();
+        $clock ??= new SystemClock();
+
+        return new self(new ArrayStore($clock), $clock);
     }
 
     /**
-     * Handle dynamic static calls by routing them through the shared instance.
-     *
-     * @param string $method
-     * @param array  $parameters
-     * @return mixed
+     * Alias of {@see self::inMemory()} — reads well when you think of the backend
+     * as "the array store".
      */
-    public static function __callStatic(string $method, array $parameters): mixed
+    public static function array(?Clock $clock = null): self
     {
-        return self::instance()->__call($method, $parameters);
+        return self::inMemory($clock);
     }
 
     /**
-     * Enable AES-256-CBC encryption for cached data.
-     *
-     * @param string $key
-     * @return Cacheer
+     * Named constructor for the filesystem store: persistent, dependency-free,
+     * and safe to install without Redis or a database.
      */
-    public function useEncryption(string $key): Cacheer
+    public static function file(string $directory, ?PipelineConfig $pipeline = null, ?Clock $clock = null): self
     {
-        $this->encryptionKey = $key;
-        return $this;
+        $clock ??= new SystemClock();
+
+        return new self(new FileStore($directory, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
-     * Enable or disable gzip compression of cached values.
-     *
-     * @param bool $status
-     * @return Cacheer
+     * Named constructor for the database store. The PDO connection is injected;
+     * create the schema explicitly with DatabaseStoreSchema::migrate() first.
      */
-    public function useCompression(bool $status = true): Cacheer
-    {
-        $this->compression = $status;
-        return $this;
+    public static function database(
+        PDO $pdo,
+        string $table = 'cacheer_store',
+        ?PipelineConfig $pipeline = null,
+        ?Clock $clock = null,
+    ): self {
+        $clock ??= new SystemClock();
+
+        return new self(new DatabaseStore($pdo, $table, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
-     * Toggle the output formatter.
-     *
-     * When enabled, read methods return a CacheDataFormatter instance that
-     * exposes toJson(), toArray(), toObject(), and toString() helpers.
-     *
-     * @return void
+     * Named constructor for the Redis store, driven by an injected connection
+     * adapter (PredisConnection, PhpRedisConnection, or a custom one).
      */
-    public function useFormatter(): void
-    {
-        $this->formatted = !$this->formatted;
+    public static function redis(
+        RedisConnection $connection,
+        string $prefix = 'cacheer',
+        ?PipelineConfig $pipeline = null,
+        ?Clock $clock = null,
+    ): self {
+        $clock ??= new SystemClock();
+
+        return new self(new RedisStore($connection, $prefix, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
-     * Returns the active cache store implementation.
-     *
-     * @return CacheerInterface
+     * Named constructor for a tiered L1/L2 cache: a fast local store in front of
+     * a shared one, with promotion and generation-based coherence.
      */
-    public function getCacheStore(): CacheerInterface
-    {
-        return $this->cacheStore;
+    public static function tiered(
+        Store $l1,
+        Store $l2,
+        ?Ttl $l1MaxTtl = null,
+        ?Clock $clock = null,
+        ?DeferredExecutor $executor = null,
+        ?EventDispatcher $events = null,
+    ): self {
+        $clock ??= new SystemClock();
+        $events ??= new NullEventDispatcher();
+
+        return new self(new TieredStore($l1, $l2, $clock, $l1MaxTtl, events: $events), $clock, $executor, $events);
     }
 
     /**
-     * Replaces the active cache store implementation.
-     *
-     * Called by CacheDriver when switching drivers (useFileDriver, useRedisDriver …).
-     *
-     * @param CacheerInterface $store
-     * @return void
+     * Named constructor for a fault-tolerant cache: serve from a primary store,
+     * fall back to another when a circuit breaker trips.
      */
-    public function setCacheStore(CacheerInterface $store): void
+    public static function resilient(
+        Store $primary,
+        Store $fallback,
+        ?CircuitBreaker $breaker = null,
+        ?Clock $clock = null,
+        ?DeferredExecutor $executor = null,
+    ): self {
+        $clock ??= new SystemClock();
+
+        return new self(new ResilientStore($primary, $fallback, $breaker, $clock), $clock, $executor);
+    }
+
+    public function entry(string|Key $key): CacheEntry
     {
-        $this->cacheStore = $store;
+        return $this->operations->entry($key);
+    }
+
+    public function get(string|Key $key, mixed $default = null): mixed
+    {
+        return $this->operations->get($key, $default);
+    }
+
+    public function set(
+        string|Key $key,
+        mixed $value,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): void {
+        $this->operations->set($key, $value, $ttl);
+    }
+
+    public function delete(string|Key $key): bool
+    {
+        return $this->operations->delete($key);
+    }
+
+    public function clear(): void
+    {
+        $this->operations->clear();
+    }
+
+    public function has(string|Key $key): bool
+    {
+        return $this->operations->has($key);
+    }
+
+    public function remember(
+        string|Key $key,
+        Ttl|DateInterval|int|string|null $ttl,
+        callable $callback,
+    ): mixed {
+        return $this->operations->remember($key, $ttl, $callback);
     }
 
     /**
-     * Returns the value of a single configuration option, or a default if the key is not set.
-     *
-     * @param string $key
-     * @param mixed  $default
-     * @return mixed
+     * Stale-while-revalidate: serve fresh for $fresh seconds, then serve the
+     * stale value while a single worker refreshes it (deferred via the executor)
+     * until $stale seconds, after which it is recomputed synchronously.
      */
-    public function getOption(string $key, mixed $default = null): mixed
+    public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): mixed
     {
-        return $this->options[$key] ?? $default;
+        return $this->operations->flexible($key, $fresh, $stale, $callback);
     }
 
     /**
-     * Returns the full options array.
-     *
-     * @return array
+     * @param iterable<string|Key> $keys
+     * @return array<string, mixed>
      */
-    public function getOptions(): array
+    public function many(iterable $keys, mixed $default = null): array
     {
-        return $this->options;
+        return $this->operations->many($keys, $default);
     }
 
     /**
-     * Returns the time source shared by the facade, services, and stores.
-     *
-     * @return Clock
+     * @param iterable<array-key, mixed> $values
      */
-    public function getClock(): Clock
-    {
-        return $this->clock;
+    public function setMany(
+        iterable $values,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): void {
+        $this->operations->setMany($values, $ttl);
     }
 
     /**
-     * Sets a single option key/value pair.
-     *
-     * @param string $key
-     * @param mixed  $value
-     * @return Cacheer
+     * @param iterable<string|Key> $keys
      */
-    public function setOption(string $key, mixed $value): Cacheer
+    public function deleteMany(iterable $keys): bool
     {
-        $this->options[$key] = $value;
-        return $this;
+        return $this->operations->deleteMany($keys);
     }
 
     /**
-     * Replaces the entire options array.
-     *
-     * Used by CacheConfig::setUp() to reset all options at once.
-     *
-     * @param array $options
-     * @return void
+     * Wrap this cache with a policy (default TTL, jitter, negative caching,
+     * serve-stale-on-error). Reads pass through; writes and remember() honor it.
      */
-    public function setOptions(array $options): void
+    public function withPolicy(CachePolicy $policy): PolicyCacheer
     {
-        unset($options['clock']);
-        $this->options = $options;
+        return new PolicyCacheer($this, $policy, $this->clock);
     }
 
     /**
-     * Returns whether the last operation was successful.
-     *
-     * @return bool
+     * A read-formatting view: reads return a CacheDataFormatter so you can chain
+     * `->toJson()` / `->toArray()` / `->toObject()` / `->toString()`. The base
+     * `get()` stays raw (it must return false/null/ints losslessly and feed the
+     * PSR adapters). See {@see FormattedCacheer}.
      */
-    public function isSuccess(): bool
+    public function formatted(): FormattedCacheer
     {
-        return $this->success;
+        return new FormattedCacheer($this);
     }
 
-    /**
-     * Returns the human-readable message from the last operation.
-     *
-     * @return string
-     */
-    public function getMessage(): string
+    public function scope(string|Scope $scope): ScopedCacheer
     {
-        return $this->message;
-    }
-
-    /**
-     * Copies status from the active cache store into this Cacheer instance.
-     *
-     * @return void
-     */
-    public function syncState(): void
-    {
-        $this->setMessage($this->cacheStore->getMessage(), $this->cacheStore->isSuccess());
-    }
-
-    /**
-     * Directly sets the internal status message and success flag.
-     *
-     * @param string $message
-     * @param bool   $success
-     * @return void
-     */
-    public function setInternalState(string $message, bool $success): void
-    {
-        $this->setMessage($message, $success);
-    }
-
-    /**
-     * Returns whether the output formatter is enabled.
-     *
-     * @return bool
-     */
-    public function isFormatted(): bool
-    {
-        return $this->formatted;
-    }
-
-    /**
-     * Returns whether gzip compression is enabled for cached values.
-     *
-     * @return bool
-     */
-    public function isCompressionEnabled(): bool
-    {
-        return $this->compression;
-    }
-
-    /**
-     * Returns the encryption key if encryption is enabled, or null otherwise.
-     *
-     * @return string|null
-     */
-    public function getEncryptionKey(): ?string
-    {
-        return $this->encryptionKey;
-    }
-
-    /**
-     * Returns basic runtime information about the active cache configuration.
-     *
-     * Useful for logging, health-check endpoints, or debugging.
-     *
-     * @return array{driver: string, compression: bool, encryption: bool}
-     */
-    public function stats(): array
-    {
-        return [
-            'driver'      => get_class($this->cacheStore),
-            'compression' => $this->compression,
-            'encryption'  => $this->encryptionKey !== null,
-        ];
-    }
-
-    /**
-     * Resets the shared static instance to null.
-     *
-     * Call this in tearDown() when using the static facade in tests so each
-     * test case starts with a clean state.
-     *
-     * @return void
-     */
-    public static function resetInstance(): void
-    {
-        self::$staticInstance = null;
-    }
-
-    /**
-     * Replaces the shared static instance with a custom one.
-     *
-     * Allows injecting a pre-configured Cacheer (e.g. with a mock driver or
-     * specific options) before static-facade calls in tests.
-     *
-     * @param self $instance
-     * @return void
-     */
-    public static function setInstance(self $instance): void
-    {
-        self::$staticInstance = $instance;
-    }
-
-    /**
-     * Begin a fluent context scoped to $namespace.
-     *
-     * @param string $namespace
-     * @return PendingCache
-     */
-    public function in(string $namespace): PendingCache
-    {
-        return new PendingCache($this, $namespace);
-    }
-
-    /**
-     * Alias of in().
-     *
-     * @param string $namespace
-     * @return PendingCache
-     */
-    public function namespace(string $namespace): PendingCache
-    {
-        return $this->in($namespace);
-    }
-
-    /**
-     * Begin a fluent context with no namespace bound.
-     *
-     * @return PendingCache
-     */
-    public function withoutNamespace(): PendingCache
-    {
-        return new PendingCache($this);
-    }
-
-    /**
-     * Build a distributed lock scoped to the active cache store.
-     *
-     * Routed through __call / __callStatic as lock() (see the @method tags) so
-     * it works both on an instance and via the static facade. Returns a
-     * CacheLock you can acquire()/release(), block() on, or run a callback
-     * through. Backed natively by the current driver (Redis SET NX, a DB locks
-     * table, or file flock).
-     *
-     * @param string $name Lock name.
-     * @param int    $ttl  Lock lifetime in seconds.
-     * @return CacheLock
-     * @throws BadMethodCallException When the active driver does not support locking.
-     */
-    private function buildLock(string $name, int $ttl = 60): CacheLock
-    {
-        if (!$this->cacheStore instanceof LockProviderInterface) {
-            throw new BadMethodCallException(sprintf(
-                'The active cache driver (%s) does not support locking.',
-                get_class($this->cacheStore),
-            ));
-        }
-
-        return new CacheLock($this->cacheStore, $name, $ttl, null, $this->clock);
-    }
-
-    /**
-     * Returns (and lazily creates) the shared instance used by static calls.
-     *
-     * @return self
-     */
-    private static function instance(): self
-    {
-        if (self::$staticInstance === null) {
-            self::$staticInstance = new self();
-        }
-        return self::$staticInstance;
-    }
-
-    /**
-     * Sets the internal message and success flag.
-     *
-     * @param string $message
-     * @param bool   $success
-     * @return void
-     */
-    private function setMessage(string $message, bool $success): void
-    {
-        $this->message = $message;
-        $this->success = $success;
+        return new ScopedCacheer(
+            $this->store,
+            $this->operations->nestedScope($scope),
+            $this->clock,
+            $this->executor,
+            $this->events,
+        );
     }
 }

@@ -8,7 +8,7 @@ use DateInterval;
 use PHPUnit\Framework\TestCase;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Cache\InvalidArgumentException;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Psr\Psr6Pool;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Tests\Support\FakeClock;
@@ -22,7 +22,7 @@ final class Psr6PoolTest extends TestCase
     protected function setUp(): void
     {
         $this->clock = new FakeClock();
-        $this->pool = new Psr6Pool(new Cache(new ArrayStore($this->clock), $this->clock), $this->clock);
+        $this->pool = new Psr6Pool(new Cacheer(new ArrayStore($this->clock), $this->clock), $this->clock);
     }
 
     public function testItIsAPsr6Pool(): void

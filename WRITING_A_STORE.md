@@ -97,7 +97,7 @@ final class MyStoreConformanceTest extends StoreConformance
 ```
 
 If it passes, your store is a first-class CacheerPHP driver: it composes with
-`Cache`, scopes, tiering, resilience, the PSR-16/PSR-6 adapters, and the CLI
+`Cacheer`, scopes, tiering, resilience, the PSR-16/PSR-6 adapters, and the CLI
 exactly like the built-in stores.
 
 ## 5. Getting it listed as compatible

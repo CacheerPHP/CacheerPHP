@@ -5,22 +5,29 @@ declare(strict_types=1);
 namespace Tests\Kernel;
 
 use PHPUnit\Framework\TestCase;
-use Silviooosilva\CacheerPhp\Compat\LegacyCacheer;
+use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Console\Application;
 use Silviooosilva\CacheerPhp\Console\CacheerContext;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Psr\Psr16Cache;
 use Silviooosilva\CacheerPhp\Psr\Psr6Pool;
+use Silviooosilva\CacheerPhp\Storage\Compat\V5PayloadReader;
+use Silviooosilva\CacheerPhp\Storage\Envelope;
+use Silviooosilva\CacheerPhp\Storage\KeyEncoder\HashingKeyEncoder;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+use Silviooosilva\CacheerPhp\Stores\FileStore;
+use Silviooosilva\CacheerPhp\Stores\Support\StoredRecord;
 use Tests\Support\FakeClock;
 
 /**
- * Milestone 8 release rehearsal: proves the two headline install paths work
- * end to end with nothing but the core package — no Redis, no database client,
- * no optional extensions beyond what a default PHP build ships.
+ * Release rehearsal: proves the headline paths work end to end with nothing but
+ * the core package — no Redis, no database client, no optional extensions beyond
+ * what a default PHP build ships.
  *
  * A green run here is the "fresh-install and v5-upgrade rehearsals pass in CI"
- * exit-gate for the 6.0 release candidate.
+ * exit-gate for the 6.0 release candidate. The v5-upgrade path is the data
+ * bridge (rewrite-on-read), not an API shim.
  */
 final class ReleaseRehearsalTest extends TestCase
 {
@@ -50,7 +57,7 @@ final class ReleaseRehearsalTest extends TestCase
     public function testFreshInstallWorksWithZeroOptionalDependencies(): void
     {
         // In-memory: the dependency-free default.
-        $memory = Cache::inMemory();
+        $memory = Cacheer::inMemory();
         $memory->set('k', ['v' => 1], ttl: 60);
         self::assertSame(['v' => 1], $memory->get('k'));
 
@@ -68,28 +75,38 @@ final class ReleaseRehearsalTest extends TestCase
         self::assertNull($memory->get('x'));
 
         // Filesystem: persistent, still dependency-free.
-        $file = Cache::file($this->dir);
+        $file = Cacheer::file($this->dir);
         $file->set('persisted', 'ok');
-        self::assertSame('ok', Cache::file($this->dir)->get('persisted'));
+        self::assertSame('ok', Cacheer::file($this->dir)->get('persisted'));
     }
 
-    public function testV5UpgradePathBridgesThenReadsThroughTheModernApi(): void
+    public function testV5DataUpgradesThroughRewriteOnRead(): void
     {
-        // A v5 codebase keeps its call sites via the bridge...
-        $legacy = LegacyCacheer::file($this->dir);
-        self::assertTrue($legacy->putCache('user:1', ['name' => 'Ada'], 'accounts', 3600));
-        self::assertSame(['name' => 'Ada'], $legacy->getCache('user:1', 'accounts'));
+        $clock = new FakeClock();
+        $key = Key::named('legacy:value');
 
-        // ...and the same data is readable through the v6 Cache API, so call
-        // sites can be migrated incrementally against one shared store.
-        $modern = Cache::file($this->dir);
-        self::assertSame(['name' => 'Ada'], $modern->scope('accounts')->get('user:1'));
+        // Seed a value in the v5 on-disk format (an untransformed payload).
+        $codec = PipelineConfig::default()->withV5Reader(new V5PayloadReader())->codec();
+        $encoder = new HashingKeyEncoder();
+        $safe = hash('sha256', $encoder->encode($key));
+        $path = $this->dir . '/entries/' . substr($safe, 0, 2) . '/' . $safe . '.cache';
+        @mkdir(dirname($path), 0775, true);
+        file_put_contents($path, StoredRecord::forKey($key, 1_000, null, 'legacy-value')->toString());
+
+        // A store told to migrate legacy data reads it and rewrites it as v6.
+        $cache = new Cacheer(new FileStore($this->dir, $codec, clock: $clock, migrateLegacyOnRead: true), $clock);
+        self::assertSame('legacy-value', $cache->get('legacy:value'));
+
+        // The entry on disk is now a v6 envelope — the modern API owns it.
+        $record = StoredRecord::fromString((string) file_get_contents($path));
+        self::assertNotNull($record);
+        self::assertTrue(Envelope::isEnvelope($record->blob));
     }
 
     public function testPsrAdaptersResolveOverTheKernel(): void
     {
         $clock = new FakeClock();
-        $cache = new Cache(new ArrayStore($clock), $clock);
+        $cache = new Cacheer(new ArrayStore($clock), $clock);
 
         $psr16 = new Psr16Cache($cache);
         $psr16->set('key', 'value', 3600);

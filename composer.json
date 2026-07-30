@@ -49,7 +49,6 @@
     "test": "@test:unit",
     "test:unit": "@php vendor/bin/pest --testsuite=Unit --colors=always",
     "test:contract": "@php vendor/bin/pest --testsuite=Contract --colors=always",
-    "test:concurrency": "@php vendor/bin/pest --testsuite=Concurrency --colors=always",
     "test:benchmark": "@php vendor/bin/pest --testsuite=Benchmark --colors=always",
     "test:kernel": "@php vendor/bin/pest --testsuite=Kernel --colors=always",
     "test:storage": "@php vendor/bin/pest --testsuite=Storage --colors=always",
@@ -84,10 +83,9 @@
   },
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.94",
-    "pestphp/pest": "^3.8 || ^4.7",
+    "pestphp/pest": "^5.0",
     "phpstan/phpstan": "^2.1",
     "predis/predis": "^2.3",
-    "vlucas/phpdotenv": "^5.6",
     "ext-pdo": "*",
     "ext-openssl": "*",
     "ext-zlib": "*"
@@ -97,8 +95,7 @@
     "ext-redis": "Use the Redis cache driver via the native phpredis extension.",
     "ext-pdo": "Use the database cache driver (SQLite, MySQL, MariaDB, or PostgreSQL).",
     "ext-openssl": "Enable authenticated AES-256-GCM encryption of cached values.",
-    "ext-zlib": "Enable gzip compression of cached values.",
-    "vlucas/phpdotenv": "Load cache configuration from a .env file (optional; real environment variables also work)."
+    "ext-zlib": "Enable gzip compression of cached values."
   },
   "config": {
     "allow-plugins": {

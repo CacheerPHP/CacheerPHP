@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../vendor/autoload.php';
 
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Observability\EventBus;
 use Silviooosilva\CacheerPhp\Observability\MetricsCollector;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
@@ -23,7 +23,7 @@ $metrics = new MetricsCollector();
 $events = new EventBus();
 $events->listen($metrics->record(...));
 
-$cache = Cache::instrumented(new ArrayStore($clock), $events);
+$cache = Cacheer::instrumented(new ArrayStore($clock), $events);
 
 // Scopes keep the same key name isolated per feature.
 $cache->scope('reports')->set('daily', ['rows' => 10]);

@@ -7,14 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.0.0] — Instance-first rewrite (release candidate)
 
-CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cache` kernel
+CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cacheer` kernel
 runs over a minimal four-method `Store` contract; everything else is an optional
-capability. There is no global state and no autoload-time side effect. v5 code
-keeps working through the `LegacyCacheer` bridge during the migration window.
+capability. There is no global state and no autoload-time side effect. v5 remains
+available on its own `5.x` line during migration.
 
 ### Highlights
 
-- **Kernel.** Explicit `Cache` and immutable `ScopedCache` over typed `Key`,
+- **Kernel.** Explicit `Cacheer` and immutable `ScopedCacheer` over typed `Key`,
   `Scope`, `Ttl`, and `CacheEntry` value objects; time is an injected `Clock`.
 - **Stores & capabilities.** `ArrayStore`, `FileStore`, `DatabaseStore` (SQLite,
   MySQL/MariaDB, PostgreSQL), and `RedisStore`, each declaring only the
@@ -31,13 +31,19 @@ keeps working through the `LegacyCacheer` bridge during the migration window.
   (values are never captured).
 - **Operations.** A `cacheer` CLI (`doctor`, `stats`, `inspect`, `prune`,
   `clear`, `migrate`) with `--dry-run` and `--json`.
-- **Migration.** `LegacyCacheer` bridge with opt-in deprecations, an optional
-  Rector rename set, and end-to-end fresh-install / v5-upgrade rehearsals in CI.
+- **Ergonomics.** A fluent `Cacheer::build()` that assembles store + pipeline +
+  policy in one chain (the v6 take on v5's OptionBuilder), and a
+  `CacheDataFormatter` (`toJson`/`toArray`/`toObject`/`toString`) reachable
+  standalone or through an opt-in `formatted()` view.
+- **Migration.** An optional Rector rename set, rewrite-on-read for v5 payloads
+  (`FileStore`/`DatabaseStore`), and end-to-end fresh-install / v5-upgrade
+  rehearsals in CI.
 
 ### Breaking changes
 
-- Instance-first: the static/global facade is not part of the core; use an
-  injected `Cache` or the `LegacyCacheer` bridge.
+- Instance-first: the static/global facade is gone; construct and inject a
+  `Cacheer`. There is no drop-in v5 shim — migrate with the Rector set + mapping
+  table (MIGRATION.md), or stay on `^5.2`.
 - `get()` no longer accepts a read-time TTL; positional namespaces become
   `scope()`; success is a return value or `entry()->isHit()`, not mutable state.
 - Minimum PHP is now **8.3**. Driver clients and extensions are optional
@@ -60,7 +66,7 @@ keeps working through the `LegacyCacheer` bridge during the migration window.
 - Injectable production/fake clocks for deterministic expiration and lock tests.
 - PHPStan level-5 analysis with a clean, suppression-free starting point.
 - Six-class benchmark payload matrix and regression comparison command.
-- Explicit, instance-first v6 `Cache` and immutable `ScopedCache` APIs.
+- Explicit, instance-first v6 `Cacheer` and immutable `ScopedCacheer` APIs.
 - Typed v6 `Key`, `Scope`, `Ttl`, and `CacheEntry` value objects.
 - Minimal v6 `Store` contract with accepted optional capability interfaces.
 - Service-free v6 `ArrayStore` reference implementation and Kernel test suite.

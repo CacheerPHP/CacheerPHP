@@ -9,7 +9,7 @@ use PDO;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Stores\Support\DatabaseStoreSchema;
 use SplFileInfo;
 use Tests\Support\FakeClock;
@@ -18,7 +18,7 @@ final class NamedConstructorsTest extends TestCase
 {
     public function testInMemoryConstructorRoundTrips(): void
     {
-        $cache = Cache::inMemory(new FakeClock());
+        $cache = Cacheer::inMemory(new FakeClock());
         $cache->set('k', ['v' => 1]);
 
         self::assertSame(['v' => 1], $cache->get('k'));
@@ -27,7 +27,7 @@ final class NamedConstructorsTest extends TestCase
     public function testFileConstructorRoundTrips(): void
     {
         $directory = sys_get_temp_dir() . '/cacheer-named-file-' . bin2hex(random_bytes(6));
-        $cache = Cache::file($directory, clock: new FakeClock());
+        $cache = Cacheer::file($directory, clock: new FakeClock());
 
         $cache->set('user:1', 'Ada', '10 minutes');
         self::assertSame('Ada', $cache->get('user:1'));
@@ -41,7 +41,7 @@ final class NamedConstructorsTest extends TestCase
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         DatabaseStoreSchema::migrate($pdo, 'cacheer_store');
 
-        $cache = Cache::database($pdo, clock: new FakeClock());
+        $cache = Cacheer::database($pdo, clock: new FakeClock());
         $cache->set('k', 42);
 
         self::assertSame(42, $cache->get('k'));

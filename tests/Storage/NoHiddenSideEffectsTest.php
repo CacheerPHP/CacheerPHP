@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Tests\Storage;
 
 use PHPUnit\Framework\TestCase;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Config\PipelineConfig;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
 
 /**
  * Guards roadmap principle #5 for the v6 layer: the kernel, stores, storage
@@ -56,7 +56,7 @@ final class NoHiddenSideEffectsTest extends TestCase
         $codec = PipelineConfig::default()->withGzip()->codec();
         $codec->decode($codec->encode(['x' => 1]));
 
-        $cache = Cache::inMemory();
+        $cache = Cacheer::inMemory();
         $cache->set('k', 'v');
 
         self::assertSame('v', $cache->get('k'));

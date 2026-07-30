@@ -6,8 +6,8 @@ namespace Tests\Kernel;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Config\CachePolicy;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Tests\Support\FakeClock;
 
@@ -15,12 +15,12 @@ final class CachePolicyTest extends TestCase
 {
     private FakeClock $clock;
 
-    private Cache $cache;
+    private Cacheer $cache;
 
     protected function setUp(): void
     {
         $this->clock = new FakeClock();
-        $this->cache = new Cache(new ArrayStore($this->clock), $this->clock);
+        $this->cache = new Cacheer(new ArrayStore($this->clock), $this->clock);
     }
 
     public function testDefaultTtlIsAppliedWhenNoneIsGiven(): void

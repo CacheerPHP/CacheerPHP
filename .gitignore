@@ -29,3 +29,6 @@ cacheerphp.github.io/coverage/
 cacheerphp.github.io/npm-debug.log*
 cacheerphp.github.io/yarn-*.log*
 cacheerphp.github.io/pnpm-debug.log*
+
+# Transient cache written by the runnable examples
+/Examples/v6/cache/

@@ -17,7 +17,7 @@
 
 ---
 
-> **CacheerPHP 6.x** is an instance-first rewrite. The engine is a small `Cache`
+> **CacheerPHP 6.x** is an instance-first rewrite. The engine is a small `Cacheer`
 > kernel over a minimal `Store` contract; everything else — batching, tags,
 > locks, atomic counters, tiering, resilience, encryption — is an **optional
 > capability** you opt into. There is no global state and no autoload-time side
@@ -33,10 +33,10 @@ The core installs with **no backend clients and no required extensions** —
 `ArrayStore` and `FileStore` work out of the box.
 
 ```php
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 
 // Dependency-free, in-process. Great for tests and short CLI runs.
-$cache = Cache::inMemory();
+$cache = Cacheer::inMemory();
 
 // Write with a TTL (seconds, "10 minutes", a DateInterval, or null = forever).
 $cache->set('user:42', ['name' => 'Ada'], ttl: '10 minutes');
@@ -57,9 +57,9 @@ $cache->delete('user:42');
 Swap the store, keep the API:
 
 ```php
-$cache = Cache::file('/var/cache/app');      // persistent, dependency-free
-$cache = Cache::database($pdo, 'cacheer');   // inject your own PDO
-$cache = Cache::redis($connection);          // predis or phpredis adapter
+$cache = Cacheer::file('/var/cache/app');      // persistent, dependency-free
+$cache = Cacheer::database($pdo, 'cacheer');   // inject your own PDO
+$cache = Cacheer::redis($connection);          // predis or phpredis adapter
 ```
 
 ## Why v6
@@ -109,13 +109,13 @@ $value = $cache->flexible('feed', fresh: 30, stale: 300, callback: fn () => buil
 ```php
 use Silviooosilva\CacheerPhp\Observability\{EventBus, MetricsCollector};
 
-$cache = Cache::tiered($l1, $l2);                 // fast local in front of shared
-$cache = Cache::resilient($primary, $fallback);   // fall back when the breaker trips
+$cache = Cacheer::tiered($l1, $l2);                 // fast local in front of shared
+$cache = Cacheer::resilient($primary, $fallback);   // fall back when the breaker trips
 
 $events = new EventBus();
 $metrics = new MetricsCollector();
 $events->listen($metrics->record(...));
-$cache = Cache::instrumented($store, $events);    // typed events; values never captured
+$cache = Cacheer::instrumented($store, $events);    // typed events; values never captured
 $metrics->snapshot();                             // hit_rate, latency, bytes, ...
 ```
 
@@ -129,13 +129,39 @@ $pipeline = PipelineConfig::default()
     ->withGzip()
     ->withKeyring(Keyring::fromPassphrases(['current' => $secret], 'current')); // AES-256-GCM
 
-$cache = Cache::file('/var/cache/app', $pipeline);
+$cache = Cacheer::file('/var/cache/app', $pipeline);
+```
+
+### Fluent configuration — `Cacheer::build()`
+
+Assemble a store, storage pipeline, and default policy in one chain (the v6 take on
+v5's OptionBuilder — it returns a ready cache, not an options array):
+
+```php
+$cache = Cacheer::build()
+    ->file('/var/cache/app')
+    ->gzip()
+    ->encryptWithPassphrases(['current' => $secret], 'current')
+    ->defaultTtl('10 minutes')
+    ->jitter(0.10)
+    ->create();
+```
+
+### Formatting reads
+
+Values are stored losslessly. To reshape one on the way out, use the
+`CacheDataFormatter` — standalone, or via a fluent `formatted()` view:
+
+```php
+use Silviooosilva\CacheerPhp\Support\CacheDataFormatter;
+
+$json = (new CacheDataFormatter($cache->get('user:1')))->toJson();  // wrap any value
+$json = $cache->formatted()->get('user:1')->toJson();               // fluent view
 ```
 
 ### Atomic counters, tags, locks (capabilities)
 
-Capabilities live on the store. Use them via the store, or through the
-[`LegacyCacheer`](src/Compat/LegacyCacheer.php) bridge:
+Capabilities live on the store — reach them through the store:
 
 ```php
 $store->increment(Key::named('visits'));          // AtomicStore
@@ -168,26 +194,17 @@ Point the CLI at a `cacheer.config.php` that returns a `Store` (or
 
 ## Migrating from v5
 
-The [`LegacyCacheer`](src/Compat/LegacyCacheer.php) bridge exposes the v5 method
-surface on top of the v6 engine, so you can upgrade without rewriting every call
-site at once:
+v6 is a new major with an instance-first API. Migrating is mostly mechanical:
 
-```php
-use Silviooosilva\CacheerPhp\Compat\LegacyCacheer;
+- Rename the v5 methods to the v6 names — `putCache`→`set`, `getCache`→`get`,
+  `flushCache`→`clear`, and the positional namespace → `scope()`. The optional
+  [`rector.php`](rector.php) set automates the common renames.
+- Your existing cached data upgrades itself: `FileStore`/`DatabaseStore` can
+  **rewrite v5 payloads into the v6 envelope on read** during the transition.
+- Can't migrate a service yet? Pin it to `^5.2` — it still receives security fixes.
 
-$cache = LegacyCacheer::file('/var/cache');        // or ::inMemory()
-$cache->putCache('user:1', $user, 'accounts', 3600);
-$user = $cache->getCache('user:1', 'accounts');
-```
-
-- Turn on `emitDeprecations: true` in development to find call sites to migrate
-  (silent by default).
-- Run the optional [`rector.php`](rector.php) set for the straightforward renames.
-- `FileStore`/`DatabaseStore` can **rewrite v5 payloads into the v6 envelope on
-  read** during the migration window.
-
-The full guide, method-by-method mapping, and database migration/rollback steps
-are in **[MIGRATION.md](MIGRATION.md)**.
+The method-by-method mapping and database migration/rollback steps are in
+**[MIGRATION.md](MIGRATION.md)**.
 
 ## Building a custom store
 

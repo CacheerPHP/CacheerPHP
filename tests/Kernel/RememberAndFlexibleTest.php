@@ -6,7 +6,7 @@ namespace Tests\Kernel;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Support\AfterResponseDeferredExecutor;
 use Tests\Support\FakeClock;
@@ -15,12 +15,12 @@ final class RememberAndFlexibleTest extends TestCase
 {
     private FakeClock $clock;
 
-    private Cache $cache;
+    private Cacheer $cache;
 
     protected function setUp(): void
     {
         $this->clock = new FakeClock();
-        $this->cache = new Cache(new ArrayStore($this->clock), $this->clock);
+        $this->cache = new Cacheer(new ArrayStore($this->clock), $this->clock);
     }
 
     public function testRememberComputesOnceAndCachesIncludingNull(): void
@@ -56,7 +56,7 @@ final class RememberAndFlexibleTest extends TestCase
     public function testFlexibleServesStaleAndRefreshesInTheBackground(): void
     {
         $executor = new AfterResponseDeferredExecutor();
-        $cache = new Cache(new ArrayStore($this->clock), $this->clock, $executor);
+        $cache = new Cacheer(new ArrayStore($this->clock), $this->clock, $executor);
 
         $calls = 0;
         $factory = function () use (&$calls): string {

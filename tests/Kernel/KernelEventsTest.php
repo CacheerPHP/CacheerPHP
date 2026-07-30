@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tests\Kernel;
 
 use PHPUnit\Framework\TestCase;
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Observability\CacheEvent;
 use Silviooosilva\CacheerPhp\Observability\CacheEventType;
 use Silviooosilva\CacheerPhp\Observability\EventBus;
@@ -47,7 +47,7 @@ final class KernelEventsTest extends TestCase
     public function testTieredPromotionEmitsAPromotionEvent(): void
     {
         $l2 = new ArrayStore($this->clock);
-        $cache = Cache::tiered(new ArrayStore($this->clock), $l2, clock: $this->clock, events: $this->bus);
+        $cache = Cacheer::tiered(new ArrayStore($this->clock), $l2, clock: $this->clock, events: $this->bus);
 
         $cache->set('k', 'v');
         $this->seen = [];
@@ -62,7 +62,7 @@ final class KernelEventsTest extends TestCase
 
     public function testFlexibleEmitsStaleServedAndRefreshEvents(): void
     {
-        $cache = new Cache(new ArrayStore($this->clock), $this->clock, events: $this->bus);
+        $cache = new Cacheer(new ArrayStore($this->clock), $this->clock, events: $this->bus);
 
         $calls = 0;
         $factory = function () use (&$calls): string {
