@@ -22,6 +22,7 @@ use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\ScopedCacheer;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
+use Silviooosilva\CacheerPhp\Observability\Telemetry;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Stores\DatabaseStore;
 use Silviooosilva\CacheerPhp\Stores\FileStore;
@@ -99,7 +100,7 @@ final readonly class Cacheer
     {
         $clock ??= new SystemClock();
 
-        return new self(new ArrayStore($clock), $clock);
+        return self::boot(new ArrayStore($clock), $clock);
     }
 
     /**
@@ -119,7 +120,7 @@ final readonly class Cacheer
     {
         $clock ??= new SystemClock();
 
-        return new self(new FileStore($directory, $pipeline?->codec(), clock: $clock), $clock);
+        return self::boot(new FileStore($directory, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
@@ -134,7 +135,7 @@ final readonly class Cacheer
     ): self {
         $clock ??= new SystemClock();
 
-        return new self(new DatabaseStore($pdo, $table, $pipeline?->codec(), clock: $clock), $clock);
+        return self::boot(new DatabaseStore($pdo, $table, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
@@ -149,7 +150,29 @@ final readonly class Cacheer
     ): self {
         $clock ??= new SystemClock();
 
-        return new self(new RedisStore($connection, $prefix, $pipeline?->codec(), clock: $clock), $clock);
+        return self::boot(new RedisStore($connection, $prefix, $pipeline?->codec(), clock: $clock), $clock);
+    }
+
+    /**
+     * Build a cache over the given store, transparently attaching the global
+     * telemetry tap when {@see Telemetry} has listeners (e.g. cacheerphp/monitor
+     * is installed). With no listeners this is exactly `new self($store, $clock)`
+     * — no instrumentation, no overhead, no behavior change.
+     */
+    private static function boot(Store $store, Clock $clock, ?DeferredExecutor $executor = null): self
+    {
+        if (!Telemetry::hasListeners()) {
+            return new self($store, $clock, $executor);
+        }
+
+        $events = Telemetry::dispatcher();
+
+        return new self(
+            new InstrumentedStore($store, $events, Telemetry::capturesValues()),
+            $clock,
+            $executor,
+            $events,
+        );
     }
 
     /**
