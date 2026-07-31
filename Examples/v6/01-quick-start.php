@@ -10,9 +10,9 @@ declare(strict_types=1);
 
 require __DIR__ . '/../../vendor/autoload.php';
 
-use Silviooosilva\CacheerPhp\Kernel\Cache;
+use Silviooosilva\CacheerPhp\Cacheer;
 
-$cache = Cache::inMemory();
+$cache = Cacheer::inMemory();
 
 $cache->set('greeting', 'hello world', ttl: 60);
 assert($cache->get('greeting') === 'hello world');
