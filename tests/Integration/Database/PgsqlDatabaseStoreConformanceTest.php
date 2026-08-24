@@ -24,6 +24,12 @@ final class PgsqlDatabaseStoreConformanceTest extends StoreConformance
 
     protected function createStore(FakeClock $clock): Store
     {
+        // See the note in MySqlDatabaseStoreConformanceTest: DB_HOST/DB_PORT are
+        // shared, so DB_CONNECTION is what says which server is really running.
+        if ((getenv('DB_CONNECTION') ?: '') !== 'pgsql') {
+            self::markTestSkipped('DB_CONNECTION is not "pgsql"; no PostgreSQL server to test against.');
+        }
+
         $host = getenv('DB_HOST') ?: '127.0.0.1';
         $port = getenv('DB_PORT') ?: '5432';
         $name = getenv('DB_DATABASE') ?: 'cacheer_db';
@@ -32,10 +38,10 @@ final class PgsqlDatabaseStoreConformanceTest extends StoreConformance
 
         try {
             $this->pdo = new PDO(
-                sprintf('pgsql:host=%s;port=%s;dbname=%s', $host, $port, $name),
+                sprintf('pgsql:host=%s;port=%s;dbname=%s;connect_timeout=5', $host, $port, $name),
                 $user,
                 $pass,
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5],
             );
         } catch (\Throwable $exception) {
             self::markTestSkipped('PostgreSQL is not available: ' . $exception->getMessage());
