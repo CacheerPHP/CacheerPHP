@@ -320,7 +320,7 @@ when the service is absent.
 - [WRITING_A_STORE.md](WRITING_A_STORE.md) — third-party store author guide
 - [SECURITY.md](SECURITY.md) — support windows and vulnerability reporting
 - [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) — documented edges
-- Runnable, CI-tested examples in [`examples/v6`](examples/v6)
+- Runnable, CI-tested examples in [`Examples/v6`](Examples/v6)
 - Full docs site: [cacheerphp.com/docs](https://cacheerphp.com/docs/en/getting-started/)
 - The v6 execution plan lives in [ROADMAP.md](ROADMAP.md)
 
