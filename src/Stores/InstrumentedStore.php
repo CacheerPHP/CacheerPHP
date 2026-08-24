@@ -6,6 +6,7 @@ namespace Silviooosilva\CacheerPhp\Stores;
 
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
+use Silviooosilva\CacheerPhp\Contracts\CapabilityAware;
 use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
 use Silviooosilva\CacheerPhp\Contracts\InspectableStore;
@@ -15,8 +16,8 @@ use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
-use Silviooosilva\CacheerPhp\Exceptions\UnsupportedCapabilityException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
+use Silviooosilva\CacheerPhp\Kernel\Capabilities;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
@@ -41,7 +42,8 @@ final class InstrumentedStore implements
     FlushableScopeStore,
     TaggableStore,
     AtomicStore,
-    LockingStore
+    LockingStore,
+    CapabilityAware
 {
     private readonly string $name;
 
@@ -55,6 +57,19 @@ final class InstrumentedStore implements
         private $redactor = null,
     ) {
         $this->name = (new \ReflectionClass($inner))->getShortName();
+    }
+
+    /**
+     * Batching is implemented here over the four core methods, so it is always
+     * available. Every other capability is only as real as the wrapped store's.
+     */
+    public function supports(string $capability): bool
+    {
+        if ($capability === Store::class || $capability === BatchStore::class) {
+            return true;
+        }
+
+        return Capabilities::supports($this->inner, $capability);
     }
 
     public function get(Key $key): CacheEntry
@@ -131,7 +146,16 @@ final class InstrumentedStore implements
 
     public function touch(Key $key, Ttl $ttl): bool
     {
-        return $this->touchable()->touch($key, $ttl);
+        $start = microtime(true);
+        $touched = $this->guard($key, fn (): bool => $this->touchable()->touch($key, $ttl));
+
+        // Reported as a write: no value changed, but the entry did. Without this
+        // a renewed TTL is invisible to telemetry.
+        if ($touched) {
+            $this->events->dispatch(CacheEvent::written($this->name, (string) $key, $this->elapsed($start)));
+        }
+
+        return $touched;
     }
 
     public function prune(): int
@@ -157,22 +181,67 @@ final class InstrumentedStore implements
 
     public function tag(Key $key, string ...$tags): void
     {
-        $this->taggable()->tag($key, ...$tags);
+        $start = microtime(true);
+        $this->guard($key, function () use ($key, $tags): void {
+            $this->taggable()->tag($key, ...$tags);
+        });
+
+        $this->events->dispatch(CacheEvent::written(
+            $this->name,
+            (string) $key,
+            $this->elapsed($start),
+            count: count($tags),
+        ));
     }
 
     public function clearTag(string $tag): int
     {
-        return $this->taggable()->clearTag($tag);
+        $start = microtime(true);
+        $removed = $this->guard(null, fn (): int => $this->taggable()->clearTag($tag));
+
+        // A tag flush is a bulk invalidation, so it reports as a clear carrying
+        // how many entries went with it.
+        $this->events->dispatch(CacheEvent::pruned($this->name, $this->elapsed($start), $removed));
+
+        return $removed;
     }
 
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
-        return $this->atomic()->increment($key, $amount, $initial, $ttl);
+        $start = microtime(true);
+        $value = $this->guard($key, fn (): int => $this->atomic()->increment($key, $amount, $initial, $ttl));
+
+        // Counters are writes; the new value rides along in `count` so a
+        // dashboard can chart it without value capture being enabled.
+        $this->events->dispatch(CacheEvent::written(
+            $this->name,
+            (string) $key,
+            $this->elapsed($start),
+            count: $value,
+        ));
+
+        return $value;
     }
 
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
-        return $this->atomic()->compareAndSwap($key, $expected, $value, $ttl);
+        $start = microtime(true);
+        $swapped = $this->guard($key, fn (): bool => $this->atomic()->compareAndSwap($key, $expected, $value, $ttl));
+
+        // Only a successful swap wrote anything.
+        if ($swapped) {
+            [$bytes, $hasValue, $captured] = $this->capture($value);
+            $this->events->dispatch(CacheEvent::written(
+                $this->name,
+                (string) $key,
+                $this->elapsed($start),
+                $bytes,
+                $hasValue,
+                $captured,
+            ));
+        }
+
+        return $swapped;
     }
 
     public function lock(string $name, Ttl $ttl): Lock
@@ -226,50 +295,36 @@ final class InstrumentedStore implements
 
     private function touchable(): TouchStore
     {
-        return $this->inner instanceof TouchStore
-            ? $this->inner
-            : throw UnsupportedCapabilityException::for(TouchStore::class, 'touch');
+        return Capabilities::require($this->inner, TouchStore::class, 'touch');
     }
 
     private function prunable(): PrunableStore
     {
-        return $this->inner instanceof PrunableStore
-            ? $this->inner
-            : throw UnsupportedCapabilityException::for(PrunableStore::class, 'prune');
+        return Capabilities::require($this->inner, PrunableStore::class, 'prune');
     }
 
     private function inspectable(): InspectableStore
     {
-        return $this->inner instanceof InspectableStore
-            ? $this->inner
-            : throw UnsupportedCapabilityException::for(InspectableStore::class, 'entries');
+        return Capabilities::require($this->inner, InspectableStore::class, 'entries');
     }
 
     private function scopeFlushable(): FlushableScopeStore
     {
-        return $this->inner instanceof FlushableScopeStore
-            ? $this->inner
-            : throw UnsupportedCapabilityException::for(FlushableScopeStore::class, 'clearScope');
+        return Capabilities::require($this->inner, FlushableScopeStore::class, 'clearScope');
     }
 
     private function taggable(): TaggableStore
     {
-        return $this->inner instanceof TaggableStore
-            ? $this->inner
-            : throw UnsupportedCapabilityException::for(TaggableStore::class, 'tag');
+        return Capabilities::require($this->inner, TaggableStore::class, 'tag');
     }
 
     private function atomic(): AtomicStore
     {
-        return $this->inner instanceof AtomicStore
-            ? $this->inner
-            : throw UnsupportedCapabilityException::for(AtomicStore::class, 'increment');
+        return Capabilities::require($this->inner, AtomicStore::class, 'increment');
     }
 
     private function lockable(): LockingStore
     {
-        return $this->inner instanceof LockingStore
-            ? $this->inner
-            : throw UnsupportedCapabilityException::for(LockingStore::class, 'lock');
+        return Capabilities::require($this->inner, LockingStore::class, 'lock');
     }
 }

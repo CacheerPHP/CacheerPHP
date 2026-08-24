@@ -6,6 +6,7 @@ namespace Silviooosilva\CacheerPhp\Stores;
 
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
+use Silviooosilva\CacheerPhp\Contracts\CapabilityAware;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
@@ -16,8 +17,8 @@ use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
-use Silviooosilva\CacheerPhp\Exceptions\UnsupportedCapabilityException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
+use Silviooosilva\CacheerPhp\Kernel\Capabilities;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
@@ -45,7 +46,8 @@ final class TieredStore implements
     FlushableScopeStore,
     TaggableStore,
     AtomicStore,
-    LockingStore
+    LockingStore,
+    CapabilityAware
 {
     private const GENERATION_KEY = '__cacheer_tier_generation__';
 
@@ -63,6 +65,20 @@ final class TieredStore implements
         private readonly float $generationCheckSeconds = 5.0,
         private readonly EventDispatcher $events = new NullEventDispatcher(),
     ) {
+    }
+
+    /**
+     * L2 is the source of truth for every shared capability, so that is what
+     * decides. Batching is implemented here over the two tiers' core methods and
+     * is always available.
+     */
+    public function supports(string $capability): bool
+    {
+        if ($capability === Store::class || $capability === BatchStore::class) {
+            return true;
+        }
+
+        return Capabilities::supports($this->l2, $capability);
     }
 
     public function get(Key $key): CacheEntry
@@ -160,8 +176,9 @@ final class TieredStore implements
 
     public function prune(): int
     {
-        if ($this->l1 instanceof PrunableStore) {
-            $this->l1->prune();
+        $local = $this->l1;
+        if ($local instanceof PrunableStore && Capabilities::supports($local, PrunableStore::class)) {
+            $local->prune();
         }
 
         return $this->sharedPrune()->prune();
@@ -305,50 +322,36 @@ final class TieredStore implements
 
     private function sharedTouch(): TouchStore
     {
-        return $this->l2 instanceof TouchStore
-            ? $this->l2
-            : throw UnsupportedCapabilityException::for(TouchStore::class, 'touch');
+        return Capabilities::require($this->l2, TouchStore::class, 'touch');
     }
 
     private function sharedPrune(): PrunableStore
     {
-        return $this->l2 instanceof PrunableStore
-            ? $this->l2
-            : throw UnsupportedCapabilityException::for(PrunableStore::class, 'prune');
+        return Capabilities::require($this->l2, PrunableStore::class, 'prune');
     }
 
     private function sharedInspect(): InspectableStore
     {
-        return $this->l2 instanceof InspectableStore
-            ? $this->l2
-            : throw UnsupportedCapabilityException::for(InspectableStore::class, 'entries');
+        return Capabilities::require($this->l2, InspectableStore::class, 'entries');
     }
 
     private function sharedScopeFlush(): FlushableScopeStore
     {
-        return $this->l2 instanceof FlushableScopeStore
-            ? $this->l2
-            : throw UnsupportedCapabilityException::for(FlushableScopeStore::class, 'clearScope');
+        return Capabilities::require($this->l2, FlushableScopeStore::class, 'clearScope');
     }
 
     private function sharedTaggable(): TaggableStore
     {
-        return $this->l2 instanceof TaggableStore
-            ? $this->l2
-            : throw UnsupportedCapabilityException::for(TaggableStore::class, 'tag');
+        return Capabilities::require($this->l2, TaggableStore::class, 'tag');
     }
 
     private function sharedAtomic(): AtomicStore
     {
-        return $this->l2 instanceof AtomicStore
-            ? $this->l2
-            : throw UnsupportedCapabilityException::for(AtomicStore::class, 'increment');
+        return Capabilities::require($this->l2, AtomicStore::class, 'increment');
     }
 
     private function sharedLocking(): LockingStore
     {
-        return $this->l2 instanceof LockingStore
-            ? $this->l2
-            : throw UnsupportedCapabilityException::for(LockingStore::class, 'lock');
+        return Capabilities::require($this->l2, LockingStore::class, 'lock');
     }
 }

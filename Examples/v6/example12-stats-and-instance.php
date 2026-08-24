@@ -10,10 +10,12 @@ declare(strict_types=1);
  * singleton, so setInstance()/resetInstance() are gone by design — you simply
  * construct the cache you want and inject it.
  *
- * The useful half of v5's stats() — "what is my cache actually doing?" — is now
- * first-class observability:
+ * The useful half of v5's stats() — "what is my cache actually doing?" — comes
+ * in three sizes:
+ *   - $cache->stats()                  → what this cache IS: store, scope,
+ *                                        policy, and which capabilities are real.
  *   - MetricsCollector on an EventBus  → hits, misses, writes, hit rate.
- *   - InspectableStore::entries()      → walk the live keyspace.
+ *   - $cache->entries()                → walk the live keyspace, scope applied.
  *
  * Run: php Examples/v6/example12-stats-and-instance.php
  */
@@ -41,7 +43,15 @@ $cache->set('user:2', ['name' => 'Linus']);
 $cache->get('user:1');   // hit
 $cache->get('user:404'); // miss
 
-// ── stats(), the v6 way ──────────────────────────────────────────────────────
+// ── What is this cache? ──────────────────────────────────────────────────────
+echo "--- cache stats ---\n";
+print_r($cache->stats());
+
+// Capabilities are reported honestly, decorators included — ask before calling
+// one if your backend is pluggable.
+assert($cache->stats()['capabilities']['atomic'] === true);
+
+// ── What has it been doing? ──────────────────────────────────────────────────
 $snapshot = $metrics->snapshot();
 echo "--- metrics snapshot ---\n";
 echo 'Writes   : ' . $snapshot['writes'] . PHP_EOL;
@@ -56,7 +66,7 @@ assert($snapshot['misses'] >= 1);
 // ── Walk the live keyspace (InspectableStore) ────────────────────────────────
 echo "--- live entries ---\n";
 $keys = [];
-foreach ($store->entries() as $entry) {
+foreach ($cache->entries() as $entry) {
     $keys[] = $entry->key()->value();
 }
 sort($keys);

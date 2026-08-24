@@ -11,7 +11,6 @@ declare(strict_types=1);
 require __DIR__ . '/../../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Kernel\PolicyCacheer;
 use Silviooosilva\CacheerPhp\Support\CacheDataFormatter;
 
 // Assemble a store + pipeline + default policy in one chain.
@@ -21,7 +20,7 @@ $cache = Cacheer::build()
     ->jitter(0.10)
     ->create();
 
-assert($cache instanceof PolicyCacheer); // a policy was set
+assert($cache->stats()['policy']); // a policy was bound
 
 $cache->set('user:1', ['id' => 1, 'name' => 'Ada']);
 

@@ -16,6 +16,7 @@ jobs:
   quality:
     name: Metadata, security, style, and static analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout code
@@ -45,6 +46,7 @@ jobs:
   unit:
     name: Unit / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -84,6 +86,7 @@ jobs:
   parallel:
     name: Parallel isolation
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -107,6 +110,7 @@ jobs:
   lowest-dependencies:
     name: Lowest supported dependencies
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -134,6 +138,7 @@ jobs:
   release-rehearsal:
     name: Fresh-install & v5-upgrade rehearsal
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -150,8 +155,8 @@ jobs:
 
       - name: Fresh install runs with zero optional dependencies
         run: |
-          php examples/v6/01-quick-start.php
-          php examples/v6/02-scopes-and-observability.php
+          php Examples/v6/01-quick-start.php
+          php Examples/v6/02-scopes-and-observability.php
 
       - name: Install dev tooling
         run: composer install --prefer-dist --no-interaction --no-progress
@@ -164,6 +169,7 @@ jobs:
   benchmark:
     name: Baseline benchmark
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -200,6 +206,7 @@ jobs:
   redis:
     name: Redis / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -244,6 +251,7 @@ jobs:
   mysql:
     name: MySQL integration
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       mysql:
@@ -287,6 +295,7 @@ jobs:
   postgresql:
     name: PostgreSQL integration
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:

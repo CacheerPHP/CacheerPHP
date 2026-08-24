@@ -14,7 +14,8 @@ declare(strict_types=1);
  *   $cache->set($key, array_merge($current, $extra));
  *
  * When several processes may append concurrently, wrap the read-modify-write in
- * a lock (see example 20) so updates are not lost.
+ * a lock so updates are not lost — $cache->lock() is right there on the cache
+ * (see example 20).
  *
  * Run: php Examples/v6/example07-append-cache.php
  */

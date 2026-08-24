@@ -5,48 +5,70 @@ declare(strict_types=1);
 namespace Silviooosilva\CacheerPhp\Support;
 
 use DateInterval;
-use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Config\CachePolicy;
+use Silviooosilva\CacheerPhp\Contracts\Cache;
+use Silviooosilva\CacheerPhp\Contracts\Lock;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
-use Silviooosilva\CacheerPhp\Kernel\ScopedCacheer;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 
 /**
- * A read-formatting view over a Cacheer: reads return a {@see CacheDataFormatter}
- * instead of the raw value, so you can chain `->toJson()` / `->toArray()` / etc.
+ * A read-formatting view over a cache: value-returning reads hand back a
+ * {@see CacheDataFormatter} instead of the raw value, so you can chain
+ * `->toJson()` / `->toArray()` / `->toObject()` / `->toString()`.
  *
  *     $cache = Cacheer::file('/var/cache')->formatted();
  *     $json  = $cache->get('user:1')->toJson();
  *
- * This is the opt-in, immutable v6 equivalent of v5's useFormatter(). The base
- * Cacheer::get() is deliberately unchanged — it must return raw values (false,
- * null, ints) losslessly and feed the PSR adapters. Writes and existence checks
- * pass straight through; use raw() to get the underlying cache back.
+ * The opt-in, immutable v6 equivalent of v5's useFormatter(). The underlying
+ * `get()` is deliberately unchanged — it must return raw values (false, null,
+ * ints) losslessly and feed the PSR adapters.
+ *
+ * Everything else forwards unchanged, so nothing is lost by reading through this
+ * view: writes, batches, capabilities, scoping, and policies all still work, and
+ * the views they return stay formatted. Call {@see self::raw()} to step back out.
  */
 final readonly class FormattedCacheer
 {
-    public function __construct(private Cacheer|ScopedCacheer $cache)
+    public function __construct(private Cache $cache)
     {
     }
+
+    // ------------------------------------------------------------------ read --
 
     public function get(string|Key $key, mixed $default = null): CacheDataFormatter
     {
         return new CacheDataFormatter($this->cache->get($key, $default));
     }
 
-    public function remember(
-        string|Key $key,
-        Ttl|DateInterval|int|string|null $ttl,
-        callable $callback,
-    ): CacheDataFormatter {
-        return new CacheDataFormatter($this->cache->remember($key, $ttl, $callback));
+    /**
+     * @param iterable<string|Key> $keys
+     */
+    public function many(iterable $keys, mixed $default = null): CacheDataFormatter
+    {
+        return new CacheDataFormatter($this->cache->many($keys, $default));
     }
 
+    /**
+     * Metadata is not a value, so this is unformatted by design.
+     */
     public function entry(string|Key $key): CacheEntry
     {
         return $this->cache->entry($key);
     }
+
+    public function has(string|Key $key): bool
+    {
+        return $this->cache->has($key);
+    }
+
+    public function missing(string|Key $key): bool
+    {
+        return $this->cache->missing($key);
+    }
+
+    // ----------------------------------------------------------------- write --
 
     public function set(
         string|Key $key,
@@ -56,9 +78,27 @@ final readonly class FormattedCacheer
         $this->cache->set($key, $value, $ttl);
     }
 
-    public function has(string|Key $key): bool
+    public function forever(string|Key $key, mixed $value): void
     {
-        return $this->cache->has($key);
+        $this->cache->forever($key, $value);
+    }
+
+    public function add(
+        string|Key $key,
+        mixed $value,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): bool {
+        return $this->cache->add($key, $value, $ttl);
+    }
+
+    /**
+     * @param iterable<array-key, mixed> $values
+     */
+    public function setMany(
+        iterable $values,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): void {
+        $this->cache->setMany($values, $ttl);
     }
 
     public function delete(string|Key $key): bool
@@ -66,20 +106,148 @@ final readonly class FormattedCacheer
         return $this->cache->delete($key);
     }
 
+    public function pull(string|Key $key, mixed $default = null): CacheDataFormatter
+    {
+        return new CacheDataFormatter($this->cache->pull($key, $default));
+    }
+
+    /**
+     * @param iterable<string|Key> $keys
+     */
+    public function deleteMany(iterable $keys): bool
+    {
+        return $this->cache->deleteMany($keys);
+    }
+
     public function clear(): void
     {
         $this->cache->clear();
     }
+
+    // --------------------------------------------------------------- compute --
+
+    public function remember(
+        string|Key $key,
+        Ttl|DateInterval|int|string|null $ttl,
+        callable $callback,
+    ): CacheDataFormatter {
+        return new CacheDataFormatter($this->cache->remember($key, $ttl, $callback));
+    }
+
+    public function rememberForever(string|Key $key, callable $callback): CacheDataFormatter
+    {
+        return new CacheDataFormatter($this->cache->rememberForever($key, $callback));
+    }
+
+    public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): CacheDataFormatter
+    {
+        return new CacheDataFormatter($this->cache->flexible($key, $fresh, $stale, $callback));
+    }
+
+    // ---------------------------------------------------------- capabilities --
+
+    /**
+     * @param class-string $capability
+     */
+    public function supports(string $capability): bool
+    {
+        return $this->cache->supports($capability);
+    }
+
+    public function increment(
+        string|Key $key,
+        int $amount = 1,
+        ?int $initial = null,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): int {
+        return $this->cache->increment($key, $amount, $initial, $ttl);
+    }
+
+    public function decrement(
+        string|Key $key,
+        int $amount = 1,
+        ?int $initial = null,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): int {
+        return $this->cache->decrement($key, $amount, $initial, $ttl);
+    }
+
+    public function touch(string|Key $key, Ttl|DateInterval|int|string $ttl): bool
+    {
+        return $this->cache->touch($key, $ttl);
+    }
+
+    public function tag(string|Key $key, string ...$tags): void
+    {
+        $this->cache->tag($key, ...$tags);
+    }
+
+    public function flushTag(string $tag): int
+    {
+        return $this->cache->flushTag($tag);
+    }
+
+    public function lock(string $name, Ttl|DateInterval|int|string $ttl = 60): Lock
+    {
+        return $this->cache->lock($name, $ttl);
+    }
+
+    /**
+     * @return iterable<CacheEntry>
+     */
+    public function entries(): iterable
+    {
+        return $this->cache->entries();
+    }
+
+    public function prune(): int
+    {
+        return $this->cache->prune();
+    }
+
+    // ----------------------------------------------------------------- views --
 
     public function scope(string|Scope $scope): self
     {
         return new self($this->cache->scope($scope));
     }
 
+    public function in(string|Scope $scope): self
+    {
+        return new self($this->cache->in($scope));
+    }
+
+    public function boundScope(): Scope
+    {
+        return $this->cache->boundScope();
+    }
+
+    public function withPolicy(CachePolicy $policy): self
+    {
+        return new self($this->cache->withPolicy($policy));
+    }
+
+    /**
+     * @return array{store: string, scope: string, policy: bool, capabilities: array<string, bool>}
+     */
+    public function stats(): array
+    {
+        return $this->cache->stats();
+    }
+
+    /**
+     * Already formatted — returns this view, so the call is idempotent and the
+     * surface stays complete wherever a Cache is expected.
+     */
+    public function formatted(): self
+    {
+        return $this;
+    }
+
     /**
      * The underlying, unformatted cache.
      */
-    public function raw(): Cacheer|ScopedCacheer
+    public function raw(): Cache
     {
         return $this->cache;
     }

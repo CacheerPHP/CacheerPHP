@@ -6,6 +6,7 @@ namespace Silviooosilva\CacheerPhp\Stores;
 
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
+use Silviooosilva\CacheerPhp\Contracts\CapabilityAware;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
 use Silviooosilva\CacheerPhp\Contracts\InspectableStore;
@@ -15,8 +16,8 @@ use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
-use Silviooosilva\CacheerPhp\Exceptions\UnsupportedCapabilityException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
+use Silviooosilva\CacheerPhp\Kernel\Capabilities;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
@@ -43,7 +44,8 @@ final class ResilientStore implements
     FlushableScopeStore,
     TaggableStore,
     AtomicStore,
-    LockingStore
+    LockingStore,
+    CapabilityAware
 {
     private readonly CircuitBreaker $breaker;
 
@@ -54,6 +56,20 @@ final class ResilientStore implements
         Clock $clock = new SystemClock(),
     ) {
         $this->breaker = $breaker ?? new CircuitBreaker($clock);
+    }
+
+    /**
+     * Every operation may land on either store — writes always reach the
+     * fallback — so a capability is only real when both stores honor it.
+     */
+    public function supports(string $capability): bool
+    {
+        if ($capability === Store::class) {
+            return true;
+        }
+
+        return Capabilities::supports($this->primary, $capability)
+            && Capabilities::supports($this->fallback, $capability);
     }
 
     public function get(Key $key): CacheEntry
@@ -208,57 +224,41 @@ final class ResilientStore implements
 
     private function batch(Store $store): BatchStore
     {
-        return $store instanceof BatchStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(BatchStore::class, 'batch');
+        return Capabilities::require($store, BatchStore::class, 'batch');
     }
 
     private function touchable(Store $store): TouchStore
     {
-        return $store instanceof TouchStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(TouchStore::class, 'touch');
+        return Capabilities::require($store, TouchStore::class, 'touch');
     }
 
     private function prunable(Store $store): PrunableStore
     {
-        return $store instanceof PrunableStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(PrunableStore::class, 'prune');
+        return Capabilities::require($store, PrunableStore::class, 'prune');
     }
 
     private function inspectable(Store $store): InspectableStore
     {
-        return $store instanceof InspectableStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(InspectableStore::class, 'entries');
+        return Capabilities::require($store, InspectableStore::class, 'entries');
     }
 
     private function scopeFlushable(Store $store): FlushableScopeStore
     {
-        return $store instanceof FlushableScopeStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(FlushableScopeStore::class, 'clearScope');
+        return Capabilities::require($store, FlushableScopeStore::class, 'clearScope');
     }
 
     private function taggable(Store $store): TaggableStore
     {
-        return $store instanceof TaggableStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(TaggableStore::class, 'tag');
+        return Capabilities::require($store, TaggableStore::class, 'tag');
     }
 
     private function atomic(Store $store): AtomicStore
     {
-        return $store instanceof AtomicStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(AtomicStore::class, 'increment');
+        return Capabilities::require($store, AtomicStore::class, 'increment');
     }
 
     private function lockable(Store $store): LockingStore
     {
-        return $store instanceof LockingStore
-            ? $store
-            : throw UnsupportedCapabilityException::for(LockingStore::class, 'lock');
+        return Capabilities::require($store, LockingStore::class, 'lock');
     }
 }

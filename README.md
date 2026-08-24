@@ -20,8 +20,9 @@
 > **CacheerPHP 6.x** is an instance-first rewrite. The engine is a small `Cacheer`
 > kernel over a minimal `Store` contract; everything else — batching, tags,
 > locks, atomic counters, tiering, resilience, encryption — is an **optional
-> capability** you opt into. There is no global state and no autoload-time side
-> effect. Upgrading from v5? Jump to [Migrating from v5](#migrating-from-v5).
+> capability** you opt into. Caches are never global — you construct one and
+> inject it — and this package runs nothing at autoload time. Upgrading from v5?
+> Jump to [Migrating from v5](#migrating-from-v5).
 
 ## Five-minute quick start
 
@@ -65,13 +66,21 @@ $cache = Cacheer::redis($connection);          // predis or phpredis adapter
 ## Why v6
 
 - **Tiny core, honest capabilities.** A store implements four methods; extra
-  behavior is declared by interface and checked at runtime — a backend never
-  pretends to guarantee something it can't. See [CAPABILITIES.md](CAPABILITIES.md).
-- **Instance-first, no globals.** Construct exactly the cache you need; run
-  several side by side; nothing reads the environment or the clock behind your
-  back.
-- **Scopes instead of stringly namespaces.** `->scope('billing')` is an isolated
-  keyspace you can clear on its own.
+  behavior is declared by interface, and `$cache->supports(...)` answers
+  truthfully even through decorators — a backend never pretends to guarantee
+  something it can't. See [CAPABILITIES.md](CAPABILITIES.md).
+- **One cache type.** Scope, policy, and capabilities are state on one object, so
+  every combination composes — a scoped cache still has a policy, a policy-bound
+  cache still scopes, and both still increment, tag, and lock. Type-hint the
+  `Cache` interface and any of them is substitutable.
+- **Instance-first.** Construct exactly the cache you need; run several side by
+  side; nothing reads the environment or the clock behind your back. There is no
+  static facade and no ambient singleton — a `Cacheer` is only ever reachable
+  through the variable you put it in. The one deliberate exception is
+  [`Telemetry`](#observability-and-the-one-global), an opt-in observability tap.
+- **Scopes instead of stringly namespaces.** `->scope('billing')` (or `->in()`)
+  is an isolated keyspace you can clear on its own — and it applies to counters,
+  tags, and locks too, not just to get/set.
 - **Composable decorators.** Tiered (L1/L2), resilient (circuit-breaker
   fallback), and instrumented (typed events + metrics) all wrap any store.
 - **Stampede protection built in.** `remember()` single-flights across workers;
@@ -89,8 +98,24 @@ $cache = Cacheer::redis($connection);          // predis or phpredis adapter
 
 ```php
 $cache->scope('reports')->set('daily', $rows);
-$cache->scope('billing')->set('daily', $invoice);   // independent entry
+$cache->in('billing')->set('daily', $invoice);      // in() is an alias of scope()
 $cache->scope('reports')->clear();                  // clears only that scope
+
+// Scope applies to every operation, capabilities included.
+$billing = $cache->in('billing');
+$billing->increment('invoices:issued');             // never touches another scope
+$billing->lock('nightly-import', 60);               // per-scope mutex
+```
+
+### One type, every combination
+
+```php
+use Silviooosilva\CacheerPhp\Contracts\Cache;
+
+function report(Cache $cache): string { /* ... */ }   // type-hint the interface
+
+$tuned = $cache->in('reports')->withPolicy($policy);  // order does not matter
+$tuned->formatted()->get('daily')->toJson();          // views compose too
 ```
 
 ### Stampede protection & stale-while-revalidate
@@ -159,15 +184,67 @@ $json = (new CacheDataFormatter($cache->get('user:1')))->toJson();  // wrap any 
 $json = $cache->formatted()->get('user:1')->toJson();               // fluent view
 ```
 
-### Atomic counters, tags, locks (capabilities)
+### Counters, tags, locks, TTL renewal (capabilities)
 
-Capabilities live on the store — reach them through the store:
+Capabilities are implemented by the store and reached on the cache, so the scope
+is applied for you and one clear exception names anything the backend can't do:
 
 ```php
-$store->increment(Key::named('visits'));          // AtomicStore
-$store->tag(Key::named('p1'), 'products');         // TaggableStore
-$lock = $store->lock('import', Ttl::seconds(30));  // LockingStore
+$cache->increment('visits');                  // AtomicStore
+$cache->decrement('stock', 5, initial: 100);
+$cache->touch('session:1', '1 hour');         // TouchStore — renew, keep value
+$cache->tag('p1', 'products');                // TaggableStore
+$cache->flushTag('products');
+$lock = $cache->lock('import', 30);           // LockingStore
+$cache->entries();                            // InspectableStore — this scope
+$cache->prune();                              // PrunableStore
+
+// Pluggable backend? Ask first — this is honest through decorators too.
+if ($cache->supports(AtomicStore::class)) { /* ... */ }
 ```
+
+### Everyday verbs
+
+```php
+$cache->forever('config', $config);                    // no expiry, stated plainly
+$cache->add('lock:job', 1, ttl: 60);                   // store only if absent
+$cache->pull('flash');                                 // read once, then remove
+$cache->missing('user:1');                             // inverse of has()
+$cache->rememberForever('version', fn () => compute());
+$cache->stats();                                       // store, scope, capabilities
+```
+
+## Observability and the one global
+
+Everything above is instance-scoped. `Observability\Telemetry` is the single
+deliberate exception, and it is worth being precise about what it is:
+
+- It holds **process-global state** — a static listener list.
+- It is **dormant**: with no listeners registered, `Cacheer`'s named constructors
+  take the plain, uninstrumented path. No overhead, no behavior change, nothing
+  observable.
+- **This package registers nothing.** `silviooosilva/cacheer-php` declares only
+  PSR-4 autoloading, so installing it executes no code.
+
+It exists so a telemetry package can observe caches it did not construct:
+
+```php
+use Silviooosilva\CacheerPhp\Observability\Telemetry;
+
+Telemetry::listen(fn ($event) => $myCollector->record($event));  // opt in
+Telemetry::reset();                                              // opt back out
+```
+
+Installing [`cacheerphp/monitor`](https://github.com/CacheerPHP/cacheer-monitor)
+**does** add an autoload-time side effect: that package declares
+`autoload.files`, and its bootstrap registers a listener as soon as
+`vendor/autoload.php` is loaded. That is the point of it — zero-wiring
+monitoring — but it is a real side effect, from that package, and you opt into it
+by installing it.
+
+If you want no process-global state at all, never call `Telemetry::listen()` and
+don't install the monitor: wire observability explicitly with
+`Cacheer::instrumented($store, $events)` instead.
 
 ## PSR adapters
 
@@ -243,7 +320,7 @@ when the service is absent.
 - [WRITING_A_STORE.md](WRITING_A_STORE.md) — third-party store author guide
 - [SECURITY.md](SECURITY.md) — support windows and vulnerability reporting
 - [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) — documented edges
-- Runnable, CI-tested examples in [`examples/v6`](examples/v6)
+- Runnable, CI-tested examples in [`Examples/v6`](Examples/v6)
 - Full docs site: [cacheerphp.com/docs](https://cacheerphp.com/docs/en/getting-started/)
 - The v6 execution plan lives in [ROADMAP.md](ROADMAP.md)
 

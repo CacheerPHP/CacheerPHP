@@ -6,9 +6,11 @@ namespace Tests\Kernel;
 
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
 use ReflectionMethod;
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Kernel\ScopedCacheer;
+use Silviooosilva\CacheerPhp\Config\CachePolicy;
+use Silviooosilva\CacheerPhp\Contracts\Cache;
 use Silviooosilva\CacheerPhp\Psr\Psr16Cache;
 use Silviooosilva\CacheerPhp\Psr\Psr6Pool;
 
@@ -21,17 +23,43 @@ use Silviooosilva\CacheerPhp\Psr\Psr6Pool;
 final class PublicApiTest extends TestCase
 {
     /**
-     * The instance surface promised by the docs. Kept deliberately small.
+     * The instance surface promised by the docs — one object carries all of it,
+     * including the capability verbs that used to require the raw store.
      *
      * @return array<string, array{string}>
      */
     public static function cacheOperations(): array
     {
         return self::named([
-            'entry', 'get', 'set', 'delete', 'clear', 'has',
-            'remember', 'flexible', 'many', 'setMany', 'deleteMany',
-            'withPolicy', 'scope', 'formatted',
+            // core
+            'entry', 'get', 'set', 'delete', 'clear', 'has', 'missing',
+            'many', 'setMany', 'deleteMany',
+            // v5 verbs kept
+            'forever', 'add', 'pull', 'rememberForever',
+            // compute
+            'remember', 'flexible',
+            // capabilities, reached on the cache with the scope applied
+            'supports', 'increment', 'decrement', 'touch',
+            'tag', 'flushTag', 'lock', 'entries', 'prune',
+            // views
+            'withPolicy', 'scope', 'in', 'boundScope', 'formatted', 'stats',
         ]);
+    }
+
+    /**
+     * Whatever Cacheer promises, the formatted view must forward — reading
+     * through it must not silently cost you part of the API.
+     */
+    public function testFormattedViewForwardsTheWholeSurface(): void
+    {
+        $formatted = Cacheer::inMemory()->formatted();
+
+        foreach (array_keys(self::cacheOperations()) as $method) {
+            self::assertTrue(
+                method_exists($formatted, $method),
+                "FormattedCacheer lost Cache::{$method}().",
+            );
+        }
     }
 
     /**
@@ -64,10 +92,36 @@ final class PublicApiTest extends TestCase
         );
     }
 
-    public function testScopedCacheMirrorsTheCoreReadWriteSurface(): void
+    /**
+     * Scoping used to return a different, smaller type. It now returns the same
+     * one, so a scoped cache cannot silently lack part of the surface.
+     */
+    public function testScopingAndPolicyBindingPreserveTheWholeSurface(): void
     {
-        foreach (['get', 'set', 'delete', 'has', 'remember', 'scope'] as $method) {
-            self::assertPublicInstanceMethod(ScopedCacheer::class, $method);
+        $cache = Cacheer::inMemory();
+        $derived = [
+            'scoped'    => $cache->scope('tenant'),
+            'aliased'   => $cache->in('tenant'),
+            'policied'  => $cache->withPolicy(CachePolicy::defaults()),
+            'both'      => $cache->in('tenant')->withPolicy(CachePolicy::defaults()),
+            'reordered' => $cache->withPolicy(CachePolicy::defaults())->in('tenant'),
+            'nested'    => $cache->scope('a')->scope('b'),
+        ];
+
+        $surface = array_map(
+            static fn (\ReflectionMethod $m): string => $m->getName(),
+            (new ReflectionClass(Cache::class))->getMethods(),
+        );
+
+        foreach ($derived as $label => $instance) {
+            self::assertInstanceOf(Cache::class, $instance, "{$label} must still be a Cache.");
+
+            foreach ($surface as $method) {
+                self::assertTrue(
+                    method_exists($instance, $method),
+                    "{$label} lost Cache::{$method}().",
+                );
+            }
         }
     }
 

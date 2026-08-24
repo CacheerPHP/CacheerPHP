@@ -9,13 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cacheer` kernel
 runs over a minimal four-method `Store` contract; everything else is an optional
-capability. There is no global state and no autoload-time side effect. v5 remains
-available on its own `5.x` line during migration.
+capability. Caches are never global — you construct one and inject it — and the
+package itself runs nothing at autoload time; the one process-global is the
+opt-in `Observability\Telemetry` tap, dormant until a listener is registered. v5
+remains available on its own `5.x` line during migration.
+
+### Architecture changes since the first 6.0 preview
+
+- **One cache type instead of four.** `ScopedCacheer` and `PolicyCacheer` are
+  gone; `scope()`, `in()`, and `withPolicy()` all return a `Cacheer`. The
+  scope × policy × formatting matrix now closes — previously a scoped cache could
+  not take a policy, a policy-bound cache could not be scoped, and the formatted
+  view silently lacked `flexible()`, `many()`, `setMany()`, and `deleteMany()`.
+- **New `Cache` interface.** Type-hint it in application code; `Psr16Cache` and
+  `Psr6Pool` now accept it, so a scoped or policy-bound cache can back a PSR
+  adapter. Backends still implement `Store`, not this.
+- **Capabilities moved onto the cache.** `increment()`, `decrement()`, `touch()`,
+  `tag()`, `flushTag()`, `lock()`, `entries()`, and `prune()` are methods on the
+  cache, with the scope applied. Reaching past the cache to the store and
+  building a `Key` by hand — which the previous examples had to do — silently
+  ignored the scope and targeted a different entry. Tags and lock names are
+  namespaced by scope too.
+- **Fixed: decorators claimed capabilities they could not honor.** PHP has no
+  conditional interface implementation, so `TieredStore`, `ResilientStore`, and
+  `InstrumentedStore` declare every capability interface. `instanceof` was
+  therefore true for a wrapper around a store that could not honor it, and
+  `remember()` on a custom store **threw `UnsupportedCapabilityException` as soon
+  as the store was wrapped** — including implicitly, when `cacheerphp/monitor`
+  auto-instrumented it. Capability questions now go through the new
+  `Capabilities` helper and the `CapabilityAware` contract, which answer for the
+  store that will actually run the operation; `remember()` and `flexible()`
+  degrade to a plain compute instead of failing. Ask with `$cache->supports()`.
+- **v5 verbs restored.** `forever()`, `rememberForever()`, `missing()`, `add()`,
+  `pull()` (v5's `getAndForget`), `decrement()`, `touch()` (v5's `renewCache`),
+  `stats()`, and `in()` as an alias of `scope()`. `add()` is lock-serialized
+  where the store can lock, rather than the racy `has()` + `set()` the previous
+  examples recommended.
+- **Removed.** `Cacheer::array()` (a verbatim alias of `inMemory()`) and the
+  unused v5 exception island (`BaseException`, `CacheFileException`,
+  `CacheDatabaseException`, `CacheRedisException`, `ConnectionException`).
 
 ### Highlights
 
-- **Kernel.** Explicit `Cacheer` and immutable `ScopedCacheer` over typed `Key`,
-  `Scope`, `Ttl`, and `CacheEntry` value objects; time is an injected `Clock`.
+- **Kernel.** One explicit, immutable `Cacheer` behind a `Cache` interface, over
+  typed `Key`, `Scope`, `Ttl`, and `CacheEntry` value objects; time is an
+  injected `Clock`. Scope and policy are state on the object, so every
+  combination composes — `in('billing')->withPolicy($p)->increment('hits')`.
 - **Stores & capabilities.** `ArrayStore`, `FileStore`, `DatabaseStore` (SQLite,
   MySQL/MariaDB, PostgreSQL), and `RedisStore`, each declaring only the
   capabilities it can guarantee (batch, touch, prune, inspect, scoped flush,
