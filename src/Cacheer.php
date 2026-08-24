@@ -63,26 +63,54 @@ final readonly class Cacheer implements Cache
 
     private Scope $boundScope;
 
+    private Store $store;
+
+    /**
+     * Build a cache over a store.
+     *
+     * When the global {@see Telemetry} tap has listeners — i.e. a telemetry
+     * package such as cacheerphp/monitor is installed — the store is wrapped in
+     * transparent instrumentation here, so *every* cache reports regardless of
+     * how it was constructed. Pass your own $events (as
+     * {@see self::instrumented()} does) or an already-instrumented store to opt
+     * out; with no listeners registered this is a no-op and costs nothing.
+     */
     public function __construct(
-        private Store $store,
+        Store $store,
         ?Clock $clock = null,
         ?DeferredExecutor $executor = null,
         ?EventDispatcher $events = null,
         ?Scope $scope = null,
         private ?CachePolicy $policy = null,
     ) {
+        if ($events === null && self::tapApplies($store)) {
+            $events = Telemetry::dispatcher();
+            $store = new InstrumentedStore($store, $events, Telemetry::capturesValues());
+        }
+
+        $this->store = $store;
         $this->clock = $clock ?? new SystemClock();
         $this->executor = $executor ?? new SyncDeferredExecutor();
         $this->events = $events ?? new NullEventDispatcher();
         $this->boundScope = $scope ?? Scope::root();
         $this->operations = new CacheOperations(
-            $store,
+            $this->store,
             $this->boundScope,
             $this->clock,
             $this->executor,
             $this->events,
-            $policy,
+            $this->policy,
         );
+    }
+
+    /**
+     * Whether the global telemetry tap should wrap this store: only when a
+     * listener is registered and the store is not already instrumented (so a
+     * decorator chain is never double-wrapped and events are never duplicated).
+     */
+    private static function tapApplies(Store $store): bool
+    {
+        return Telemetry::hasListeners() && !$store instanceof InstrumentedStore;
     }
 
     // ------------------------------------------------------ named constructors --
@@ -95,7 +123,7 @@ final readonly class Cacheer implements Cache
     {
         $clock ??= new SystemClock();
 
-        return self::boot(new ArrayStore($clock), $clock);
+        return new self(new ArrayStore($clock), $clock);
     }
 
     /**
@@ -106,7 +134,7 @@ final readonly class Cacheer implements Cache
     {
         $clock ??= new SystemClock();
 
-        return self::boot(new FileStore($directory, $pipeline?->codec(), clock: $clock), $clock);
+        return new self(new FileStore($directory, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
@@ -121,7 +149,7 @@ final readonly class Cacheer implements Cache
     ): self {
         $clock ??= new SystemClock();
 
-        return self::boot(new DatabaseStore($pdo, $table, $pipeline?->codec(), clock: $clock), $clock);
+        return new self(new DatabaseStore($pdo, $table, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
@@ -136,7 +164,7 @@ final readonly class Cacheer implements Cache
     ): self {
         $clock ??= new SystemClock();
 
-        return self::boot(new RedisStore($connection, $prefix, $pipeline?->codec(), clock: $clock), $clock);
+        return new self(new RedisStore($connection, $prefix, $pipeline?->codec(), clock: $clock), $clock);
     }
 
     /**
@@ -152,9 +180,22 @@ final readonly class Cacheer implements Cache
         ?EventDispatcher $events = null,
     ): self {
         $clock ??= new SystemClock();
-        $events ??= new NullEventDispatcher();
 
-        return new self(new TieredStore($l1, $l2, $clock, $l1MaxTtl, events: $events), $clock, $executor, $events);
+        // TieredStore emits promotion events of its own, so it needs a dispatcher
+        // up front rather than relying on the constructor's tap. With no explicit
+        // one, borrow the telemetry tap while it is live so promotions are
+        // reported too; $events stays null so the constructor still wraps the
+        // tier for ordinary get/set instrumentation.
+        $tierEvents = $events ?? (Telemetry::hasListeners()
+            ? Telemetry::dispatcher()
+            : new NullEventDispatcher());
+
+        return new self(
+            new TieredStore($l1, $l2, $clock, $l1MaxTtl, events: $tierEvents),
+            $clock,
+            $executor,
+            $events,
+        );
     }
 
     /**
@@ -411,28 +452,6 @@ final readonly class Cacheer implements Cache
     public function store(): Store
     {
         return $this->store;
-    }
-
-    /**
-     * Build a cache over the given store, transparently attaching the global
-     * telemetry tap when {@see Telemetry} has listeners (e.g. cacheerphp/monitor
-     * is installed). With no listeners this is exactly `new self($store, $clock)`
-     * — no instrumentation, no overhead, no behavior change.
-     */
-    private static function boot(Store $store, Clock $clock, ?DeferredExecutor $executor = null): self
-    {
-        if (!Telemetry::hasListeners()) {
-            return new self($store, $clock, $executor);
-        }
-
-        $events = Telemetry::dispatcher();
-
-        return new self(
-            new InstrumentedStore($store, $events, Telemetry::capturesValues()),
-            $clock,
-            $executor,
-            $events,
-        );
     }
 
     private function derive(Scope $scope, ?CachePolicy $policy): self

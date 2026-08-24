@@ -39,9 +39,13 @@ final readonly class CacheEvent
         return new self(CacheEventType::Miss, $store, $key, $duration);
     }
 
-    public static function written(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null): self
+    /**
+     * @param int|null $count Optional quantity the write carries — a counter's new
+     *                        value after increment(), or how many tags were added.
+     */
+    public static function written(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null, ?int $count = null): self
     {
-        return new self(CacheEventType::Write, $store, $key, $duration, $bytes, hasValue: $hasValue, value: $value);
+        return new self(CacheEventType::Write, $store, $key, $duration, $bytes, $count, hasValue: $hasValue, value: $value);
     }
 
     public static function deleted(string $store, string $key, float $duration, bool $existed): self
