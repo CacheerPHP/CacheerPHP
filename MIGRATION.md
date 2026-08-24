@@ -38,20 +38,40 @@ explicitly (see §6).
 
 ## 3. Method mapping
 
+Every v5 verb below is a method on the cache in v6 — you never reach past it to
+the store, and the scope you are in is applied for you.
+
 | v5 | v6 primary API | Notes |
 |---|---|---|
 | `putCache($k, $v, $ns, $ttl)` | `set($k, $v, $ttl)` | Namespace becomes `scope($ns)->set(...)` |
-| `forever($k, $v)` | `set($k, $v, null)` | `null` TTL means forever |
 | `getCache($k, $ns, $ttl)` | `get($k)` | The read-time TTL is removed |
-| `clearCache($k, $ns)` | `delete($k)` | Namespace becomes `scope($ns)->delete(...)` |
+| `clearCache($k, $ns)` / `forget()` | `delete($k)` | Namespace becomes `scope($ns)->delete(...)` |
 | `flushCache()` | `clear()` | Limited to the configured keyspace |
-| `getAndForget()` / `pull()` | `get($k)` then `delete($k)` | v6 has no `pull()`; do it in two calls |
-| `has()` / `missing()` | `has()` | — |
-| positional namespace | `scope('name')` | Returns a scoped cache |
-| `tag($tag, ...$keys)` | `TaggableStore::tag()` | Capability, not core |
-| `increment()` / `decrement()` | `AtomicStore::increment()` | Capability, not core |
-| `isSuccess()` | `entry()->isHit()` or return value | Removed from core state |
+| `forever($k, $v)` | `forever($k, $v)` | Or `set($k, $v, null)` |
+| `add($k, $v, $ns, $ttl)` | `add($k, $v, $ttl)` | Lock-serialized where the store can lock |
+| `getAndForget()` / `pull()` | `pull($k, $default = null)` | Read and remove in one call |
+| `has()` | `has()` | — |
+| `missing()` | `missing()` | — |
+| `getMany()` / `putMany()` | `many()` / `setMany()` | — |
+| positional namespace | `scope('name')` or `in('name')` | Returns a cache of the same type |
+| `tag($tag, ...$keys)` | `tag($key, ...$tags)` | Per key; tags are scope-namespaced |
+| `flushTag($tag)` | `flushTag($tag)` | Returns how many were removed |
+| `increment()` / `decrement()` | `increment()` / `decrement()` | Both kept |
+| `renewCache($k, $ttl, $ns)` | `touch($k, $ttl)` | Extends TTL, keeps the value |
+| `getAll($ns)` | `entries()` | Scope applied; yields entries with metadata |
+| `lock($name, $ttl)` | `lock($name, $ttl)` | Lock names are scope-namespaced |
+| `rememberForever()` | `rememberForever()` | — |
 | `remember()` / `flexible()` | `remember()` / `flexible()` | Same intent, injected clock |
+| `stats()` | `stats()` | Store, scope, policy, real capabilities |
+| `useFormatter()` | `formatted()` | An immutable view; base reads stay raw |
+| `appendCache()` | read → merge → `set()` | Explicit; wrap in `lock()` if concurrent |
+| `isSuccess()` / `getMessage()` | `entry()->isHit()` or return value | Removed from core state |
+| static `Cacheer::putCache(...)` | inject a `Cache` instance | No global state in v6 |
+
+The capability-backed rows (`increment`, `touch`, `tag`, `flushTag`, `lock`,
+`entries`, `prune`) throw `UnsupportedCapabilityException` on a store that cannot
+honor them. Every built-in store honors all of them; if you support pluggable
+backends, ask `$cache->supports(AtomicStore::class)` first.
 
 ### Automated renames (Rector)
 

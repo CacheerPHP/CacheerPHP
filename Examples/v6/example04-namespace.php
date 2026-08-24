@@ -9,7 +9,7 @@ declare(strict_types=1);
  *   $c->putCache($key, $value, $namespace)  →  $c->scope($namespace)->set($key, $value)
  *   $c->getCache($key, $namespace)          →  $c->scope($namespace)->get($key)
  *
- * scope() returns an immutable ScopedCacheer that shares the same store but a
+ * scope() returns a new immutable Cacheer that shares the same store but a
  * separate keyspace, so identical key names never collide across scopes.
  *
  * Run: php Examples/v6/example04-namespace.php

@@ -17,8 +17,6 @@ declare(strict_types=1);
 require __DIR__ . '/../../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Kernel\Key;
-use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
@@ -58,7 +56,7 @@ assert($calls === 1); // the closure ran once
 
 // ── 6. Renew a TTL with a DateInterval (TouchStore) ──────────────────────────
 $cache->set('renewable', 'data', ttl: 60);
-$touched = $store->touch(Key::named('renewable'), Ttl::from(new DateInterval('PT2H')));
+$touched = $cache->touch('renewable', new DateInterval('PT2H'));
 echo 'Renewed: ' . var_export($touched, true) . PHP_EOL;
 assert($touched === true);
 

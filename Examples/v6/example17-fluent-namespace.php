@@ -8,10 +8,10 @@ declare(strict_types=1);
  * v5 → v6 mapping:
  *   $c->in('users')->put('123', $v)        →  $c->scope('users')->set('123', $v)
  *   $c->in('users')->in('123')             →  $c->scope('users')->scope('123')
- *   $c->getNamespace()                     →  $scoped->name()
+ *   $c->getNamespace()                     →  $scoped->boundScope()
  *   $c->withoutNamespace()                 →  use the root $cache instance
  *
- * scope() returns an immutable ScopedCacheer, so chaining never mutates the
+ * scope() returns a new immutable Cacheer, so chaining never mutates the
  * parent. remember() honors the bound scope.
  *
  * Run: php Examples/v6/example17-fluent-namespace.php
@@ -36,8 +36,8 @@ assert($nested === ['bio' => 'PHP developer']);
 $users = $cache->scope('users');
 $admins = $users->scope('admins'); // does NOT change $users
 
-echo 'users scope : ' . $users->name() . PHP_EOL;   // users
-echo 'admins scope: ' . $admins->name() . PHP_EOL;  // users.admins
+echo 'users scope : ' . $users->boundScope() . PHP_EOL;   // users
+echo 'admins scope: ' . $admins->boundScope() . PHP_EOL;  // users.admins
 
 // ── Escape a scope by using the root instance ────────────────────────────────
 $tenant = $cache->scope('tenant-a');

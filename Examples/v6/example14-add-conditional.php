@@ -5,16 +5,14 @@ declare(strict_types=1);
 /**
  * Example 14 — Conditional / first-writer-wins writes (v6)
  *
- * v5 had add() — "store only if the key is absent" — often used as a poor man's
- * distributed lock. v6 does not expose add(); the tiny store contract offers two
- * precise primitives instead:
+ * v5's add() — "store only if the key is absent" — is back on the cache in v6,
+ * and it is no longer the racy has()+set() pair you would otherwise write by
+ * hand: when the store can lock, add() serializes the check and the write, so
+ * exactly one caller wins across processes. When it cannot, it degrades to a
+ * single-process check and says so here.
  *
- *   - LockingStore::lock()          → a real cross-process mutex (use this for
- *                                     "must happen once" side effects).
- *   - AtomicStore::compareAndSwap() → swap a value only if it still equals what
- *                                     you last read (optimistic concurrency).
- *
- * For a plain single-process "set if absent", has() + set() is enough.
+ * For "must happen once" side effects, take a real lock instead — add() protects
+ * the cache entry, a lock protects your work.
  *
  * Run: php Examples/v6/example14-add-conditional.php
  */
@@ -22,34 +20,29 @@ declare(strict_types=1);
 require __DIR__ . '/../../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Kernel\Key;
-use Silviooosilva\CacheerPhp\Kernel\Ttl;
-use Silviooosilva\CacheerPhp\Stores\FileStore;
-use Silviooosilva\CacheerPhp\Support\SystemClock;
+use Silviooosilva\CacheerPhp\Contracts\LockingStore;
 
-$clock = new SystemClock();
-$store = new FileStore(__DIR__ . '/cache', clock: $clock);
-$cache = new Cacheer($store, $clock);
+$cache = Cacheer::file(__DIR__ . '/cache');
 
 // Reset keys this example writes, so repeated runs are deterministic.
-$cache->delete('config:theme');
-$cache->delete('rate_limit:user:99');
+$cache->deleteMany(['config:theme', 'rate_limit:user:99']);
 
-// ── 1. Set-if-absent (single process) ────────────────────────────────────────
-if (!$cache->has('config:theme')) {
-    $cache->set('config:theme', 'dark', ttl: 3600);
-}
-echo 'Theme: ' . $cache->get('config:theme') . PHP_EOL;   // dark
+// ── 1. Set-if-absent ─────────────────────────────────────────────────────────
+$stored = $cache->add('config:theme', 'dark', ttl: 3600);
+echo 'stored: ' . var_export($stored, true) . ' → ' . $cache->get('config:theme') . PHP_EOL;
+assert($stored === true);
 
-// A second attempt does not overwrite it.
-if (!$cache->has('config:theme')) {
-    $cache->set('config:theme', 'light');
-}
-echo 'Theme still: ' . $cache->get('config:theme') . PHP_EOL; // dark
+// A second attempt does not overwrite it, and says so.
+$stored = $cache->add('config:theme', 'light');
+echo 'stored again: ' . var_export($stored, true) . ' → ' . $cache->get('config:theme') . PHP_EOL;
+assert($stored === false);
 assert($cache->get('config:theme') === 'dark');
 
-// ── 2. First-writer-wins across processes (LockingStore) ─────────────────────
-$lock = $store->lock('job:send_invoice:42', Ttl::seconds(60));
+echo 'add() is cross-process safe here: '
+    . var_export($cache->supports(LockingStore::class), true) . PHP_EOL;
+
+// ── 2. First-writer-wins across processes, for side effects ──────────────────
+$lock = $cache->lock('job:send_invoice:42', 60);
 if ($lock->acquire()) {
     try {
         echo 'Lock acquired by PID ' . getmypid() . " — running job.\n";
@@ -62,8 +55,8 @@ if ($lock->acquire()) {
 }
 
 // ── 3. Rate-limit counter — create-on-miss with a TTL window ─────────────────
-$store->increment(Key::named('rate_limit:user:99'), 1, initial: 0, ttl: Ttl::minutes(1));
-echo 'Requests this minute: ' . $cache->get('rate_limit:user:99') . PHP_EOL; // 1
+$cache->increment('rate_limit:user:99', 1, initial: 0, ttl: '1 minute');
+echo 'Requests this minute: ' . $cache->get('rate_limit:user:99') . PHP_EOL;
 assert($cache->get('rate_limit:user:99') === 1);
 
 echo "OK\n";

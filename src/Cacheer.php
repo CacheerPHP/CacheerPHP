@@ -9,17 +9,17 @@ use PDO;
 use Silviooosilva\CacheerPhp\Config\CacheerBuilder;
 use Silviooosilva\CacheerPhp\Config\CachePolicy;
 use Silviooosilva\CacheerPhp\Config\PipelineConfig;
+use Silviooosilva\CacheerPhp\Contracts\Cache;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
 use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
+use Silviooosilva\CacheerPhp\Contracts\Lock;
 use Silviooosilva\CacheerPhp\Contracts\RedisConnection;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Core\CacheOperations;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
-use Silviooosilva\CacheerPhp\Kernel\PolicyCacheer;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
-use Silviooosilva\CacheerPhp\Kernel\ScopedCacheer;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
 use Silviooosilva\CacheerPhp\Observability\Telemetry;
@@ -41,8 +41,17 @@ use Silviooosilva\CacheerPhp\Support\SystemClock;
  * The distinctive name (over a generic "Cache") keeps imports collision-free
  * next to a framework's own cache classes. Construct one with a named
  * constructor and inject it where you need it; there is no global state.
+ *
+ * Scope and policy are state on the object, not separate wrapper types, so every
+ * combination composes and nothing is lost along the way:
+ *
+ *     $billing = $cache->in('billing')->withPolicy($policy);
+ *     $billing->increment('invoices:issued');
+ *     $billing->formatted()->get('summary')->toJson();
+ *
+ * Type-hint {@see Cache} in application code so any of those is substitutable.
  */
-final readonly class Cacheer
+final readonly class Cacheer implements Cache
 {
     private CacheOperations $operations;
 
@@ -52,45 +61,31 @@ final readonly class Cacheer
 
     private EventDispatcher $events;
 
+    private Scope $boundScope;
+
     public function __construct(
         private Store $store,
         ?Clock $clock = null,
         ?DeferredExecutor $executor = null,
         ?EventDispatcher $events = null,
+        ?Scope $scope = null,
+        private ?CachePolicy $policy = null,
     ) {
         $this->clock = $clock ?? new SystemClock();
         $this->executor = $executor ?? new SyncDeferredExecutor();
         $this->events = $events ?? new NullEventDispatcher();
-        $this->operations = new CacheOperations($store, Scope::root(), $this->clock, $this->executor, $this->events);
+        $this->boundScope = $scope ?? Scope::root();
+        $this->operations = new CacheOperations(
+            $store,
+            $this->boundScope,
+            $this->clock,
+            $this->executor,
+            $this->events,
+            $policy,
+        );
     }
 
-    /**
-     * Named constructor that wraps a store in transparent instrumentation:
-     * every operation is timed and emitted as a typed event through the given
-     * dispatcher (which also carries the kernel's promotion/stale/refresh
-     * events). Value capture is off by default.
-     *
-     * @param (callable(mixed): mixed)|null $redactor
-     */
-    public static function instrumented(
-        Store $store,
-        EventDispatcher $events,
-        bool $captureValues = false,
-        ?callable $redactor = null,
-        ?Clock $clock = null,
-    ): self {
-        return new self(new InstrumentedStore($store, $events, $captureValues, $redactor), $clock, null, $events);
-    }
-
-    /**
-     * Start a fluent builder that assembles a store, a storage pipeline, and an
-     * optional default policy into a ready cache — sugar over the named
-     * constructors, PipelineConfig, and CachePolicy. See {@see CacheerBuilder}.
-     */
-    public static function build(): CacheerBuilder
-    {
-        return new CacheerBuilder();
-    }
+    // ------------------------------------------------------ named constructors --
 
     /**
      * Named constructor for the in-process array store: a dependency-free cache
@@ -101,15 +96,6 @@ final readonly class Cacheer
         $clock ??= new SystemClock();
 
         return self::boot(new ArrayStore($clock), $clock);
-    }
-
-    /**
-     * Alias of {@see self::inMemory()} — reads well when you think of the backend
-     * as "the array store".
-     */
-    public static function array(?Clock $clock = null): self
-    {
-        return self::inMemory($clock);
     }
 
     /**
@@ -154,28 +140,6 @@ final readonly class Cacheer
     }
 
     /**
-     * Build a cache over the given store, transparently attaching the global
-     * telemetry tap when {@see Telemetry} has listeners (e.g. cacheerphp/monitor
-     * is installed). With no listeners this is exactly `new self($store, $clock)`
-     * — no instrumentation, no overhead, no behavior change.
-     */
-    private static function boot(Store $store, Clock $clock, ?DeferredExecutor $executor = null): self
-    {
-        if (!Telemetry::hasListeners()) {
-            return new self($store, $clock, $executor);
-        }
-
-        $events = Telemetry::dispatcher();
-
-        return new self(
-            new InstrumentedStore($store, $events, Telemetry::capturesValues()),
-            $clock,
-            $executor,
-            $events,
-        );
-    }
-
-    /**
      * Named constructor for a tiered L1/L2 cache: a fast local store in front of
      * a shared one, with promotion and generation-based coherence.
      */
@@ -209,6 +173,35 @@ final readonly class Cacheer
         return new self(new ResilientStore($primary, $fallback, $breaker, $clock), $clock, $executor);
     }
 
+    /**
+     * Named constructor that wraps a store in transparent instrumentation:
+     * every operation is timed and emitted as a typed event through the given
+     * dispatcher (which also carries the kernel's promotion/stale/refresh
+     * events). Value capture is off by default.
+     *
+     * @param (callable(mixed): mixed)|null $redactor
+     */
+    public static function instrumented(
+        Store $store,
+        EventDispatcher $events,
+        bool $captureValues = false,
+        ?callable $redactor = null,
+        ?Clock $clock = null,
+    ): self {
+        return new self(new InstrumentedStore($store, $events, $captureValues, $redactor), $clock, null, $events);
+    }
+
+    /**
+     * Start a fluent builder that assembles a store, a storage pipeline, and an
+     * optional default policy into a ready cache. See {@see CacheerBuilder}.
+     */
+    public static function build(): CacheerBuilder
+    {
+        return new CacheerBuilder();
+    }
+
+    // ------------------------------------------------------------------ read --
+
     public function entry(string|Key $key): CacheEntry
     {
         return $this->operations->entry($key);
@@ -219,45 +212,14 @@ final readonly class Cacheer
         return $this->operations->get($key, $default);
     }
 
-    public function set(
-        string|Key $key,
-        mixed $value,
-        Ttl|DateInterval|int|string|null $ttl = null,
-    ): void {
-        $this->operations->set($key, $value, $ttl);
-    }
-
-    public function delete(string|Key $key): bool
-    {
-        return $this->operations->delete($key);
-    }
-
-    public function clear(): void
-    {
-        $this->operations->clear();
-    }
-
     public function has(string|Key $key): bool
     {
         return $this->operations->has($key);
     }
 
-    public function remember(
-        string|Key $key,
-        Ttl|DateInterval|int|string|null $ttl,
-        callable $callback,
-    ): mixed {
-        return $this->operations->remember($key, $ttl, $callback);
-    }
-
-    /**
-     * Stale-while-revalidate: serve fresh for $fresh seconds, then serve the
-     * stale value while a single worker refreshes it (deferred via the executor)
-     * until $stale seconds, after which it is recomputed synchronously.
-     */
-    public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): mixed
+    public function missing(string|Key $key): bool
     {
-        return $this->operations->flexible($key, $fresh, $stale, $callback);
+        return !$this->operations->has($key);
     }
 
     /**
@@ -267,6 +229,29 @@ final readonly class Cacheer
     public function many(iterable $keys, mixed $default = null): array
     {
         return $this->operations->many($keys, $default);
+    }
+
+    // ----------------------------------------------------------------- write --
+
+    public function set(
+        string|Key $key,
+        mixed $value,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): void {
+        $this->operations->set($key, $value, $ttl);
+    }
+
+    public function forever(string|Key $key, mixed $value): void
+    {
+        $this->operations->set($key, $value, Ttl::forever());
+    }
+
+    public function add(
+        string|Key $key,
+        mixed $value,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): bool {
+        return $this->operations->add($key, $value, $ttl);
     }
 
     /**
@@ -279,6 +264,16 @@ final readonly class Cacheer
         $this->operations->setMany($values, $ttl);
     }
 
+    public function delete(string|Key $key): bool
+    {
+        return $this->operations->delete($key);
+    }
+
+    public function pull(string|Key $key, mixed $default = null): mixed
+    {
+        return $this->operations->pull($key, $default);
+    }
+
     /**
      * @param iterable<string|Key> $keys
      */
@@ -287,34 +282,161 @@ final readonly class Cacheer
         return $this->operations->deleteMany($keys);
     }
 
-    /**
-     * Wrap this cache with a policy (default TTL, jitter, negative caching,
-     * serve-stale-on-error). Reads pass through; writes and remember() honor it.
-     */
-    public function withPolicy(CachePolicy $policy): PolicyCacheer
+    public function clear(): void
     {
-        return new PolicyCacheer($this, $policy, $this->clock);
+        $this->operations->clear();
+    }
+
+    // --------------------------------------------------------------- compute --
+
+    public function remember(
+        string|Key $key,
+        Ttl|DateInterval|int|string|null $ttl,
+        callable $callback,
+    ): mixed {
+        return $this->operations->remember($key, $ttl, $callback);
+    }
+
+    public function rememberForever(string|Key $key, callable $callback): mixed
+    {
+        return $this->operations->remember($key, Ttl::forever(), $callback);
+    }
+
+    public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): mixed
+    {
+        return $this->operations->flexible($key, $fresh, $stale, $callback);
+    }
+
+    // ---------------------------------------------------------- capabilities --
+
+    /**
+     * @param class-string $capability
+     */
+    public function supports(string $capability): bool
+    {
+        return $this->operations->supports($capability);
+    }
+
+    public function increment(
+        string|Key $key,
+        int $amount = 1,
+        ?int $initial = null,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): int {
+        return $this->operations->increment($key, $amount, $initial, $ttl);
+    }
+
+    public function decrement(
+        string|Key $key,
+        int $amount = 1,
+        ?int $initial = null,
+        Ttl|DateInterval|int|string|null $ttl = null,
+    ): int {
+        return $this->operations->increment($key, -$amount, $initial, $ttl);
+    }
+
+    public function touch(string|Key $key, Ttl|DateInterval|int|string $ttl): bool
+    {
+        return $this->operations->touch($key, $ttl);
+    }
+
+    public function tag(string|Key $key, string ...$tags): void
+    {
+        $this->operations->tag($key, ...$tags);
+    }
+
+    public function flushTag(string $tag): int
+    {
+        return $this->operations->flushTag($tag);
+    }
+
+    public function lock(string $name, Ttl|DateInterval|int|string $ttl = 60): Lock
+    {
+        return $this->operations->lock($name, $ttl);
     }
 
     /**
-     * A read-formatting view: reads return a CacheDataFormatter so you can chain
-     * `->toJson()` / `->toArray()` / `->toObject()` / `->toString()`. The base
-     * `get()` stays raw (it must return false/null/ints losslessly and feed the
-     * PSR adapters). See {@see FormattedCacheer}.
+     * @return iterable<CacheEntry>
      */
+    public function entries(): iterable
+    {
+        return $this->operations->entries();
+    }
+
+    public function prune(): int
+    {
+        return $this->operations->prune();
+    }
+
+    // ----------------------------------------------------------------- views --
+
+    public function scope(string|Scope $scope): static
+    {
+        return $this->derive($this->operations->nestedScope($scope), $this->policy);
+    }
+
+    public function in(string|Scope $scope): static
+    {
+        return $this->scope($scope);
+    }
+
+    public function boundScope(): Scope
+    {
+        return $this->boundScope;
+    }
+
+    public function withPolicy(CachePolicy $policy): static
+    {
+        return $this->derive($this->boundScope, $policy);
+    }
+
     public function formatted(): FormattedCacheer
     {
         return new FormattedCacheer($this);
     }
 
-    public function scope(string|Scope $scope): ScopedCacheer
+    /**
+     * @return array{store: string, scope: string, policy: bool, capabilities: array<string, bool>}
+     */
+    public function stats(): array
     {
-        return new ScopedCacheer(
-            $this->store,
-            $this->operations->nestedScope($scope),
-            $this->clock,
-            $this->executor,
-            $this->events,
+        return $this->operations->stats();
+    }
+
+    /**
+     * The store this cache drives. Application code should not need it — every
+     * capability is reachable on this object, scope applied. It exists for store
+     * authors, tests, and the CLI.
+     */
+    public function store(): Store
+    {
+        return $this->store;
+    }
+
+    /**
+     * Build a cache over the given store, transparently attaching the global
+     * telemetry tap when {@see Telemetry} has listeners (e.g. cacheerphp/monitor
+     * is installed). With no listeners this is exactly `new self($store, $clock)`
+     * — no instrumentation, no overhead, no behavior change.
+     */
+    private static function boot(Store $store, Clock $clock, ?DeferredExecutor $executor = null): self
+    {
+        if (!Telemetry::hasListeners()) {
+            return new self($store, $clock, $executor);
+        }
+
+        $events = Telemetry::dispatcher();
+
+        return new self(
+            new InstrumentedStore($store, $events, Telemetry::capturesValues()),
+            $clock,
+            $executor,
+            $events,
         );
+    }
+
+    private function derive(Scope $scope, ?CachePolicy $policy): self
+    {
+        return new self($this->store, $this->clock, $this->executor, $this->events, $scope, $policy);
     }
 }

@@ -14,8 +14,10 @@ declare(strict_types=1);
  *
  * What it does automatically:
  *   - Renames the straightforward v5 methods to the v6 names on any object typed
- *     as Cacheer (putCache -> set, getCache -> get, clearCache -> delete, and
- *     so on).
+ *     as Cacheer (putCache -> set, getCache -> get, clearCache -> delete,
+ *     renewCache -> touch, getAndForget -> pull, and so on). Verbs v6 kept
+ *     unchanged — add, forever, missing, pull, increment, decrement, tag,
+ *     flushTag, lock, rememberForever, stats — need no rule at all.
  *
  * What it deliberately does NOT do (review these by hand — see MIGRATION.md):
  *   - Change construction: `(new Cacheer(...))->setDriver()->useFileDriver()`
@@ -23,8 +25,8 @@ declare(strict_types=1);
  *   - Move the positional namespace argument onto a `->scope()` call.
  *   - Drop the read-time TTL argument that v6's get() no longer accepts.
  *   - Translate `isSuccess()` into checking `entry()->isHit()` or a return value.
- *   - Rewrite `getAndForget()`/`pull()` (v6 has no `pull()` — do `get()` then
- *     `delete()`), or `tag()`/`increment()` (now store capabilities).
+ *   - Drop the trailing `$namespace` argument that several v5 methods took; the
+ *     rename lands, but the extra argument must move onto `->scope()` by hand.
  *
  * Let this rule set flag the mechanical renames, then migrate the remaining call
  * sites to the v6 instance API guided by the compatibility table in MIGRATION.md.
@@ -45,8 +47,12 @@ return static function (RectorConfig $rectorConfig): void {
         'clearCache' => 'delete',
         'forget'     => 'delete',
         'flushCache' => 'clear',
-        'renewCache' => 'set',
+        'renewCache' => 'touch',
         'putMany'    => 'setMany',
+        'getMany'    => 'many',
+
+        // Kept verbs whose v5 spelling differed.
+        'getAndForget' => 'pull',
     ];
 
     $methodRenames = [];

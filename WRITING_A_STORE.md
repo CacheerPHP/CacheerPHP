@@ -52,6 +52,14 @@ Contract rules the conformance suite enforces:
 Implement only the interfaces you can honor; the kernel throws
 `UnsupportedCapabilityException` for the rest instead of degrading silently.
 
+**Never answer "can this store do X?" with `instanceof`.** A decorator has to
+declare every capability it might forward, so `instanceof` is true for wrappers
+around stores that cannot. Ask `Capabilities::supports($store, X::class)` (or
+`$cache->supports(X::class)`) instead. If your store is itself a decorator,
+implement `CapabilityAware::supports()` and delegate to whichever store will run
+the operation — that is the whole contract, and the kernel relies on it to
+degrade optional optimizations rather than fail.
+
 | Interface | Adds |
 |---|---|
 | `BatchStore` | `getMany` / `setMany` / `deleteMany` |

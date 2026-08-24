@@ -7,7 +7,7 @@ namespace Silviooosilva\CacheerPhp\Psr;
 use DateInterval;
 use DateTimeImmutable;
 use Psr\SimpleCache\CacheInterface;
-use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Contracts\Cache;
 use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
 
 /**
@@ -21,7 +21,7 @@ final class Psr16Cache implements CacheInterface
 {
     private const RESERVED = '{}()/\\@:';
 
-    public function __construct(private readonly Cacheer $cache)
+    public function __construct(private readonly Cache $cache)
     {
     }
 

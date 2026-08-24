@@ -13,7 +13,6 @@ use Silviooosilva\CacheerPhp\Contracts\Compressor;
 use Silviooosilva\CacheerPhp\Contracts\Encrypter;
 use Silviooosilva\CacheerPhp\Contracts\RedisConnection;
 use Silviooosilva\CacheerPhp\Contracts\Serializer;
-use Silviooosilva\CacheerPhp\Kernel\PolicyCacheer;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Storage\Encryption\Keyring;
 
@@ -23,7 +22,7 @@ use Silviooosilva\CacheerPhp\Storage\Encryption\Keyring;
  * call create().
  *
  * The v6 reimagining of v5's OptionBuilder — but it returns a ready, typed
- * Cacheer (or PolicyCacheer when a policy is set), not a stringly options array.
+ * Cacheer, not a stringly options array.
  * Everything here is sugar over the named constructors, {@see PipelineConfig},
  * and {@see CachePolicy}; power users can still reach for those directly.
  *
@@ -193,10 +192,9 @@ final class CacheerBuilder
     }
 
     /**
-     * Build the cache. Returns a PolicyCacheer when any policy method was used,
-     * otherwise a plain Cacheer; both expose the same read/write surface.
+     * Build the cache.
      */
-    public function create(): Cacheer|PolicyCacheer
+    public function create(): Cacheer
     {
         $cache = match ($this->driver) {
             'file'     => Cacheer::file($this->require($this->directory, 'file(directory)'), $this->pipeline, $this->clock),

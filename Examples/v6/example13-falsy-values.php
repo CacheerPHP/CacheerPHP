@@ -16,7 +16,6 @@ declare(strict_types=1);
 require __DIR__ . '/../../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
@@ -47,9 +46,9 @@ assert($hit->isHit() === true && $hit->value() === false);
 assert($miss->isMiss() === true);
 
 // ── increment() from a stored 0 (AtomicStore) ────────────────────────────────
-$store->increment(Key::named('counter'), 1, initial: 0);
-$store->increment(Key::named('counter'), 1);
-$store->increment(Key::named('counter'), 5);
+$cache->increment('counter', 1, initial: 0);
+$cache->increment('counter', 1);
+$cache->increment('counter', 5);
 echo 'Counter : ' . $cache->get('counter') . PHP_EOL; // 7
 assert($cache->get('counter') === 7);
 

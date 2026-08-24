@@ -7,12 +7,12 @@ namespace Tests\Kernel;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Contracts\Cache;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Exceptions\StoreOperationFailedException;
 use Silviooosilva\CacheerPhp\Exceptions\UnsupportedCapabilityException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
-use Silviooosilva\CacheerPhp\Kernel\ScopedCacheer;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Tests\Support\FakeClock;
@@ -85,9 +85,12 @@ final class CacheTest extends TestCase
         $tenant = $this->cache->scope('tenant');
         $users = $tenant->scope('users');
 
-        self::assertInstanceOf(ScopedCacheer::class, $tenant);
-        self::assertSame('tenant', (string) $tenant->name());
-        self::assertSame('tenant/users', (string) $users->name());
+        // A scoped cache is the same type as an unscoped one, so it keeps the
+        // whole surface — that is what makes scope × policy × capability compose.
+        self::assertInstanceOf(Cacheer::class, $tenant);
+        self::assertInstanceOf(Cache::class, $tenant);
+        self::assertSame('tenant', (string) $tenant->boundScope());
+        self::assertSame('tenant/users', (string) $users->boundScope());
 
         $this->cache->set('same', 'root');
         $tenant->set('same', 'tenant');
@@ -209,7 +212,6 @@ final class CacheTest extends TestCase
     public function testCoreHasNoMagicDelegationOrStaticState(): void
     {
         $cache = new \ReflectionClass(Cacheer::class);
-        $scoped = new \ReflectionClass(ScopedCacheer::class);
 
         self::assertFalse($cache->hasMethod('__call'));
         self::assertFalse($cache->hasMethod('__callStatic'));
@@ -217,6 +219,6 @@ final class CacheTest extends TestCase
             $cache->getProperties(),
             static fn (\ReflectionProperty $property): bool => $property->isStatic(),
         ));
-        self::assertTrue($scoped->isReadOnly());
+        self::assertTrue($cache->isReadOnly());
     }
 }

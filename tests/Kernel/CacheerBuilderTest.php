@@ -7,7 +7,6 @@ namespace Tests\Kernel;
 use PHPUnit\Framework\TestCase;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Config\CacheerBuilder;
-use Silviooosilva\CacheerPhp\Kernel\PolicyCacheer;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 use Tests\Support\FakeClock;
 
@@ -75,7 +74,7 @@ final class CacheerBuilderTest extends TestCase
         self::assertSame('sensitive-data', $build()->get('token'));
     }
 
-    public function testPolicyMethodsReturnAPolicyCacheerAndApplyTheDefaultTtl(): void
+    public function testPolicyMethodsBindThePolicyAndApplyTheDefaultTtl(): void
     {
         $clock = new FakeClock();
 
@@ -86,7 +85,8 @@ final class CacheerBuilderTest extends TestCase
             ->jitter(0.0)
             ->create();
 
-        self::assertInstanceOf(PolicyCacheer::class, $cache);
+        self::assertInstanceOf(Cacheer::class, $cache);
+        self::assertTrue($cache->stats()['policy']);
 
         // No per-call TTL → the policy's default (60s) applies.
         $cache->set('k', 'v');

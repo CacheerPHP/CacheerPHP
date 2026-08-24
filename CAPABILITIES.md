@@ -20,7 +20,25 @@ shared conformance suite and integration tests.
 | Named locks | `LockingStore` | ✅ | ✅ | ✅ | ✅ |
 
 Decorators (`TieredStore`, `ResilientStore`, `InstrumentedStore`) forward every
-capability their wrapped store(s) provide, so composition never loses a feature.
+capability their wrapped store(s) provide, so composition never loses a feature —
+and never *invents* one either.
+
+PHP has no conditional interface implementation, so a decorator must declare
+every capability it might forward. That makes `instanceof` unusable as the
+question "can this store do X?": it is true for a wrapper around a store that
+cannot. Ask instead:
+
+```php
+$cache->supports(AtomicStore::class);                  // on the cache
+Capabilities::supports($store, AtomicStore::class);    // on a bare store
+```
+
+Both answer for the store that will actually run the operation — `TieredStore`
+defers to L2, `ResilientStore` requires both of its stores (writes reach the
+fallback), `InstrumentedStore` defers to the store it wraps, and nesting works.
+The kernel uses this internally, so an optional optimization degrades instead of
+failing: `remember()` single-flights through a lock when one is really available
+and falls back to a plain compute when it is not.
 
 ## Guarantees and failure modes
 
