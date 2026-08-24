@@ -66,7 +66,7 @@ the store, and the scope you are in is applied for you.
 | `useFormatter()` | `formatted()` | An immutable view; base reads stay raw |
 | `appendCache()` | read → merge → `set()` | Explicit; wrap in `lock()` if concurrent |
 | `isSuccess()` / `getMessage()` | `entry()->isHit()` or return value | Removed from core state |
-| static `Cacheer::putCache(...)` | inject a `Cache` instance | No global state in v6 |
+| static `Cacheer::putCache(...)` | inject a `Cache` instance | No static facade in v6 |
 
 The capability-backed rows (`increment`, `touch`, `tag`, `flushTag`, `lock`,
 `entries`, `prune`) throw `UnsupportedCapabilityException` on a store that cannot

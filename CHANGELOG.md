@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cacheer` kernel
 runs over a minimal four-method `Store` contract; everything else is an optional
-capability. There is no global state and no autoload-time side effect. v5 remains
-available on its own `5.x` line during migration.
+capability. Caches are never global — you construct one and inject it — and the
+package itself runs nothing at autoload time; the one process-global is the
+opt-in `Observability\Telemetry` tap, dormant until a listener is registered. v5
+remains available on its own `5.x` line during migration.
 
 ### Architecture changes since the first 6.0 preview
 

@@ -20,8 +20,9 @@
 > **CacheerPHP 6.x** is an instance-first rewrite. The engine is a small `Cacheer`
 > kernel over a minimal `Store` contract; everything else — batching, tags,
 > locks, atomic counters, tiering, resilience, encryption — is an **optional
-> capability** you opt into. There is no global state and no autoload-time side
-> effect. Upgrading from v5? Jump to [Migrating from v5](#migrating-from-v5).
+> capability** you opt into. Caches are never global — you construct one and
+> inject it — and this package runs nothing at autoload time. Upgrading from v5?
+> Jump to [Migrating from v5](#migrating-from-v5).
 
 ## Five-minute quick start
 
@@ -72,9 +73,11 @@ $cache = Cacheer::redis($connection);          // predis or phpredis adapter
   every combination composes — a scoped cache still has a policy, a policy-bound
   cache still scopes, and both still increment, tag, and lock. Type-hint the
   `Cache` interface and any of them is substitutable.
-- **Instance-first, no globals.** Construct exactly the cache you need; run
-  several side by side; nothing reads the environment or the clock behind your
-  back.
+- **Instance-first.** Construct exactly the cache you need; run several side by
+  side; nothing reads the environment or the clock behind your back. There is no
+  static facade and no ambient singleton — a `Cacheer` is only ever reachable
+  through the variable you put it in. The one deliberate exception is
+  [`Telemetry`](#observability-and-the-one-global), an opt-in observability tap.
 - **Scopes instead of stringly namespaces.** `->scope('billing')` (or `->in()`)
   is an isolated keyspace you can clear on its own — and it applies to counters,
   tags, and locks too, not just to get/set.
@@ -210,6 +213,38 @@ $cache->missing('user:1');                             // inverse of has()
 $cache->rememberForever('version', fn () => compute());
 $cache->stats();                                       // store, scope, capabilities
 ```
+
+## Observability and the one global
+
+Everything above is instance-scoped. `Observability\Telemetry` is the single
+deliberate exception, and it is worth being precise about what it is:
+
+- It holds **process-global state** — a static listener list.
+- It is **dormant**: with no listeners registered, `Cacheer`'s named constructors
+  take the plain, uninstrumented path. No overhead, no behavior change, nothing
+  observable.
+- **This package registers nothing.** `silviooosilva/cacheer-php` declares only
+  PSR-4 autoloading, so installing it executes no code.
+
+It exists so a telemetry package can observe caches it did not construct:
+
+```php
+use Silviooosilva\CacheerPhp\Observability\Telemetry;
+
+Telemetry::listen(fn ($event) => $myCollector->record($event));  // opt in
+Telemetry::reset();                                              // opt back out
+```
+
+Installing [`cacheerphp/monitor`](https://github.com/CacheerPHP/cacheer-monitor)
+**does** add an autoload-time side effect: that package declares
+`autoload.files`, and its bootstrap registers a listener as soon as
+`vendor/autoload.php` is loaded. That is the point of it — zero-wiring
+monitoring — but it is a real side effect, from that package, and you opt into it
+by installing it.
+
+If you want no process-global state at all, never call `Telemetry::listen()` and
+don't install the monitor: wire observability explicitly with
+`Cacheer::instrumented($store, $events)` instead.
 
 ## PSR adapters
 
