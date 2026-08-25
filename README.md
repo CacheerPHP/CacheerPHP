@@ -1,7 +1,13 @@
 # CacheerPHP
 
 <p align="center">
-  <a href="https://github.com/silviooosilva/CacheerPHP"><img src="./art/cacheer_php_logo__.png" width="450" alt="CacheerPHP Logo"/></a>
+  <a href="https://github.com/silviooosilva/CacheerPHP">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="./art/logo.svg">
+      <source media="(prefers-color-scheme: light)" srcset="./art/logo-light.svg">
+      <img src="./art/logo.svg" width="420" alt="CacheerPHP"/>
+    </picture>
+  </a>
 </p>
 
 <p align="center">
