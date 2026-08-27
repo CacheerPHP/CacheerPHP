@@ -5,6 +5,6 @@
     <path d="M45.73 24.33 A17.5 17.5 0 1 0 39.27 46.84" fill="none" stroke="#fff" stroke-width="10.5"/>
     <path d="M52.47 12.00 L36.00 32.95 L44.24 32.95 L39.53 52.00 L56.00 30.10 L47.76 30.10 Z" fill="#000" stroke="#000" stroke-width="6.0" stroke-linejoin="round"/>
   </mask>
-  <rect width="64" height="64" fill="#c8ff3d" mask="url(#cut)"/>
-  <path d="M52.47 12.00 L36.00 32.95 L44.24 32.95 L39.53 52.00 L56.00 30.10 L47.76 30.10 Z" fill="#c8ff3d"/>
+  <rect width="64" height="64" fill="#f2b93c" mask="url(#cut)"/>
+  <path d="M52.47 12.00 L36.00 32.95 L44.24 32.95 L39.53 52.00 L56.00 30.10 L47.76 30.10 Z" fill="#f2b93c"/>
 </svg>
