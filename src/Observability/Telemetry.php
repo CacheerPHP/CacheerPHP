@@ -23,10 +23,19 @@ use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
  */
 final class Telemetry
 {
+    /**
+     * @var ?EventBus
+     */
     private static ?EventBus $bus = null;
 
+    /**
+     * @var int
+     */
     private static int $listenerCount = 0;
 
+    /**
+     * @var bool
+     */
     private static bool $captureValues = false;
 
     /**
@@ -44,6 +53,8 @@ final class Telemetry
     /**
      * Whether any listener is registered. The named constructors consult this to
      * decide whether to take the instrumented path at all.
+     *
+     * @return bool
      */
     public static function hasListeners(): bool
     {
@@ -52,6 +63,8 @@ final class Telemetry
 
     /**
      * The shared dispatcher that fans events out to every registered listener.
+     *
+     * @return EventDispatcher
      */
     public static function dispatcher(): EventDispatcher
     {
@@ -62,12 +75,17 @@ final class Telemetry
      * Opt into carrying cached values on emitted events, so a listener can build
      * value previews. Off by default — values never leave the process unless a
      * listener is explicitly told to capture them.
+     *
+     * @param bool $capture
      */
     public static function captureValues(bool $capture = true): void
     {
         self::$captureValues = $capture;
     }
 
+    /**
+     * @return bool
+     */
     public static function capturesValues(): bool
     {
         return self::$captureValues;
@@ -84,6 +102,9 @@ final class Telemetry
         self::$captureValues = false;
     }
 
+    /**
+     * @return EventBus
+     */
     private static function bus(): EventBus
     {
         return self::$bus ??= new EventBus();

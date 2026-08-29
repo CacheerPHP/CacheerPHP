@@ -22,6 +22,13 @@ use Silviooosilva\CacheerPhp\Storage\Compat\V5PayloadReader;
  */
 final class EnvelopeCodec
 {
+    /**
+     * @param Serializer $serializer
+     * @param ?Compressor $compressor
+     * @param ?Encrypter $encrypter
+     * @param int $maxValueBytes
+     * @param ?V5PayloadReader $v5Reader
+     */
     public function __construct(
         private readonly Serializer $serializer,
         private readonly ?Compressor $compressor = null,
@@ -31,6 +38,10 @@ final class EnvelopeCodec
     ) {
     }
 
+    /**
+     * @param mixed $value
+     * @return string
+     */
     public function encode(mixed $value): string
     {
         $payload = $this->serializer->serialize($value);
@@ -62,6 +73,10 @@ final class EnvelopeCodec
         ))->toString();
     }
 
+    /**
+     * @param string $blob
+     * @return mixed
+     */
     public function decode(string $blob): mixed
     {
         if (!Envelope::isEnvelope($blob)) {
@@ -90,12 +105,19 @@ final class EnvelopeCodec
      * True when the blob is not a v6 envelope and a v5 reader is configured to
      * decode it. Stores use this to detect values that should be rewritten in
      * the v6 format on read during a migration.
+     *
+     * @param string $blob
+     * @return bool
      */
     public function isLegacyBlob(string $blob): bool
     {
         return $this->v5Reader !== null && !Envelope::isEnvelope($blob);
     }
 
+    /**
+     * @param string $blob
+     * @return mixed
+     */
     private function decodeLegacy(string $blob): mixed
     {
         if ($this->v5Reader === null) {
@@ -105,6 +127,10 @@ final class EnvelopeCodec
         return $this->v5Reader->read($blob);
     }
 
+    /**
+     * @param string $id
+     * @return Encrypter
+     */
     private function encrypterFor(string $id): Encrypter
     {
         if ($this->encrypter === null || $this->encrypter->id() !== $id) {
@@ -114,6 +140,10 @@ final class EnvelopeCodec
         return $this->encrypter;
     }
 
+    /**
+     * @param string $id
+     * @return Compressor
+     */
     private function compressorFor(string $id): Compressor
     {
         if ($this->compressor === null || $this->compressor->id() !== $id) {

@@ -19,7 +19,11 @@ use Silviooosilva\CacheerPhp\Kernel\Scope;
 final class StoredRecord
 {
     /**
+     * @param int $createdAt
+     * @param ?int $expiresAt
      * @param list<string> $scopeSegments
+     * @param string $keyValue
+     * @param string $blob
      */
     public function __construct(
         public readonly int $createdAt,
@@ -30,16 +34,29 @@ final class StoredRecord
     ) {
     }
 
+    /**
+     * @param Key $key
+     * @param int $createdAt
+     * @param ?int $expiresAt
+     * @param string $blob
+     * @return StoredRecord
+     */
     public static function forKey(Key $key, int $createdAt, ?int $expiresAt, string $blob): self
     {
         return new self($createdAt, $expiresAt, $key->scope()->segments(), $key->value(), $blob);
     }
 
+    /**
+     * @return Key
+     */
     public function key(): Key
     {
         return Key::named($this->keyValue)->within(Scope::fromSegments($this->scopeSegments));
     }
 
+    /**
+     * @return string
+     */
     public function toString(): string
     {
         $header = json_encode([
@@ -52,6 +69,10 @@ final class StoredRecord
         return pack('N', strlen($header)) . $header . $this->blob;
     }
 
+    /**
+     * @param string $raw
+     * @return ?StoredRecord
+     */
     public static function fromString(string $raw): ?self
     {
         if (strlen($raw) < 4) {

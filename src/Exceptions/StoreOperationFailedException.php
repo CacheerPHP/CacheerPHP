@@ -7,8 +7,19 @@ namespace Silviooosilva\CacheerPhp\Exceptions;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Throwable;
 
+/**
+ * Wraps a backend failure with the operation and key that caused it.
+ *
+ * The kernel wraps any non-CacheException throwable from a store in this, so
+ * callers see one exception type regardless of backend.
+ */
 final class StoreOperationFailedException extends \RuntimeException implements CacheException
 {
+    /**
+     * @param string $operation
+     * @param ?Key $key
+     * @param Throwable $previous
+     */
     public function __construct(
         public readonly string $operation,
         public readonly ?Key $key,

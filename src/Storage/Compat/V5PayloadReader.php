@@ -24,12 +24,20 @@ final class V5PayloadReader
 
     private const IV_BYTES = 16;
 
+    /**
+     * @param bool $compression
+     * @param ?string $encryptionKey
+     */
     public function __construct(
         private readonly bool $compression = false,
         private readonly ?string $encryptionKey = null,
     ) {
     }
 
+    /**
+     * @param string $data
+     * @return mixed
+     */
     public function read(string $data): mixed
     {
         // v5 stored untransformed values verbatim; nothing to decode.
@@ -58,6 +66,10 @@ final class V5PayloadReader
         return $value;
     }
 
+    /**
+     * @param string $data
+     * @return string
+     */
     private function decrypt(string $data): string
     {
         $raw = base64_decode($data, true);

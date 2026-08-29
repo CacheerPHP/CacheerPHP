@@ -16,10 +16,23 @@ use Silviooosilva\CacheerPhp\Kernel\Ttl;
  */
 interface Store
 {
+    /**
+     * @param Key $key
+     * @return CacheEntry
+     */
     public function get(Key $key): CacheEntry;
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     */
     public function set(Key $key, mixed $value, Ttl $ttl): void;
 
+    /**
+     * @param Key $key
+     * @return bool
+     */
     public function delete(Key $key): bool;
 
     public function clear(): void;

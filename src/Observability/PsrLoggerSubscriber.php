@@ -16,10 +16,16 @@ use Psr\Log\LogLevel;
  */
 final class PsrLoggerSubscriber
 {
+    /**
+     * @param LoggerInterface $logger
+     */
     public function __construct(private readonly LoggerInterface $logger)
     {
     }
 
+    /**
+     * @param CacheEvent $event
+     */
     public function record(CacheEvent $event): void
     {
         $context = array_filter([

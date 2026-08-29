@@ -15,5 +15,9 @@ use Silviooosilva\CacheerPhp\Kernel\Key;
  */
 interface KeyEncoder
 {
+    /**
+     * @param Key $key
+     * @return string
+     */
     public function encode(Key $key): string;
 }

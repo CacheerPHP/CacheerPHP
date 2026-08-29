@@ -6,16 +6,30 @@ namespace Silviooosilva\CacheerPhp\Kernel;
 
 use Silviooosilva\CacheerPhp\Exceptions\InvalidKeyException;
 
+/**
+ * A validated cache key, optionally bound to a {@see Scope}.
+ *
+ * Validated once on construction so a backend never has to defend against an
+ * empty, oversized, or control-character key.
+ */
 final readonly class Key implements \Stringable
 {
     private const MAX_BYTES = 1024;
 
+    /**
+     * @param string $value
+     * @param Scope $scope
+     */
     private function __construct(
         private string $value,
         private Scope $scope,
     ) {
     }
 
+    /**
+     * @param string $value
+     * @return Key
+     */
     public static function named(string $value): self
     {
         if ($value === '') {
@@ -36,26 +50,42 @@ final readonly class Key implements \Stringable
         return new self($value, Scope::root());
     }
 
+    /**
+     * @return string
+     */
     public function value(): string
     {
         return $this->value;
     }
 
+    /**
+     * @return Scope
+     */
     public function scope(): Scope
     {
         return $this->scope;
     }
 
+    /**
+     * @param Scope $scope
+     * @return Key
+     */
     public function within(Scope $scope): self
     {
         return new self($this->value, $scope->append($this->scope));
     }
 
+    /**
+     * @return string
+     */
     public function identity(): string
     {
         return $this->scope->identity() . '|' . strlen($this->value) . ':' . $this->value;
     }
 
+    /**
+     * @return string
+     */
     public function __toString(): string
     {
         if ($this->scope->isRoot()) {

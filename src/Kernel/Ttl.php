@@ -9,17 +9,34 @@ use DateTimeInterface;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
 use Silviooosilva\CacheerPhp\Exceptions\InvalidTtlException;
 
+/**
+ * A lifetime, expressed however the caller finds clearest.
+ *
+ * Accepts seconds, a human string ('10 minutes'), a DateInterval, or null for
+ * forever. Overflow is guarded rather than silently wrapping, and forever is
+ * "no expiry" rather than a large integer.
+ */
 final readonly class Ttl implements \Stringable
 {
+    /**
+     * @param ?int $seconds
+     */
     private function __construct(private ?int $seconds)
     {
     }
 
+    /**
+     * @return Ttl
+     */
     public static function forever(): self
     {
         return new self(null);
     }
 
+    /**
+     * @param int $seconds
+     * @return Ttl
+     */
     public static function seconds(int $seconds): self
     {
         if ($seconds <= 0) {
@@ -29,31 +46,56 @@ final readonly class Ttl implements \Stringable
         return new self($seconds);
     }
 
+    /**
+     * @param int $minutes
+     * @return Ttl
+     */
     public static function minutes(int $minutes): self
     {
         return self::seconds(self::multiply($minutes, 60));
     }
 
+    /**
+     * @param int $hours
+     * @return Ttl
+     */
     public static function hours(int $hours): self
     {
         return self::seconds(self::multiply($hours, 3600));
     }
 
+    /**
+     * @param int $days
+     * @return Ttl
+     */
     public static function days(int $days): self
     {
         return self::seconds(self::multiply($days, 86400));
     }
 
+    /**
+     * @param int $weeks
+     * @return Ttl
+     */
     public static function weeks(int $weeks): self
     {
         return self::seconds(self::multiply($weeks, 604800));
     }
 
+    /**
+     * @param DateTimeInterface $expiration
+     * @param Clock $clock
+     * @return Ttl
+     */
     public static function until(DateTimeInterface $expiration, Clock $clock): self
     {
         return self::seconds($expiration->getTimestamp() - $clock->now());
     }
 
+    /**
+     * @param Ttl|DateInterval|string|int|null $ttl
+     * @return Ttl
+     */
     public static function from(self|DateInterval|int|string|null $ttl): self
     {
         if ($ttl instanceof self) {
@@ -96,16 +138,26 @@ final readonly class Ttl implements \Stringable
         };
     }
 
+    /**
+     * @return bool
+     */
     public function isForever(): bool
     {
         return $this->seconds === null;
     }
 
+    /**
+     * @return ?int
+     */
     public function inSeconds(): ?int
     {
         return $this->seconds;
     }
 
+    /**
+     * @param Clock $clock
+     * @return ?int
+     */
     public function expiresAt(Clock $clock): ?int
     {
         if ($this->seconds === null) {
@@ -120,11 +172,18 @@ final readonly class Ttl implements \Stringable
         return $now + $this->seconds;
     }
 
+    /**
+     * @return string
+     */
     public function __toString(): string
     {
         return $this->seconds === null ? 'forever' : $this->seconds . ' seconds';
     }
 
+    /**
+     * @param DateInterval $interval
+     * @return Ttl
+     */
     private static function fromDateInterval(DateInterval $interval): self
     {
         if ($interval->invert === 1) {
@@ -144,6 +203,11 @@ final readonly class Ttl implements \Stringable
         return self::seconds($seconds);
     }
 
+    /**
+     * @param int $value
+     * @param int $multiplier
+     * @return int
+     */
     private static function multiply(int $value, int $multiplier): int
     {
         if ($value < 0) {
@@ -157,6 +221,11 @@ final readonly class Ttl implements \Stringable
         return $value * $multiplier;
     }
 
+    /**
+     * @param int $left
+     * @param int $right
+     * @return int
+     */
     private static function add(int $left, int $right): int
     {
         if ($right > PHP_INT_MAX - $left) {

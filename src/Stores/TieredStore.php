@@ -51,12 +51,29 @@ final class TieredStore implements
 {
     private const GENERATION_KEY = '__cacheer_tier_generation__';
 
+    /**
+     * @var int
+     */
     private int $localGeneration = 0;
 
+    /**
+     * @var float
+     */
     private float $generationCheckedAt = 0.0;
 
+    /**
+     * @var bool
+     */
     private bool $generationInitialized = false;
 
+    /**
+     * @param Store $l1
+     * @param Store $l2
+     * @param Clock $clock
+     * @param ?Ttl $l1MaxTtl
+     * @param float $generationCheckSeconds
+     * @param EventDispatcher $events
+     */
     public function __construct(
         private readonly Store $l1,
         private readonly Store $l2,
@@ -71,6 +88,9 @@ final class TieredStore implements
      * L2 is the source of truth for every shared capability, so that is what
      * decides. Batching is implemented here over the two tiers' core methods and
      * is always available.
+     *
+     * @param string $capability
+     * @return bool
      */
     public function supports(string $capability): bool
     {
@@ -81,6 +101,10 @@ final class TieredStore implements
         return Capabilities::supports($this->l2, $capability);
     }
 
+    /**
+     * @param Key $key
+     * @return CacheEntry
+     */
     public function get(Key $key): CacheEntry
     {
         $this->syncGeneration();
@@ -98,12 +122,21 @@ final class TieredStore implements
         return $shared;
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
         $this->l2->set($key, $value, $ttl);
         $this->l1->set($key, $value, $this->capForL1($ttl));
     }
 
+    /**
+     * @param Key $key
+     * @return bool
+     */
     public function delete(Key $key): bool
     {
         $local = $this->l1->delete($key);
@@ -122,6 +155,10 @@ final class TieredStore implements
         $this->generationCheckedAt = $this->clock->nowFloat();
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return list<CacheEntry>
+     */
     public function getMany(iterable $keys): array
     {
         $this->syncGeneration();
@@ -145,6 +182,10 @@ final class TieredStore implements
         return $entries;
     }
 
+    /**
+     * @param iterable $entries
+     * @param Ttl $ttl
+     */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
         foreach ($entries as $entry) {
@@ -153,6 +194,10 @@ final class TieredStore implements
         }
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return bool
+     */
     public function deleteMany(iterable $keys): bool
     {
         $deleted = true;
@@ -164,6 +209,11 @@ final class TieredStore implements
         return $deleted;
     }
 
+    /**
+     * @param Key $key
+     * @param Ttl $ttl
+     * @return bool
+     */
     public function touch(Key $key, Ttl $ttl): bool
     {
         $touched = $this->sharedTouch()->touch($key, $ttl);
@@ -174,6 +224,9 @@ final class TieredStore implements
         return $touched;
     }
 
+    /**
+     * @return int
+     */
     public function prune(): int
     {
         $local = $this->l1;
@@ -184,6 +237,10 @@ final class TieredStore implements
         return $this->sharedPrune()->prune();
     }
 
+    /**
+     * @param ?Scope $scope
+     * @return iterable<CacheEntry>
+     */
     public function entries(?Scope $scope = null): iterable
     {
         foreach ($this->sharedInspect()->entries($scope) as $entry) {
@@ -195,6 +252,9 @@ final class TieredStore implements
         }
     }
 
+    /**
+     * @param Scope $scope
+     */
     public function clearScope(Scope $scope): void
     {
         if ($scope->isRoot()) {
@@ -207,11 +267,19 @@ final class TieredStore implements
         $this->invalidateLocalCache();
     }
 
+    /**
+     * @param Key $key
+     * @param string ...$tags
+     */
     public function tag(Key $key, string ...$tags): void
     {
         $this->sharedTaggable()->tag($key, ...$tags);
     }
 
+    /**
+     * @param string $tag
+     * @return int
+     */
     public function clearTag(string $tag): int
     {
         $removed = $this->sharedTaggable()->clearTag($tag);
@@ -220,6 +288,13 @@ final class TieredStore implements
         return $removed;
     }
 
+    /**
+     * @param Key $key
+     * @param int $amount
+     * @param ?int $initial
+     * @param ?Ttl $ttl
+     * @return int
+     */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
         $value = $this->sharedAtomic()->increment($key, $amount, $initial, $ttl);
@@ -228,6 +303,13 @@ final class TieredStore implements
         return $value;
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $expected
+     * @param mixed $value
+     * @param ?Ttl $ttl
+     * @return bool
+     */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
         $swapped = $this->sharedAtomic()->compareAndSwap($key, $expected, $value, $ttl);
@@ -238,17 +320,30 @@ final class TieredStore implements
         return $swapped;
     }
 
+    /**
+     * @param string $name
+     * @param Ttl $ttl
+     * @return Lock
+     */
     public function lock(string $name, Ttl $ttl): Lock
     {
         return $this->sharedLocking()->lock($name, $ttl);
     }
 
+    /**
+     * @param Key $key
+     * @param CacheEntry $entry
+     */
     private function promote(Key $key, CacheEntry $entry): void
     {
         $this->l1->set($key, $entry->value(), $this->promotionTtl($entry));
         $this->events->dispatch(CacheEvent::promoted('TieredStore', (string) $key));
     }
 
+    /**
+     * @param CacheEntry $entry
+     * @return Ttl
+     */
     private function promotionTtl(CacheEntry $entry): Ttl
     {
         $expiresAt = $entry->expiresAt();
@@ -259,6 +354,10 @@ final class TieredStore implements
         return $this->capForL1($base);
     }
 
+    /**
+     * @param Ttl $ttl
+     * @return Ttl
+     */
     private function capForL1(Ttl $ttl): Ttl
     {
         if ($this->l1MaxTtl === null) {
@@ -302,6 +401,9 @@ final class TieredStore implements
         $this->generationCheckedAt = $this->clock->nowFloat();
     }
 
+    /**
+     * @return int
+     */
     private function readGeneration(): int
     {
         $entry = $this->l2->get($this->generationKey());
@@ -310,46 +412,73 @@ final class TieredStore implements
         return is_int($value) ? $value : 0;
     }
 
+    /**
+     * @param int $generation
+     */
     private function writeGeneration(int $generation): void
     {
         $this->l2->set($this->generationKey(), $generation, Ttl::forever());
     }
 
+    /**
+     * @return Key
+     */
     private function generationKey(): Key
     {
         return Key::named(self::GENERATION_KEY);
     }
 
+    /**
+     * @return TouchStore
+     */
     private function sharedTouch(): TouchStore
     {
         return Capabilities::require($this->l2, TouchStore::class, 'touch');
     }
 
+    /**
+     * @return PrunableStore
+     */
     private function sharedPrune(): PrunableStore
     {
         return Capabilities::require($this->l2, PrunableStore::class, 'prune');
     }
 
+    /**
+     * @return InspectableStore
+     */
     private function sharedInspect(): InspectableStore
     {
         return Capabilities::require($this->l2, InspectableStore::class, 'entries');
     }
 
+    /**
+     * @return FlushableScopeStore
+     */
     private function sharedScopeFlush(): FlushableScopeStore
     {
         return Capabilities::require($this->l2, FlushableScopeStore::class, 'clearScope');
     }
 
+    /**
+     * @return TaggableStore
+     */
     private function sharedTaggable(): TaggableStore
     {
         return Capabilities::require($this->l2, TaggableStore::class, 'tag');
     }
 
+    /**
+     * @return AtomicStore
+     */
     private function sharedAtomic(): AtomicStore
     {
         return Capabilities::require($this->l2, AtomicStore::class, 'increment');
     }
 
+    /**
+     * @return LockingStore
+     */
     private function sharedLocking(): LockingStore
     {
         return Capabilities::require($this->l2, LockingStore::class, 'lock');

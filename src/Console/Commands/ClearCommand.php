@@ -16,16 +16,28 @@ use Silviooosilva\CacheerPhp\Console\CommandOutput;
  */
 final class ClearCommand implements Command
 {
+    /**
+     * @return string
+     */
     public function name(): string
     {
         return 'clear';
     }
 
+    /**
+     * @return string
+     */
     public function description(): string
     {
         return 'Clear the whole keyspace (--dry-run to preview, --force to execute).';
     }
 
+    /**
+     * @param CommandInput $input
+     * @param CommandOutput $output
+     * @param ?CacheerContext $context
+     * @return int
+     */
     public function run(CommandInput $input, CommandOutput $output, ?CacheerContext $context): int
     {
         if ($context === null) {

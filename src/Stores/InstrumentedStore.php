@@ -45,9 +45,15 @@ final class InstrumentedStore implements
     LockingStore,
     CapabilityAware
 {
+    /**
+     * @var string
+     */
     private readonly string $name;
 
     /**
+     * @param Store $inner
+     * @param EventDispatcher $events
+     * @param bool $captureValues
      * @param (callable(mixed): mixed)|null $redactor
      */
     public function __construct(
@@ -62,6 +68,9 @@ final class InstrumentedStore implements
     /**
      * Batching is implemented here over the four core methods, so it is always
      * available. Every other capability is only as real as the wrapped store's.
+     *
+     * @param string $capability
+     * @return bool
      */
     public function supports(string $capability): bool
     {
@@ -72,6 +81,10 @@ final class InstrumentedStore implements
         return Capabilities::supports($this->inner, $capability);
     }
 
+    /**
+     * @param Key $key
+     * @return CacheEntry
+     */
     public function get(Key $key): CacheEntry
     {
         $start = microtime(true);
@@ -88,6 +101,11 @@ final class InstrumentedStore implements
         return $entry;
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
         $start = microtime(true);
@@ -99,6 +117,10 @@ final class InstrumentedStore implements
         $this->events->dispatch(CacheEvent::written($this->name, (string) $key, $this->elapsed($start), $bytes, $hasValue, $captured));
     }
 
+    /**
+     * @param Key $key
+     * @return bool
+     */
     public function delete(Key $key): bool
     {
         $start = microtime(true);
@@ -117,6 +139,10 @@ final class InstrumentedStore implements
         $this->events->dispatch(CacheEvent::cleared($this->name, $this->elapsed($start)));
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return list<CacheEntry>
+     */
     public function getMany(iterable $keys): array
     {
         $entries = [];
@@ -127,6 +153,10 @@ final class InstrumentedStore implements
         return $entries;
     }
 
+    /**
+     * @param iterable $entries
+     * @param Ttl $ttl
+     */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
         foreach ($entries as $entry) {
@@ -134,6 +164,10 @@ final class InstrumentedStore implements
         }
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return bool
+     */
     public function deleteMany(iterable $keys): bool
     {
         $deleted = true;
@@ -144,6 +178,11 @@ final class InstrumentedStore implements
         return $deleted;
     }
 
+    /**
+     * @param Key $key
+     * @param Ttl $ttl
+     * @return bool
+     */
     public function touch(Key $key, Ttl $ttl): bool
     {
         $start = microtime(true);
@@ -158,6 +197,9 @@ final class InstrumentedStore implements
         return $touched;
     }
 
+    /**
+     * @return int
+     */
     public function prune(): int
     {
         $start = microtime(true);
@@ -167,11 +209,18 @@ final class InstrumentedStore implements
         return $removed;
     }
 
+    /**
+     * @param ?Scope $scope
+     * @return iterable<CacheEntry>
+     */
     public function entries(?Scope $scope = null): iterable
     {
         return $this->inspectable()->entries($scope);
     }
 
+    /**
+     * @param Scope $scope
+     */
     public function clearScope(Scope $scope): void
     {
         $start = microtime(true);
@@ -179,6 +228,10 @@ final class InstrumentedStore implements
         $this->events->dispatch(CacheEvent::cleared($this->name, $this->elapsed($start)));
     }
 
+    /**
+     * @param Key $key
+     * @param string ...$tags
+     */
     public function tag(Key $key, string ...$tags): void
     {
         $start = microtime(true);
@@ -194,6 +247,10 @@ final class InstrumentedStore implements
         ));
     }
 
+    /**
+     * @param string $tag
+     * @return int
+     */
     public function clearTag(string $tag): int
     {
         $start = microtime(true);
@@ -206,6 +263,13 @@ final class InstrumentedStore implements
         return $removed;
     }
 
+    /**
+     * @param Key $key
+     * @param int $amount
+     * @param ?int $initial
+     * @param ?Ttl $ttl
+     * @return int
+     */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
         $start = microtime(true);
@@ -223,6 +287,13 @@ final class InstrumentedStore implements
         return $value;
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $expected
+     * @param mixed $value
+     * @param ?Ttl $ttl
+     * @return bool
+     */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
         $start = microtime(true);
@@ -244,6 +315,11 @@ final class InstrumentedStore implements
         return $swapped;
     }
 
+    /**
+     * @param string $name
+     * @param Ttl $ttl
+     * @return Lock
+     */
     public function lock(string $name, Ttl $ttl): Lock
     {
         return $this->lockable()->lock($name, $ttl);
@@ -251,6 +327,7 @@ final class InstrumentedStore implements
 
     /**
      * @template T
+     * @param ?Key $key
      * @param callable(): T $operationFn
      * @return T
      */
@@ -268,6 +345,7 @@ final class InstrumentedStore implements
     }
 
     /**
+     * @param mixed $value
      * @return array{0: int|null, 1: bool, 2: mixed}
      */
     private function capture(mixed $value): array
@@ -288,41 +366,66 @@ final class InstrumentedStore implements
         return [$bytes, true, $captured];
     }
 
+    /**
+     * @param float $start
+     * @return float
+     */
     private function elapsed(float $start): float
     {
         return (microtime(true) - $start) * 1_000_000;
     }
 
+    /**
+     * @return TouchStore
+     */
     private function touchable(): TouchStore
     {
         return Capabilities::require($this->inner, TouchStore::class, 'touch');
     }
 
+    /**
+     * @return PrunableStore
+     */
     private function prunable(): PrunableStore
     {
         return Capabilities::require($this->inner, PrunableStore::class, 'prune');
     }
 
+    /**
+     * @return InspectableStore
+     */
     private function inspectable(): InspectableStore
     {
         return Capabilities::require($this->inner, InspectableStore::class, 'entries');
     }
 
+    /**
+     * @return FlushableScopeStore
+     */
     private function scopeFlushable(): FlushableScopeStore
     {
         return Capabilities::require($this->inner, FlushableScopeStore::class, 'clearScope');
     }
 
+    /**
+     * @return TaggableStore
+     */
     private function taggable(): TaggableStore
     {
         return Capabilities::require($this->inner, TaggableStore::class, 'tag');
     }
 
+    /**
+     * @return AtomicStore
+     */
     private function atomic(): AtomicStore
     {
         return Capabilities::require($this->inner, AtomicStore::class, 'increment');
     }
 
+    /**
+     * @return LockingStore
+     */
     private function lockable(): LockingStore
     {
         return Capabilities::require($this->inner, LockingStore::class, 'lock');

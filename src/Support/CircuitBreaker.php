@@ -23,12 +23,26 @@ final class CircuitBreaker
 
     public const HALF_OPEN = 'half-open';
 
+    /**
+     * @var string
+     */
     private string $state = self::CLOSED;
 
+    /**
+     * @var int
+     */
     private int $failures = 0;
 
+    /**
+     * @var float
+     */
     private float $openedAt = 0.0;
 
+    /**
+     * @param Clock $clock
+     * @param int $failureThreshold
+     * @param float $recoverySeconds
+     */
     public function __construct(
         private readonly Clock $clock,
         private readonly int $failureThreshold = 5,
@@ -36,6 +50,9 @@ final class CircuitBreaker
     ) {
     }
 
+    /**
+     * @return bool
+     */
     public function canAttempt(): bool
     {
         if ($this->state === self::OPEN && ($this->clock->nowFloat() - $this->openedAt) >= $this->recoverySeconds) {
@@ -65,11 +82,17 @@ final class CircuitBreaker
         }
     }
 
+    /**
+     * @return string
+     */
     public function state(): string
     {
         return $this->state;
     }
 
+    /**
+     * @return bool
+     */
     public function isHealthy(): bool
     {
         return $this->state === self::CLOSED;

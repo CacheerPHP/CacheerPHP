@@ -22,6 +22,7 @@ final class EventBus implements EventDispatcher
 
     /**
      * @param callable(CacheEvent): void $listener
+     * @return EventBus
      */
     public function listen(callable $listener): self
     {
@@ -30,6 +31,9 @@ final class EventBus implements EventDispatcher
         return $this;
     }
 
+    /**
+     * @param CacheEvent $event
+     */
     public function dispatch(CacheEvent $event): void
     {
         foreach ($this->listeners as $listener) {

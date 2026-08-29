@@ -12,6 +12,9 @@ use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
  */
 final class NullEventDispatcher implements EventDispatcher
 {
+    /**
+     * @param CacheEvent $event
+     */
     public function dispatch(CacheEvent $event): void
     {
     }

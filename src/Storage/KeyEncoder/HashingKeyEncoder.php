@@ -21,10 +21,17 @@ final class HashingKeyEncoder implements KeyEncoder
 
     private const READABLE_MAX = 40;
 
+    /**
+     * @param string $prefix
+     */
     public function __construct(private readonly string $prefix = '')
     {
     }
 
+    /**
+     * @param Key $key
+     * @return string
+     */
     public function encode(Key $key): string
     {
         $hash = hash(self::ALGO, $key->identity());
@@ -34,6 +41,10 @@ final class HashingKeyEncoder implements KeyEncoder
         return $this->prefix === '' ? $encoded : $this->prefix . ':' . $encoded;
     }
 
+    /**
+     * @param string $value
+     * @return string
+     */
     private function readable(string $value): string
     {
         $slug = preg_replace('/[^A-Za-z0-9_.-]+/', '_', $value) ?? '';

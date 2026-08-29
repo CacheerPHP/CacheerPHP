@@ -16,16 +16,28 @@ use Silviooosilva\CacheerPhp\Stores\Support\DatabaseStoreSchema;
  */
 final class MigrateCommand implements Command
 {
+    /**
+     * @return string
+     */
     public function name(): string
     {
         return 'migrate';
     }
 
+    /**
+     * @return string
+     */
     public function description(): string
     {
         return 'Create the database store schema (--dry-run to print the DDL).';
     }
 
+    /**
+     * @param CommandInput $input
+     * @param CommandOutput $output
+     * @param ?CacheerContext $context
+     * @return int
+     */
     public function run(CommandInput $input, CommandOutput $output, ?CacheerContext $context): int
     {
         if ($context === null || $context->pdo() === null) {

@@ -34,16 +34,28 @@ final class StatsCommand implements Command
         FlushableScopeStore::class => 'scope-flush',
     ];
 
+    /**
+     * @return string
+     */
     public function name(): string
     {
         return 'stats';
     }
 
+    /**
+     * @return string
+     */
     public function description(): string
     {
         return 'Show the configured store, its capabilities, and entry count.';
     }
 
+    /**
+     * @param CommandInput $input
+     * @param CommandOutput $output
+     * @param ?CacheerContext $context
+     * @return int
+     */
     public function run(CommandInput $input, CommandOutput $output, ?CacheerContext $context): int
     {
         if ($context === null) {
@@ -72,11 +84,19 @@ final class StatsCommand implements Command
         return 0;
     }
 
+    /**
+     * @param InspectableStore $store
+     * @return \Generator
+     */
     private function iterate(InspectableStore $store): \Generator
     {
         yield from $store->entries();
     }
 
+    /**
+     * @param CommandOutput $output
+     * @return int
+     */
     private function noConfig(CommandOutput $output): int
     {
         $output->line('No cacheer.config.php found.')->set('error', 'no_config');

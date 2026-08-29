@@ -19,14 +19,29 @@ final class MetricsCollector
      */
     private array $counts = [];
 
+    /**
+     * @var int
+     */
     private int $bytesWritten = 0;
 
+    /**
+     * @var float
+     */
     private float $durationSum = 0.0;
 
+    /**
+     * @var int
+     */
     private int $durationSamples = 0;
 
+    /**
+     * @var float
+     */
     private float $durationMax = 0.0;
 
+    /**
+     * @param CacheEvent $event
+     */
     public function record(CacheEvent $event): void
     {
         $this->counts[$event->type->value] = ($this->counts[$event->type->value] ?? 0) + 1;
@@ -42,11 +57,18 @@ final class MetricsCollector
         }
     }
 
+    /**
+     * @param CacheEventType $type
+     * @return int
+     */
     public function count(CacheEventType $type): int
     {
         return $this->counts[$type->value] ?? 0;
     }
 
+    /**
+     * @return float
+     */
     public function hitRate(): float
     {
         $hits = $this->count(CacheEventType::Hit);

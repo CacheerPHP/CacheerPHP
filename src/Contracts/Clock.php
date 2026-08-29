@@ -12,9 +12,18 @@ namespace Silviooosilva\CacheerPhp\Contracts;
  */
 interface Clock
 {
+    /**
+     * @return int
+     */
     public function now(): int;
 
+    /**
+     * @return float
+     */
     public function nowFloat(): float;
 
+    /**
+     * @param int $microseconds
+     */
     public function sleep(int $microseconds): void;
 }

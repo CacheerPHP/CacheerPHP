@@ -23,6 +23,7 @@ interface CapabilityAware
      * Whether this store really honors the given capability interface.
      *
      * @param class-string $capability
+     * @return bool
      */
     public function supports(string $capability): bool;
 }

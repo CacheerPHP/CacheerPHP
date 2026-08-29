@@ -39,6 +39,9 @@ final class Application
         }
     }
 
+    /**
+     * @param Command $command
+     */
     public function add(Command $command): void
     {
         $this->commands[$command->name()] = $command;
@@ -46,6 +49,8 @@ final class Application
 
     /**
      * @param list<string> $argv Full argv (index 0 is the script name).
+     * @param ?CacheerContext $context
+     * @return int
      */
     public function run(array $argv, ?CacheerContext $context = null): int
     {
@@ -75,6 +80,9 @@ final class Application
         return $code;
     }
 
+    /**
+     * @return string
+     */
     private function listing(): string
     {
         $lines = ['CacheerPHP CLI', '', 'Commands:'];
@@ -90,6 +98,9 @@ final class Application
      * working directory, or --config=path). The file returns a Store, or an
      * array of ['store' => Store, 'pdo' => PDO, 'table' => string]. Returns null
      * when no config is present, so environment-only commands still work.
+     *
+     * @param CommandInput $input
+     * @return ?CacheerContext
      */
     private function bootstrap(CommandInput $input): ?CacheerContext
     {

@@ -21,15 +21,29 @@ final class Psr16Cache implements CacheInterface
 {
     private const RESERVED = '{}()/\\@:';
 
+    /**
+     * @param Cache $cache
+     */
     public function __construct(private readonly Cache $cache)
     {
     }
 
+    /**
+     * @param string $key
+     * @param mixed $default
+     * @return mixed
+     */
     public function get(string $key, mixed $default = null): mixed
     {
         return $this->cache->get($this->validateKey($key), $default);
     }
 
+    /**
+     * @param string $key
+     * @param mixed $value
+     * @param DateInterval|int|null $ttl
+     * @return bool
+     */
     public function set(string $key, mixed $value, null|int|DateInterval $ttl = null): bool
     {
         $key = $this->validateKey($key);
@@ -46,6 +60,10 @@ final class Psr16Cache implements CacheInterface
         return true;
     }
 
+    /**
+     * @param string $key
+     * @return bool
+     */
     public function delete(string $key): bool
     {
         $this->cache->delete($this->validateKey($key));
@@ -53,6 +71,9 @@ final class Psr16Cache implements CacheInterface
         return true;
     }
 
+    /**
+     * @return bool
+     */
     public function clear(): bool
     {
         $this->cache->clear();
@@ -62,6 +83,7 @@ final class Psr16Cache implements CacheInterface
 
     /**
      * @param iterable<string> $keys
+     * @param mixed $default
      * @return iterable<string, mixed>
      */
     public function getMultiple(iterable $keys, mixed $default = null): iterable
@@ -71,6 +93,8 @@ final class Psr16Cache implements CacheInterface
 
     /**
      * @param iterable<string, mixed> $values
+     * @param DateInterval|int|null $ttl
+     * @return bool
      */
     public function setMultiple(iterable $values, null|int|DateInterval $ttl = null): bool
     {
@@ -85,6 +109,7 @@ final class Psr16Cache implements CacheInterface
 
     /**
      * @param iterable<string> $keys
+     * @return bool
      */
     public function deleteMultiple(iterable $keys): bool
     {
@@ -93,11 +118,19 @@ final class Psr16Cache implements CacheInterface
         return true;
     }
 
+    /**
+     * @param string $key
+     * @return bool
+     */
     public function has(string $key): bool
     {
         return $this->cache->has($this->validateKey($key));
     }
 
+    /**
+     * @param string $key
+     * @return string
+     */
     private function validateKey(string $key): string
     {
         if ($key === '') {
@@ -127,6 +160,10 @@ final class Psr16Cache implements CacheInterface
         return $validated;
     }
 
+    /**
+     * @param DateInterval|int|null $ttl
+     * @return ?int
+     */
     private function normalizeTtl(null|int|DateInterval $ttl): ?int
     {
         if ($ttl === null) {

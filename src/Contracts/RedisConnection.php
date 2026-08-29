@@ -14,9 +14,15 @@ namespace Silviooosilva\CacheerPhp\Contracts;
  */
 interface RedisConnection
 {
+    /**
+     * @param string $key
+     * @return ?string
+     */
     public function get(string $key): ?string;
 
     /**
+     * @param string $key
+     * @param string $value
      * @param int|null $ttlMillis Expiry in milliseconds, or null for no expiry.
      */
     public function set(string $key, string $value, ?int $ttlMillis): void;
@@ -24,7 +30,10 @@ interface RedisConnection
     /**
      * SET ... NX: store only if the key is absent. Returns whether it was stored.
      *
+     * @param string $key
+     * @param string $value
      * @param int|null $ttlMillis Expiry in milliseconds, or null for no expiry.
+     * @return bool
      */
     public function setIfAbsent(string $key, string $value, ?int $ttlMillis): bool;
 
@@ -43,20 +52,28 @@ interface RedisConnection
     /**
      * Iterate keys matching a glob pattern via SCAN (never the blocking KEYS).
      *
+     * @param string $match
      * @return iterable<string>
      */
     public function scan(string $match): iterable;
 
+    /**
+     * @param string $set
+     * @param string $member
+     */
     public function sAdd(string $set, string $member): void;
 
     /**
+     * @param string $set
      * @return list<string>
      */
     public function sMembers(string $set): array;
 
     /**
+     * @param string $script
      * @param list<string> $keys
      * @param list<string> $args
+     * @return mixed
      */
     public function eval(string $script, array $keys, array $args): mixed;
 }

@@ -37,22 +37,49 @@ use Silviooosilva\CacheerPhp\Storage\Encryption\Keyring;
  */
 final class CacheerBuilder
 {
+    /**
+     * @var string
+     */
     private string $driver = 'array';
 
+    /**
+     * @var ?string
+     */
     private ?string $directory = null;
 
+    /**
+     * @var ?PDO
+     */
     private ?PDO $pdo = null;
 
+    /**
+     * @var string
+     */
     private string $table = 'cacheer_store';
 
+    /**
+     * @var ?RedisConnection
+     */
     private ?RedisConnection $connection = null;
 
+    /**
+     * @var string
+     */
     private string $prefix = 'cacheer';
 
+    /**
+     * @var ?Clock
+     */
     private ?Clock $clock = null;
 
+    /**
+     * @var PipelineConfig
+     */
     private PipelineConfig $pipeline;
 
+    /**
+     * @var ?CachePolicy
+     */
     private ?CachePolicy $policy = null;
 
     public function __construct()
@@ -62,14 +89,21 @@ final class CacheerBuilder
 
     // ---------------------------------------------------------------- store --
 
-    public function inMemory(): self
+    /**
+     * @return CacheerBuilder
+     */
+    public function inMemory(): CacheerBuilder
     {
         $this->driver = 'array';
 
         return $this;
     }
 
-    public function file(string $directory): self
+    /**
+     * @param string $directory
+     * @return CacheerBuilder
+     */
+    public function file(string $directory): CacheerBuilder
     {
         $this->driver = 'file';
         $this->directory = $directory;
@@ -77,7 +111,12 @@ final class CacheerBuilder
         return $this;
     }
 
-    public function database(PDO $pdo, string $table = 'cacheer_store'): self
+    /**
+     * @param PDO $pdo
+     * @param string $table
+     * @return CacheerBuilder
+     */
+    public function database(PDO $pdo, string $table = 'cacheer_store'): CacheerBuilder
     {
         $this->driver = 'database';
         $this->pdo = $pdo;
@@ -86,7 +125,12 @@ final class CacheerBuilder
         return $this;
     }
 
-    public function redis(RedisConnection $connection, string $prefix = 'cacheer'): self
+    /**
+     * @param RedisConnection $connection
+     * @param string $prefix
+     * @return CacheerBuilder
+     */
+    public function redis(RedisConnection $connection, string $prefix = 'cacheer'): CacheerBuilder
     {
         $this->driver = 'redis';
         $this->connection = $connection;
@@ -97,6 +141,10 @@ final class CacheerBuilder
 
     // ------------------------------------------------------------- pipeline --
 
+    /**
+     * @param Serializer $serializer
+     * @return CacheerBuilder
+     */
     public function serializer(Serializer $serializer): self
     {
         $this->pipeline = $this->pipeline->withSerializer($serializer);
@@ -104,6 +152,9 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @return CacheerBuilder
+     */
     public function json(): self
     {
         $this->pipeline = $this->pipeline->withJsonSerializer();
@@ -111,6 +162,10 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param Compressor $compressor
+     * @return CacheerBuilder
+     */
     public function compressor(Compressor $compressor): self
     {
         $this->pipeline = $this->pipeline->withCompressor($compressor);
@@ -118,6 +173,10 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param int $level
+     * @return CacheerBuilder
+     */
     public function gzip(int $level = 6): self
     {
         $this->pipeline = $this->pipeline->withGzip($level);
@@ -125,6 +184,10 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param Encrypter $encrypter
+     * @return CacheerBuilder
+     */
     public function encrypter(Encrypter $encrypter): self
     {
         $this->pipeline = $this->pipeline->withEncrypter($encrypter);
@@ -132,6 +195,10 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param Keyring $keyring
+     * @return CacheerBuilder
+     */
     public function encrypt(Keyring $keyring): self
     {
         $this->pipeline = $this->pipeline->withKeyring($keyring);
@@ -141,12 +208,18 @@ final class CacheerBuilder
 
     /**
      * @param array<string, string> $passphrases key id => passphrase
+     * @param string $activeId
+     * @return CacheerBuilder
      */
     public function encryptWithPassphrases(array $passphrases, string $activeId): self
     {
         return $this->encrypt(Keyring::fromPassphrases($passphrases, $activeId));
     }
 
+    /**
+     * @param int $bytes
+     * @return CacheerBuilder
+     */
     public function maxValueBytes(int $bytes): self
     {
         $this->pipeline = $this->pipeline->withMaxValueBytes($bytes);
@@ -156,6 +229,10 @@ final class CacheerBuilder
 
     // --------------------------------------------------------------- policy --
 
+    /**
+     * @param Ttl|string|int $ttl
+     * @return CacheerBuilder
+     */
     public function defaultTtl(Ttl|int|string $ttl): self
     {
         $this->policy = $this->policy()->withTtl($ttl);
@@ -163,6 +240,11 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param float $fraction
+     * @param ?Closure $randomizer
+     * @return CacheerBuilder
+     */
     public function jitter(float $fraction, ?Closure $randomizer = null): self
     {
         $this->policy = $this->policy()->withJitter($fraction, $randomizer);
@@ -170,6 +252,10 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param Ttl|string|int $ttl
+     * @return CacheerBuilder
+     */
     public function negativeTtl(Ttl|int|string $ttl): self
     {
         $this->policy = $this->policy()->withNegativeTtl($ttl);
@@ -177,6 +263,10 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param Ttl|string|int $grace
+     * @return CacheerBuilder
+     */
     public function serveStaleOnError(Ttl|int|string $grace): self
     {
         $this->policy = $this->policy()->withServeStaleOnError($grace);
@@ -184,6 +274,10 @@ final class CacheerBuilder
         return $this;
     }
 
+    /**
+     * @param Clock $clock
+     * @return CacheerBuilder
+     */
     public function clock(Clock $clock): self
     {
         $this->clock = $clock;
@@ -193,6 +287,8 @@ final class CacheerBuilder
 
     /**
      * Build the cache.
+     *
+     * @return Cacheer
      */
     public function create(): Cacheer
     {
@@ -206,6 +302,9 @@ final class CacheerBuilder
         return $this->policy !== null ? $cache->withPolicy($this->policy) : $cache;
     }
 
+    /**
+     * @return CachePolicy
+     */
     private function policy(): CachePolicy
     {
         return $this->policy ??= CachePolicy::defaults();
@@ -214,6 +313,7 @@ final class CacheerBuilder
     /**
      * @template T
      * @param T|null $value
+     * @param string $call
      * @return T
      */
     private function require(mixed $value, string $call): mixed

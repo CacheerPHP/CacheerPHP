@@ -11,26 +11,42 @@ namespace Silviooosilva\CacheerPhp\Exceptions;
  */
 final class CorruptedPayloadException extends \RuntimeException implements CacheException
 {
+    /**
+     * @return CorruptedPayloadException
+     */
     public static function truncatedHeader(): self
     {
         return new self('Cache payload is truncated: the value envelope header is incomplete.');
     }
 
+    /**
+     * @return CorruptedPayloadException
+     */
     public static function truncatedCiphertext(): self
     {
         return new self('Cache payload is truncated: the ciphertext is shorter than the nonce and tag.');
     }
 
+    /**
+     * @return CorruptedPayloadException
+     */
     public static function authenticationFailed(): self
     {
         return new self('Cache payload failed authentication: wrong key or tampered ciphertext.');
     }
 
+    /**
+     * @return CorruptedPayloadException
+     */
     public static function malformedCompression(): self
     {
         return new self('Cache payload could not be decompressed: the compressed stream is malformed.');
     }
 
+    /**
+     * @param string $serializer
+     * @return CorruptedPayloadException
+     */
     public static function unserializationFailed(string $serializer): self
     {
         return new self(sprintf('Cache payload could not be decoded by the "%s" serializer.', $serializer));

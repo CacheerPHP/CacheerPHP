@@ -28,6 +28,13 @@ final readonly class Envelope
 
     private const SEP = "\x1E";
 
+    /**
+     * @param string $serializerId
+     * @param string $compressorId
+     * @param string $encrypterId
+     * @param string $keyId
+     * @param string $payload
+     */
     public function __construct(
         public string $serializerId,
         public string $compressorId,
@@ -39,12 +46,18 @@ final readonly class Envelope
 
     /**
      * Whether a raw blob is a v6 envelope (as opposed to a legacy v5 payload).
+     *
+     * @param string $blob
+     * @return bool
      */
     public static function isEnvelope(string $blob): bool
     {
         return str_starts_with($blob, self::MAGIC);
     }
 
+    /**
+     * @return string
+     */
     public function toString(): string
     {
         return self::MAGIC
@@ -56,6 +69,10 @@ final readonly class Envelope
             . $this->payload;
     }
 
+    /**
+     * @param string $blob
+     * @return Envelope
+     */
     public static function fromString(string $blob): self
     {
         if (!self::isEnvelope($blob)) {

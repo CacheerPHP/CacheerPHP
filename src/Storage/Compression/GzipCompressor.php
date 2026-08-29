@@ -21,6 +21,9 @@ final class GzipCompressor implements Compressor
 {
     private const INPUT_CHUNK_BYTES = 4096;
 
+    /**
+     * @param int $level
+     */
     public function __construct(private readonly int $level = 6)
     {
         if (!function_exists('gzcompress')) {
@@ -32,11 +35,18 @@ final class GzipCompressor implements Compressor
         }
     }
 
+    /**
+     * @return string
+     */
     public function id(): string
     {
         return 'gzip';
     }
 
+    /**
+     * @param string $data
+     * @return string
+     */
     public function compress(string $data): string
     {
         $compressed = gzcompress($data, $this->level);
@@ -48,6 +58,11 @@ final class GzipCompressor implements Compressor
         return $compressed;
     }
 
+    /**
+     * @param string $data
+     * @param int $maxBytes
+     * @return string
+     */
     public function decompress(string $data, int $maxBytes = 0): string
     {
         $context = inflate_init(ZLIB_ENCODING_DEFLATE);

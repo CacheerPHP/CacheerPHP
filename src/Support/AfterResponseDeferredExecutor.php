@@ -23,8 +23,14 @@ final class AfterResponseDeferredExecutor implements DeferredExecutor
      */
     private array $tasks = [];
 
+    /**
+     * @var bool
+     */
     private bool $registered = false;
 
+    /**
+     * @param callable $task
+     */
     public function defer(callable $task): void
     {
         $this->tasks[] = $task;
@@ -58,6 +64,9 @@ final class AfterResponseDeferredExecutor implements DeferredExecutor
         }
     }
 
+    /**
+     * @return int
+     */
     public function pending(): int
     {
         return count($this->tasks);

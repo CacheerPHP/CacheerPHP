@@ -11,6 +11,11 @@ namespace Silviooosilva\CacheerPhp\Exceptions;
  */
 final class ValueTooLargeException extends \RuntimeException implements CacheException
 {
+    /**
+     * @param int $size
+     * @param int $limit
+     * @return ValueTooLargeException
+     */
     public static function onWrite(int $size, int $limit): self
     {
         return new self(sprintf(
@@ -20,6 +25,10 @@ final class ValueTooLargeException extends \RuntimeException implements CacheExc
         ));
     }
 
+    /**
+     * @param int $limit
+     * @return ValueTooLargeException
+     */
     public static function onRead(int $limit): self
     {
         return new self(sprintf(

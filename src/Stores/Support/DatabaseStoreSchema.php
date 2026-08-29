@@ -18,6 +18,10 @@ use RuntimeException;
  */
 final class DatabaseStoreSchema
 {
+    /**
+     * @param PDO $pdo
+     * @param string $table
+     */
     public static function migrate(PDO $pdo, string $table): void
     {
         self::assertSafeTableName($table);
@@ -30,6 +34,8 @@ final class DatabaseStoreSchema
     /**
      * The DDL that migrate() would run, for previews (CLI dry runs) and docs.
      *
+     * @param PDO $pdo
+     * @param string $table
      * @return list<string>
      */
     public static function sqlFor(PDO $pdo, string $table): array
@@ -39,6 +45,10 @@ final class DatabaseStoreSchema
         return self::statements($pdo, $table);
     }
 
+    /**
+     * @param PDO $pdo
+     * @param string $table
+     */
     public static function drop(PDO $pdo, string $table): void
     {
         self::assertSafeTableName($table);
@@ -49,6 +59,8 @@ final class DatabaseStoreSchema
     }
 
     /**
+     * @param PDO $pdo
+     * @param string $table
      * @return list<string>
      */
     private static function statements(PDO $pdo, string $table): array
@@ -64,6 +76,7 @@ final class DatabaseStoreSchema
     }
 
     /**
+     * @param string $t
      * @return list<string>
      */
     private static function sqlite(string $t): array
@@ -86,6 +99,7 @@ final class DatabaseStoreSchema
     }
 
     /**
+     * @param string $t
      * @return list<string>
      */
     private static function mysql(string $t): array
@@ -115,6 +129,7 @@ final class DatabaseStoreSchema
     }
 
     /**
+     * @param string $t
      * @return list<string>
      */
     private static function pgsql(string $t): array
@@ -136,6 +151,9 @@ final class DatabaseStoreSchema
         ];
     }
 
+    /**
+     * @param string $table
+     */
     public static function assertSafeTableName(string $table): void
     {
         if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table) !== 1) {

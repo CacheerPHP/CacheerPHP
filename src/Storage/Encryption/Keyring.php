@@ -24,10 +24,14 @@ final class Keyring
      */
     private array $keys;
 
+    /**
+     * @var string
+     */
     private string $activeId;
 
     /**
      * @param array<string, string> $keys Map of key id to a raw 32-byte key.
+     * @param string $activeId
      */
     public function __construct(array $keys, string $activeId)
     {
@@ -58,6 +62,8 @@ final class Keyring
      * Derive keys from human-chosen passphrases via SHA-256.
      *
      * @param array<string, string> $passphrases Map of key id to passphrase.
+     * @param string $activeId
+     * @return Keyring
      */
     public static function fromPassphrases(array $passphrases, string $activeId): self
     {
@@ -69,16 +75,26 @@ final class Keyring
         return new self($keys, $activeId);
     }
 
+    /**
+     * @return string
+     */
     public function activeId(): string
     {
         return $this->activeId;
     }
 
+    /**
+     * @return string
+     */
     public function activeKey(): string
     {
         return $this->keys[$this->activeId];
     }
 
+    /**
+     * @param string $id
+     * @return string
+     */
     public function keyFor(string $id): string
     {
         if (!array_key_exists($id, $this->keys)) {
@@ -88,6 +104,9 @@ final class Keyring
         return $this->keys[$id];
     }
 
+    /**
+     * @param string $id
+     */
     private static function assertValidId(string $id): void
     {
         if ($id === '' || preg_match('/[^\x20-\x7E]/', $id) === 1) {

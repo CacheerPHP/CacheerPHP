@@ -14,16 +14,28 @@ use Silviooosilva\CacheerPhp\Console\CommandOutput;
  */
 final class DoctorCommand implements Command
 {
+    /**
+     * @return string
+     */
     public function name(): string
     {
         return 'doctor';
     }
 
+    /**
+     * @return string
+     */
     public function description(): string
     {
         return 'Check the PHP runtime, optional extensions, and cache configuration.';
     }
 
+    /**
+     * @param CommandInput $input
+     * @param CommandOutput $output
+     * @param ?CacheerContext $context
+     * @return int
+     */
     public function run(CommandInput $input, CommandOutput $output, ?CacheerContext $context): int
     {
         $checks = [];
@@ -54,6 +66,10 @@ final class DoctorCommand implements Command
     }
 
     /**
+     * @param string $name
+     * @param bool $ok
+     * @param string $detail
+     * @param bool $critical
      * @return array{name: string, ok: bool, detail: string, critical: bool}
      */
     private function check(string $name, bool $ok, string $detail, bool $critical = false): array

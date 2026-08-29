@@ -28,10 +28,22 @@ final class RedisLock implements Lock
         return 0
         LUA;
 
+    /**
+     * @var string
+     */
     private readonly string $token;
 
+    /**
+     * @var bool
+     */
     private bool $held = false;
 
+    /**
+     * @param RedisConnection $redis
+     * @param Clock $clock
+     * @param string $key
+     * @param Ttl $ttl
+     */
     public function __construct(
         private readonly RedisConnection $redis,
         private readonly Clock $clock,
@@ -41,6 +53,9 @@ final class RedisLock implements Lock
         $this->token = bin2hex(random_bytes(16));
     }
 
+    /**
+     * @return bool
+     */
     public function acquire(): bool
     {
         $seconds = $this->ttl->inSeconds();
@@ -49,6 +64,10 @@ final class RedisLock implements Lock
         return $this->held;
     }
 
+    /**
+     * @param float $seconds
+     * @return bool
+     */
     public function block(float $seconds): bool
     {
         $deadline = $this->clock->nowFloat() + $seconds;
@@ -66,6 +85,9 @@ final class RedisLock implements Lock
         }
     }
 
+    /**
+     * @return bool
+     */
     public function release(): bool
     {
         if (!$this->held) {

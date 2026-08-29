@@ -20,10 +20,23 @@ final class DatabaseLock implements Lock
 {
     private const RETRY_MICROSECONDS = 50_000;
 
+    /**
+     * @var string
+     */
     private readonly string $owner;
 
+    /**
+     * @var bool
+     */
     private bool $held = false;
 
+    /**
+     * @param PDO $pdo
+     * @param string $table
+     * @param Clock $clock
+     * @param string $name
+     * @param Ttl $ttl
+     */
     public function __construct(
         private readonly PDO $pdo,
         private readonly string $table,
@@ -34,6 +47,9 @@ final class DatabaseLock implements Lock
         $this->owner = bin2hex(random_bytes(16));
     }
 
+    /**
+     * @return bool
+     */
     public function acquire(): bool
     {
         $delete = $this->pdo->prepare("DELETE FROM {$this->table}_locks WHERE lock_name = :name AND expires_at <= :now");
@@ -55,6 +71,10 @@ final class DatabaseLock implements Lock
         return true;
     }
 
+    /**
+     * @param float $seconds
+     * @return bool
+     */
     public function block(float $seconds): bool
     {
         $deadline = $this->clock->nowFloat() + $seconds;
@@ -72,6 +92,9 @@ final class DatabaseLock implements Lock
         }
     }
 
+    /**
+     * @return bool
+     */
     public function release(): bool
     {
         if (!$this->held) {

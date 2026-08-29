@@ -17,16 +17,27 @@ final class JsonSerializer implements Serializer
 {
     private const ENCODE_FLAGS = JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
 
+    /**
+     * @return string
+     */
     public function id(): string
     {
         return 'json';
     }
 
+    /**
+     * @param mixed $value
+     * @return string
+     */
     public function serialize(mixed $value): string
     {
         return json_encode($value, self::ENCODE_FLAGS);
     }
 
+    /**
+     * @param string $payload
+     * @return mixed
+     */
     public function unserialize(string $payload): mixed
     {
         try {

@@ -15,13 +15,21 @@ interface Compressor
 {
     /**
      * Stable, envelope-safe identifier (ASCII, no 0x1E separators), e.g. "gzip".
+     *
+     * @return string
      */
     public function id(): string;
 
+    /**
+     * @param string $data
+     * @return string
+     */
     public function compress(string $data): string;
 
     /**
+     * @param string $data
      * @param int $maxBytes Hard ceiling for the decompressed output; 0 disables the check.
+     * @return string
      */
     public function decompress(string $data, int $maxBytes = 0): string;
 }

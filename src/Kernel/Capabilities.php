@@ -25,6 +25,7 @@ final class Capabilities
      * Prefer this when the next step is a call, so the narrowed type survives.
      *
      * @template T of object
+     * @param Store $store
      * @param class-string<T> $capability
      * @return T|null
      */
@@ -42,7 +43,9 @@ final class Capabilities
     }
 
     /**
+     * @param Store $store
      * @param class-string $capability
+     * @return bool
      */
     public static function supports(Store $store, string $capability): bool
     {
@@ -54,7 +57,9 @@ final class Capabilities
      * capability and the operation that needed it.
      *
      * @template T of object
+     * @param Store $store
      * @param class-string<T> $capability
+     * @param string $operation
      * @return T
      */
     public static function require(Store $store, string $capability, string $operation): object

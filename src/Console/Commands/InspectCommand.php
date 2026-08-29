@@ -17,16 +17,28 @@ use Silviooosilva\CacheerPhp\Support\SystemClock;
  */
 final class InspectCommand implements Command
 {
+    /**
+     * @return string
+     */
     public function name(): string
     {
         return 'inspect';
     }
 
+    /**
+     * @return string
+     */
     public function description(): string
     {
         return 'Show metadata for a key: cacheer inspect <key>';
     }
 
+    /**
+     * @param CommandInput $input
+     * @param CommandOutput $output
+     * @param ?CacheerContext $context
+     * @return int
+     */
     public function run(CommandInput $input, CommandOutput $output, ?CacheerContext $context): int
     {
         if ($context === null) {

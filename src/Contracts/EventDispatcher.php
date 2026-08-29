@@ -12,5 +12,8 @@ use Silviooosilva\CacheerPhp\Observability\CacheEvent;
  */
 interface EventDispatcher
 {
+    /**
+     * @param CacheEvent $event
+     */
     public function dispatch(CacheEvent $event): void;
 }

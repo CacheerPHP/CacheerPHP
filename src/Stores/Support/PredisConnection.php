@@ -12,10 +12,17 @@ use Silviooosilva\CacheerPhp\Contracts\RedisConnection;
  */
 final class PredisConnection implements RedisConnection
 {
+    /**
+     * @param ClientInterface $client
+     */
     public function __construct(private readonly ClientInterface $client)
     {
     }
 
+    /**
+     * @param string $key
+     * @return ?string
+     */
     public function get(string $key): ?string
     {
         /** @var string|null $value */
@@ -24,6 +31,11 @@ final class PredisConnection implements RedisConnection
         return $value;
     }
 
+    /**
+     * @param string $key
+     * @param string $value
+     * @param ?int $ttlMillis
+     */
     public function set(string $key, string $value, ?int $ttlMillis): void
     {
         if ($ttlMillis === null) {
@@ -35,6 +47,12 @@ final class PredisConnection implements RedisConnection
         $this->client->set($key, $value, 'PX', $ttlMillis);
     }
 
+    /**
+     * @param string $key
+     * @param string $value
+     * @param ?int $ttlMillis
+     * @return bool
+     */
     public function setIfAbsent(string $key, string $value, ?int $ttlMillis): bool
     {
         $result = $ttlMillis === null
@@ -44,6 +62,10 @@ final class PredisConnection implements RedisConnection
         return $result !== null;
     }
 
+    /**
+     * @param list<string> $keys
+     * @return int
+     */
     public function delete(array $keys): int
     {
         if ($keys === []) {
@@ -53,6 +75,10 @@ final class PredisConnection implements RedisConnection
         return (int) $this->client->del($keys);
     }
 
+    /**
+     * @param list<string> $keys
+     * @return list<string|null>
+     */
     public function getMany(array $keys): array
     {
         if ($keys === []) {
@@ -65,6 +91,10 @@ final class PredisConnection implements RedisConnection
         return $values;
     }
 
+    /**
+     * @param string $match
+     * @return iterable<string>
+     */
     public function scan(string $match): iterable
     {
         $cursor = '0';
@@ -80,11 +110,19 @@ final class PredisConnection implements RedisConnection
         } while ($cursor !== '0');
     }
 
+    /**
+     * @param string $set
+     * @param string $member
+     */
     public function sAdd(string $set, string $member): void
     {
         $this->client->sadd($set, [$member]);
     }
 
+    /**
+     * @param string $set
+     * @return list<string>
+     */
     public function sMembers(string $set): array
     {
         /** @var list<string> $members */
@@ -93,6 +131,12 @@ final class PredisConnection implements RedisConnection
         return $members;
     }
 
+    /**
+     * @param string $script
+     * @param list<string> $keys
+     * @param list<string> $args
+     * @return mixed
+     */
     public function eval(string $script, array $keys, array $args): mixed
     {
         return $this->client->eval($script, count($keys), ...$keys, ...$args);

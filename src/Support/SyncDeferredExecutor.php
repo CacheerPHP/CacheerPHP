@@ -14,6 +14,9 @@ use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
  */
 final class SyncDeferredExecutor implements DeferredExecutor
 {
+    /**
+     * @param callable $task
+     */
     public function defer(callable $task): void
     {
         $task();

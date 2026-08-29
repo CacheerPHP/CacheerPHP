@@ -50,14 +50,34 @@ final class DatabaseStore implements
     AtomicStore,
     LockingStore
 {
+    /**
+     * @var string
+     */
     private readonly string $driver;
 
+    /**
+     * @var EnvelopeCodec
+     */
     private readonly EnvelopeCodec $codec;
 
+    /**
+     * @var KeyEncoder
+     */
     private readonly KeyEncoder $keyEncoder;
 
+    /**
+     * @var Clock
+     */
     private readonly Clock $clock;
 
+    /**
+     * @param PDO $pdo
+     * @param string $table
+     * @param ?EnvelopeCodec $codec
+     * @param ?KeyEncoder $keyEncoder
+     * @param ?Clock $clock
+     * @param bool $migrateLegacyOnRead
+     */
     public function __construct(
         private readonly PDO $pdo,
         private readonly string $table = 'cacheer_store',
@@ -73,6 +93,10 @@ final class DatabaseStore implements
         $this->clock = $clock ?? new \Silviooosilva\CacheerPhp\Support\SystemClock();
     }
 
+    /**
+     * @param Key $key
+     * @return CacheEntry
+     */
     public function get(Key $key): CacheEntry
     {
         $row = $this->selectRow($this->keyEncoder->encode($key));
@@ -99,6 +123,9 @@ final class DatabaseStore implements
     /**
      * Re-encode a v5 value in the v6 envelope in place, preserving its creation
      * and expiry timestamps.
+     *
+     * @param string $encodedKey
+     * @param mixed $value
      */
     private function rewriteLegacy(string $encodedKey, mixed $value): void
     {
@@ -106,11 +133,20 @@ final class DatabaseStore implements
         $statement->execute([':value' => $this->encode($value), ':key' => $encodedKey]);
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
         $this->upsert($key, $value, $ttl->expiresAt($this->clock));
     }
 
+    /**
+     * @param Key $key
+     * @return bool
+     */
     public function delete(Key $key): bool
     {
         $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE cache_key = :key");
@@ -125,6 +161,10 @@ final class DatabaseStore implements
         $this->pdo->exec("DELETE FROM {$this->table}_tags");
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return list<CacheEntry>
+     */
     public function getMany(iterable $keys): array
     {
         $entries = [];
@@ -136,6 +176,10 @@ final class DatabaseStore implements
         return $entries;
     }
 
+    /**
+     * @param iterable $entries
+     * @param Ttl $ttl
+     */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
         $expiresAt = $ttl->expiresAt($this->clock);
@@ -147,6 +191,10 @@ final class DatabaseStore implements
         });
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return bool
+     */
     public function deleteMany(iterable $keys): bool
     {
         $deleted = true;
@@ -160,6 +208,11 @@ final class DatabaseStore implements
         return $deleted;
     }
 
+    /**
+     * @param Key $key
+     * @param Ttl $ttl
+     * @return bool
+     */
     public function touch(Key $key, Ttl $ttl): bool
     {
         $statement = $this->pdo->prepare(
@@ -173,6 +226,9 @@ final class DatabaseStore implements
         return $statement->rowCount() > 0 && $this->get($key)->isHit();
     }
 
+    /**
+     * @return int
+     */
     public function prune(): int
     {
         $statement = $this->pdo->prepare(
@@ -183,6 +239,10 @@ final class DatabaseStore implements
         return $statement->rowCount();
     }
 
+    /**
+     * @param ?Scope $scope
+     * @return iterable<CacheEntry>
+     */
     public function entries(?Scope $scope = null): iterable
     {
         $scope ??= Scope::root();
@@ -207,6 +267,9 @@ final class DatabaseStore implements
         }
     }
 
+    /**
+     * @param Scope $scope
+     */
     public function clearScope(Scope $scope): void
     {
         if ($scope->isRoot()) {
@@ -220,6 +283,10 @@ final class DatabaseStore implements
         $statement->execute($params);
     }
 
+    /**
+     * @param Key $key
+     * @param string ...$tags
+     */
     public function tag(Key $key, string ...$tags): void
     {
         $encoded = $this->keyEncoder->encode($key);
@@ -230,6 +297,10 @@ final class DatabaseStore implements
         }
     }
 
+    /**
+     * @param string $tag
+     * @return int
+     */
     public function clearTag(string $tag): int
     {
         return $this->transaction(function () use ($tag): int {
@@ -250,6 +321,13 @@ final class DatabaseStore implements
         });
     }
 
+    /**
+     * @param Key $key
+     * @param int $amount
+     * @param ?int $initial
+     * @param ?Ttl $ttl
+     * @return int
+     */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
         return $this->transaction(function () use ($key, $amount, $initial, $ttl): int {
@@ -277,6 +355,13 @@ final class DatabaseStore implements
         });
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $expected
+     * @param mixed $value
+     * @param ?Ttl $ttl
+     * @return bool
+     */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
         return $this->transaction(function () use ($key, $expected, $value, $ttl): bool {
@@ -292,12 +377,19 @@ final class DatabaseStore implements
         });
     }
 
+    /**
+     * @param string $name
+     * @param Ttl $ttl
+     * @return Lock
+     */
     public function lock(string $name, Ttl $ttl): Lock
     {
         return new DatabaseLock($this->pdo, $this->table, $this->clock, $name, $ttl);
     }
 
     /**
+     * @param string $cacheKey
+     * @param bool $forUpdate
      * @return array{scope: string, key_value: string, value: string, created_at: int|string, expires_at: int|string|null}|null
      */
     private function selectRow(string $cacheKey, bool $forUpdate = false): ?array
@@ -315,6 +407,11 @@ final class DatabaseStore implements
         return $row === false ? null : $row;
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param ?int $expiresAt
+     */
     private function upsert(Key $key, mixed $value, ?int $expiresAt): void
     {
         $params = [
@@ -329,6 +426,9 @@ final class DatabaseStore implements
         $this->pdo->prepare($this->upsertSql())->execute($params);
     }
 
+    /**
+     * @return string
+     */
     private function upsertSql(): string
     {
         $columns = '(cache_key, scope, key_value, value, created_at, expires_at)';
@@ -346,6 +446,7 @@ final class DatabaseStore implements
     }
 
     /**
+     * @param Scope $scope
      * @return array{0: string, 1: array<string, int|string>}
      */
     private function scopeClause(Scope $scope): array
@@ -360,6 +461,10 @@ final class DatabaseStore implements
         ];
     }
 
+    /**
+     * @param string $scope
+     * @return Scope
+     */
     private function scopeFromString(string $scope): Scope
     {
         if ($scope === '') {
@@ -369,26 +474,45 @@ final class DatabaseStore implements
         return Scope::fromSegments(explode('/', $scope));
     }
 
+    /**
+     * @param mixed $value
+     * @return string
+     */
     private function encode(mixed $value): string
     {
         return base64_encode($this->codec->encode($value));
     }
 
+    /**
+     * @param string $value
+     * @return mixed
+     */
     private function decode(string $value): mixed
     {
         return $this->codec->decode((string) base64_decode($value, true));
     }
 
+    /**
+     * @param string|int|null $expiresAt
+     * @return bool
+     */
     private function isExpired(int|string|null $expiresAt): bool
     {
         return $expiresAt !== null && (int) $expiresAt <= $this->clock->now();
     }
 
+    /**
+     * @param string|int|null $value
+     * @return ?int
+     */
     private function nullableInt(int|string|null $value): ?int
     {
         return $value === null ? null : (int) $value;
     }
 
+    /**
+     * @return bool
+     */
     private function supportsRowLock(): bool
     {
         return $this->driver === 'mysql' || $this->driver === 'pgsql';

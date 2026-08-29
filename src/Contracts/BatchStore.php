@@ -8,6 +8,12 @@ use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 
+/**
+ * Multi-key reads and writes in one round trip.
+ *
+ * getMany() must return one entry per requested key, in the order asked, so a
+ * miss is represented rather than omitted.
+ */
 interface BatchStore
 {
     /**
@@ -20,11 +26,13 @@ interface BatchStore
 
     /**
      * @param iterable<array{key: Key, value: mixed}> $entries
+     * @param Ttl $ttl
      */
     public function setMany(iterable $entries, Ttl $ttl): void;
 
     /**
      * @param iterable<Key> $keys
+     * @return bool
      */
     public function deleteMany(iterable $keys): bool;
 }

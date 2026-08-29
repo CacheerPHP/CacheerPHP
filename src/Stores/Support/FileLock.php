@@ -27,6 +27,11 @@ final class FileLock implements Lock
      */
     private $handle = null;
 
+    /**
+     * @param string $lockFile
+     * @param Clock $clock
+     * @param Ttl $ttl
+     */
     public function __construct(
         private readonly string $lockFile,
         private readonly Clock $clock,
@@ -34,6 +39,9 @@ final class FileLock implements Lock
     ) {
     }
 
+    /**
+     * @return bool
+     */
     public function acquire(): bool
     {
         if ($this->handle !== null) {
@@ -59,6 +67,10 @@ final class FileLock implements Lock
         return true;
     }
 
+    /**
+     * @param float $seconds
+     * @return bool
+     */
     public function block(float $seconds): bool
     {
         $deadline = $this->clock->nowFloat() + $seconds;
@@ -76,6 +88,9 @@ final class FileLock implements Lock
         }
     }
 
+    /**
+     * @return bool
+     */
     public function release(): bool
     {
         if ($this->handle === null) {

@@ -16,6 +16,17 @@ use Throwable;
  */
 final readonly class CacheEvent
 {
+    /**
+     * @param CacheEventType $type
+     * @param string $store
+     * @param ?string $key
+     * @param float $durationMicros
+     * @param ?int $bytes
+     * @param ?int $count
+     * @param ?Throwable $error
+     * @param bool $hasValue
+     * @param mixed $value
+     */
     private function __construct(
         public CacheEventType $type,
         public string $store,
@@ -29,60 +40,127 @@ final readonly class CacheEvent
     ) {
     }
 
+    /**
+     * @param string $store
+     * @param string $key
+     * @param float $duration
+     * @param ?int $bytes
+     * @param bool $hasValue
+     * @param mixed $value
+     * @return CacheEvent
+     */
     public static function hit(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null): self
     {
         return new self(CacheEventType::Hit, $store, $key, $duration, $bytes, hasValue: $hasValue, value: $value);
     }
 
+    /**
+     * @param string $store
+     * @param string $key
+     * @param float $duration
+     * @return CacheEvent
+     */
     public static function miss(string $store, string $key, float $duration): self
     {
         return new self(CacheEventType::Miss, $store, $key, $duration);
     }
 
     /**
+     * @param string $store
+     * @param string $key
+     * @param float $duration
+     * @param ?int $bytes
+     * @param bool $hasValue
+     * @param mixed $value
      * @param int|null $count Optional quantity the write carries — a counter's new
-     *                        value after increment(), or how many tags were added.
+                       value after increment(), or how many tags were added.
+     * @return CacheEvent
      */
     public static function written(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null, ?int $count = null): self
     {
         return new self(CacheEventType::Write, $store, $key, $duration, $bytes, $count, hasValue: $hasValue, value: $value);
     }
 
+    /**
+     * @param string $store
+     * @param string $key
+     * @param float $duration
+     * @param bool $existed
+     * @return CacheEvent
+     */
     public static function deleted(string $store, string $key, float $duration, bool $existed): self
     {
         return new self(CacheEventType::Delete, $store, $key, $duration, count: $existed ? 1 : 0);
     }
 
+    /**
+     * @param string $store
+     * @param float $duration
+     * @return CacheEvent
+     */
     public static function cleared(string $store, float $duration): self
     {
         return new self(CacheEventType::Clear, $store, null, $duration);
     }
 
+    /**
+     * @param string $store
+     * @param float $duration
+     * @param int $removed
+     * @return CacheEvent
+     */
     public static function pruned(string $store, float $duration, int $removed): self
     {
         return new self(CacheEventType::Prune, $store, null, $duration, count: $removed);
     }
 
+    /**
+     * @param string $store
+     * @param ?string $key
+     * @param float $duration
+     * @param Throwable $error
+     * @return CacheEvent
+     */
     public static function failed(string $store, ?string $key, float $duration, Throwable $error): self
     {
         return new self(CacheEventType::Failure, $store, $key, $duration, error: $error);
     }
 
+    /**
+     * @param string $store
+     * @param string $key
+     * @return CacheEvent
+     */
     public static function promoted(string $store, string $key): self
     {
         return new self(CacheEventType::Promotion, $store, $key);
     }
 
+    /**
+     * @param string $store
+     * @param string $key
+     * @return CacheEvent
+     */
     public static function staleServed(string $store, string $key): self
     {
         return new self(CacheEventType::StaleServed, $store, $key);
     }
 
+    /**
+     * @param string $store
+     * @param string $key
+     * @return CacheEvent
+     */
     public static function refreshed(string $store, string $key): self
     {
         return new self(CacheEventType::Refresh, $store, $key);
     }
 
+    /**
+     * @param string $store
+     * @param string $key
+     * @return CacheEvent
+     */
     public static function lockContended(string $store, string $key): self
     {
         return new self(CacheEventType::LockContended, $store, $key);

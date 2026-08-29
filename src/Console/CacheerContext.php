@@ -14,6 +14,11 @@ use Silviooosilva\CacheerPhp\Contracts\Store;
  */
 final class CacheerContext
 {
+    /**
+     * @param Store $store
+     * @param ?PDO $pdo
+     * @param string $table
+     */
     public function __construct(
         private readonly Store $store,
         private readonly ?PDO $pdo = null,
@@ -21,16 +26,25 @@ final class CacheerContext
     ) {
     }
 
+    /**
+     * @return Store
+     */
     public function store(): Store
     {
         return $this->store;
     }
 
+    /**
+     * @return ?PDO
+     */
     public function pdo(): ?PDO
     {
         return $this->pdo;
     }
 
+    /**
+     * @return string
+     */
     public function table(): string
     {
         return $this->table;
@@ -39,6 +53,8 @@ final class CacheerContext
     /**
      * A short, human-readable description of the keyspace a mutation targets,
      * for confirmations and dry runs.
+     *
+     * @return string
      */
     public function keyspace(): string
     {

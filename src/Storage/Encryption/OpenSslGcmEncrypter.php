@@ -24,6 +24,9 @@ final class OpenSslGcmEncrypter implements Encrypter
 
     private const TAG_BYTES = 16;
 
+    /**
+     * @param Keyring $keyring
+     */
     public function __construct(private readonly Keyring $keyring)
     {
         if (!in_array(self::CIPHER, openssl_get_cipher_methods(), true)) {
@@ -31,16 +34,26 @@ final class OpenSslGcmEncrypter implements Encrypter
         }
     }
 
+    /**
+     * @return string
+     */
     public function id(): string
     {
         return self::CIPHER;
     }
 
+    /**
+     * @return string
+     */
     public function activeKeyId(): string
     {
         return $this->keyring->activeId();
     }
 
+    /**
+     * @param string $plaintext
+     * @return string
+     */
     public function encrypt(string $plaintext): string
     {
         $nonce = random_bytes(self::NONCE_BYTES);
@@ -64,6 +77,11 @@ final class OpenSslGcmEncrypter implements Encrypter
         return $nonce . $tag . $ciphertext;
     }
 
+    /**
+     * @param string $ciphertext
+     * @param string $keyId
+     * @return string
+     */
     public function decrypt(string $ciphertext, string $keyId): string
     {
         if (strlen($ciphertext) < self::NONCE_BYTES + self::TAG_BYTES) {

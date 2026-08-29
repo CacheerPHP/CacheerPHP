@@ -47,6 +47,14 @@ use UnexpectedValueException;
  */
 final readonly class CacheOperations
 {
+    /**
+     * @param Store $store
+     * @param Scope $scope
+     * @param Clock $clock
+     * @param DeferredExecutor $executor
+     * @param EventDispatcher $events
+     * @param ?CachePolicy $policy
+     */
     public function __construct(
         private Store $store,
         private Scope $scope,
@@ -57,16 +65,25 @@ final readonly class CacheOperations
     ) {
     }
 
+    /**
+     * @return Store
+     */
     public function store(): Store
     {
         return $this->store;
     }
 
+    /**
+     * @return Scope
+     */
     public function scope(): Scope
     {
         return $this->scope;
     }
 
+    /**
+     * @return ?CachePolicy
+     */
     public function policy(): ?CachePolicy
     {
         return $this->policy;
@@ -74,6 +91,10 @@ final readonly class CacheOperations
 
     // ------------------------------------------------------------------ read --
 
+    /**
+     * @param Key|string $key
+     * @return CacheEntry
+     */
     public function entry(string|Key $key): CacheEntry
     {
         $key = $this->key($key);
@@ -81,11 +102,20 @@ final readonly class CacheOperations
         return $this->run('get', $key, fn (): CacheEntry => $this->store->get($key));
     }
 
+    /**
+     * @param Key|string $key
+     * @param mixed $default
+     * @return mixed
+     */
     public function get(string|Key $key, mixed $default = null): mixed
     {
         return $this->entry($key)->valueOr($default);
     }
 
+    /**
+     * @param Key|string $key
+     * @return bool
+     */
     public function has(string|Key $key): bool
     {
         return $this->entry($key)->isHit();
@@ -93,6 +123,7 @@ final readonly class CacheOperations
 
     /**
      * @param iterable<string|Key> $keys
+     * @param mixed $default
      * @return array<string, mixed>
      */
     public function many(iterable $keys, mixed $default = null): array
@@ -132,6 +163,11 @@ final readonly class CacheOperations
 
     // ----------------------------------------------------------------- write --
 
+    /**
+     * @param Key|string $key
+     * @param mixed $value
+     * @param Ttl|DateInterval|string|int|null $ttl
+     */
     public function set(
         string|Key $key,
         mixed $value,
@@ -140,6 +176,12 @@ final readonly class CacheOperations
         $this->put($this->key($key), $value, $this->ttl($ttl, $value));
     }
 
+    /**
+     * @param Key|string $key
+     * @param mixed $value
+     * @param Ttl|DateInterval|string|int|null $ttl
+     * @return bool
+     */
     public function add(
         string|Key $key,
         mixed $value,
@@ -160,6 +202,10 @@ final readonly class CacheOperations
         }
     }
 
+    /**
+     * @param Key|string $key
+     * @return bool
+     */
     public function delete(string|Key $key): bool
     {
         $key = $this->key($key);
@@ -167,6 +213,11 @@ final readonly class CacheOperations
         return $this->run('delete', $key, fn (): bool => $this->store->delete($key));
     }
 
+    /**
+     * @param Key|string $key
+     * @param mixed $default
+     * @return mixed
+     */
     public function pull(string|Key $key, mixed $default = null): mixed
     {
         $key = $this->key($key);
@@ -183,6 +234,7 @@ final readonly class CacheOperations
 
     /**
      * @param iterable<array-key, mixed> $values
+     * @param Ttl|DateInterval|string|int|null $ttl
      */
     public function setMany(
         iterable $values,
@@ -226,6 +278,7 @@ final readonly class CacheOperations
 
     /**
      * @param iterable<string|Key> $keys
+     * @return bool
      */
     public function deleteMany(iterable $keys): bool
     {
@@ -268,6 +321,12 @@ final readonly class CacheOperations
 
     // --------------------------------------------------------------- compute --
 
+    /**
+     * @param Key|string $key
+     * @param Ttl|DateInterval|string|int|null $ttl
+     * @param callable $callback
+     * @return mixed
+     */
     public function remember(
         string|Key $key,
         Ttl|DateInterval|int|string|null $ttl,
@@ -293,6 +352,12 @@ final readonly class CacheOperations
      * refreshes it (deferred via the executor); past $stale it is recomputed
      * synchronously. A cached value must still be present, so this composes with
      * a hard TTL of $stale.
+     *
+     * @param Key|string $key
+     * @param int $fresh
+     * @param int $stale
+     * @param callable $callback
+     * @return mixed
      */
     public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): mixed
     {
@@ -324,12 +389,20 @@ final readonly class CacheOperations
 
     /**
      * @param class-string $capability
+     * @return bool
      */
     public function supports(string $capability): bool
     {
         return Capabilities::supports($this->store, $capability);
     }
 
+    /**
+     * @param Key|string $key
+     * @param int $amount
+     * @param ?int $initial
+     * @param Ttl|DateInterval|string|int|null $ttl
+     * @return int
+     */
     public function increment(
         string|Key $key,
         int $amount = 1,
@@ -347,6 +420,11 @@ final readonly class CacheOperations
         );
     }
 
+    /**
+     * @param Key|string $key
+     * @param Ttl|DateInterval|string|int $ttl
+     * @return bool
+     */
     public function touch(string|Key $key, Ttl|DateInterval|int|string $ttl): bool
     {
         $key = $this->key($key);
@@ -356,6 +434,10 @@ final readonly class CacheOperations
         return $this->run('touch', $key, fn (): bool => $touchable->touch($key, $resolved));
     }
 
+    /**
+     * @param Key|string $key
+     * @param string ...$tags
+     */
     public function tag(string|Key $key, string ...$tags): void
     {
         $key = $this->key($key);
@@ -368,6 +450,10 @@ final readonly class CacheOperations
         });
     }
 
+    /**
+     * @param string $tag
+     * @return int
+     */
     public function flushTag(string $tag): int
     {
         $taggable = Capabilities::require($this->store, TaggableStore::class, 'flushTag');
@@ -375,6 +461,11 @@ final readonly class CacheOperations
         return $this->run('flushTag', null, fn (): int => $taggable->clearTag($this->qualifiedTag($tag)));
     }
 
+    /**
+     * @param string $name
+     * @param Ttl|DateInterval|string|int $ttl
+     * @return Lock
+     */
     public function lock(string $name, Ttl|DateInterval|int|string $ttl = 60): Lock
     {
         $locking = Capabilities::require($this->store, LockingStore::class, 'lock');
@@ -392,6 +483,9 @@ final readonly class CacheOperations
         return $inspectable->entries($this->scope->isRoot() ? null : $this->scope);
     }
 
+    /**
+     * @return int
+     */
     public function prune(): int
     {
         $prunable = Capabilities::require($this->store, PrunableStore::class, 'prune');
@@ -427,6 +521,10 @@ final readonly class CacheOperations
         ];
     }
 
+    /**
+     * @param Scope|string $scope
+     * @return Scope
+     */
     public function nestedScope(string|Scope $scope): Scope
     {
         $scope = is_string($scope) ? Scope::named($scope) : $scope;
@@ -436,6 +534,10 @@ final readonly class CacheOperations
 
     // -------------------------------------------------------------- internals --
 
+    /**
+     * @param Key|string $key
+     * @return Key
+     */
     private function key(string|Key $key): Key
     {
         $key = is_string($key) ? Key::named($key) : $key;
@@ -446,12 +548,19 @@ final readonly class CacheOperations
     /**
      * Tags and lock names are keyspaces of their own, so a scoped cache must not
      * collide with another scope's tag or lock of the same name.
+     *
+     * @param string $tag
+     * @return string
      */
     private function qualifiedTag(string $tag): string
     {
         return $this->scope->isRoot() ? $tag : $this->scope->identity() . '|' . $tag;
     }
 
+    /**
+     * @param string $name
+     * @return string
+     */
     private function qualifiedLockName(string $name): string
     {
         return $this->scope->isRoot() ? $name : $this->scope->identity() . '|' . $name;
@@ -460,6 +569,10 @@ final readonly class CacheOperations
     /**
      * The effective write TTL: what the caller asked for, run through the policy
      * when one is bound.
+     *
+     * @param Ttl|DateInterval|string|int|null $ttl
+     * @param mixed $value
+     * @return Ttl
      */
     private function ttl(Ttl|DateInterval|int|string|null $ttl, mixed $value): Ttl
     {
@@ -470,6 +583,11 @@ final readonly class CacheOperations
         return $this->policy->resolveTtl($ttl instanceof DateInterval ? Ttl::from($ttl) : $ttl, $value);
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     */
     private function put(Key $key, mixed $value, Ttl $ttl): void
     {
         $this->run('set', $key, function () use ($key, $value, $ttl): void {
@@ -477,6 +595,12 @@ final readonly class CacheOperations
         });
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     * @return bool
+     */
     private function addUnlocked(Key $key, mixed $value, Ttl $ttl): bool
     {
         if ($this->entry($key)->isHit()) {
@@ -494,7 +618,10 @@ final readonly class CacheOperations
      * than propagating. The entry is written with the grace added to its TTL, so
      * it is still readable while stale.
      *
+     * @param Key $key
+     * @param Ttl|DateInterval|string|int|null $ttl
      * @param callable(): mixed $callback
+     * @return mixed
      */
     private function rememberServingStale(
         Key $key,
@@ -527,6 +654,12 @@ final readonly class CacheOperations
         return $value;
     }
 
+    /**
+     * @param Ttl|DateInterval|string|int|null $ttl
+     * @param mixed $value
+     * @param int $grace
+     * @return Ttl
+     */
     private function hardTtl(Ttl|DateInterval|int|string|null $ttl, mixed $value, int $grace): Ttl
     {
         $base = $this->ttl($ttl, $value);
@@ -540,7 +673,11 @@ final readonly class CacheOperations
      * store can lock, one caller computes while the rest wait and read the
      * result; otherwise it degrades to a plain compute-and-store.
      *
+     * @param Key $key
+     * @param Ttl|DateInterval|string|int|null $ttl
      * @param callable(): mixed $callback
+     * @param bool $applyPolicy
+     * @return mixed
      */
     private function singleFlight(
         Key $key,
@@ -571,7 +708,11 @@ final readonly class CacheOperations
     }
 
     /**
+     * @param Key $key
+     * @param Ttl|DateInterval|string|int|null $ttl
      * @param callable(): mixed $callback
+     * @param bool $applyPolicy
+     * @return mixed
      */
     private function compute(
         Key $key,
@@ -586,6 +727,8 @@ final readonly class CacheOperations
     }
 
     /**
+     * @param Key $key
+     * @param int $stale
      * @param callable(): mixed $callback
      */
     private function scheduleRefresh(Key $key, int $stale, callable $callback): void
@@ -621,6 +764,10 @@ final readonly class CacheOperations
      * wrapped store cannot — must therefore degrade, not fail, which is why this
      * asks {@see Capabilities} instead of using `instanceof`, and still absorbs
      * an UnsupportedCapabilityException from a store that misreports.
+     *
+     * @param string $prefix
+     * @param Key $key
+     * @return ?Lock
      */
     private function tryLock(string $prefix, Key $key): ?Lock
     {
@@ -637,6 +784,9 @@ final readonly class CacheOperations
         }
     }
 
+    /**
+     * @return string
+     */
     private function storeName(): string
     {
         return (new \ReflectionClass($this->store))->getShortName();
@@ -644,6 +794,8 @@ final readonly class CacheOperations
 
     /**
      * @template T
+     * @param string $name
+     * @param ?Key $key
      * @param callable(): T $operation
      * @return T
      */

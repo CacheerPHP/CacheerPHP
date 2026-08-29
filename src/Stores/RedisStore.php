@@ -51,12 +51,28 @@ final class RedisStore implements
     AtomicStore,
     LockingStore
 {
+    /**
+     * @var EnvelopeCodec
+     */
     private readonly EnvelopeCodec $codec;
 
+    /**
+     * @var KeyEncoder
+     */
     private readonly KeyEncoder $keyEncoder;
 
+    /**
+     * @var Clock
+     */
     private readonly Clock $clock;
 
+    /**
+     * @param RedisConnection $redis
+     * @param string $prefix
+     * @param ?EnvelopeCodec $codec
+     * @param ?KeyEncoder $keyEncoder
+     * @param ?Clock $clock
+     */
     public function __construct(
         private readonly RedisConnection $redis,
         private readonly string $prefix = 'cacheer',
@@ -69,6 +85,10 @@ final class RedisStore implements
         $this->clock = $clock ?? new SystemClock();
     }
 
+    /**
+     * @param Key $key
+     * @return CacheEntry
+     */
     public function get(Key $key): CacheEntry
     {
         $record = $this->readEntry($this->entryKey($key));
@@ -86,11 +106,20 @@ final class RedisStore implements
         return CacheEntry::hit($key, $this->codec->decode($record->blob), $record->createdAt, $record->expiresAt);
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
         $this->write($key, $value, $ttl->expiresAt($this->clock), $ttl->inSeconds());
     }
 
+    /**
+     * @param Key $key
+     * @return bool
+     */
     public function delete(Key $key): bool
     {
         return $this->redis->delete([$this->entryKey($key)]) > 0;
@@ -102,6 +131,10 @@ final class RedisStore implements
         $this->deleteByPattern($this->prefix . ':t:*');
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return list<CacheEntry>
+     */
     public function getMany(iterable $keys): array
     {
         $keyList = $this->keyList($keys);
@@ -119,6 +152,10 @@ final class RedisStore implements
         return $entries;
     }
 
+    /**
+     * @param iterable $entries
+     * @param Ttl $ttl
+     */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
         $expiresAt = $ttl->expiresAt($this->clock);
@@ -129,6 +166,10 @@ final class RedisStore implements
         }
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return bool
+     */
     public function deleteMany(iterable $keys): bool
     {
         $deleted = true;
@@ -140,6 +181,11 @@ final class RedisStore implements
         return $deleted;
     }
 
+    /**
+     * @param Key $key
+     * @param Ttl $ttl
+     * @return bool
+     */
     public function touch(Key $key, Ttl $ttl): bool
     {
         $record = $this->readEntry($this->entryKey($key));
@@ -156,6 +202,9 @@ final class RedisStore implements
         return true;
     }
 
+    /**
+     * @return int
+     */
     public function prune(): int
     {
         $removed = 0;
@@ -170,6 +219,10 @@ final class RedisStore implements
         return $removed;
     }
 
+    /**
+     * @param ?Scope $scope
+     * @return iterable<CacheEntry>
+     */
     public function entries(?Scope $scope = null): iterable
     {
         $scope ??= Scope::root();
@@ -187,6 +240,9 @@ final class RedisStore implements
         }
     }
 
+    /**
+     * @param Scope $scope
+     */
     public function clearScope(Scope $scope): void
     {
         if ($scope->isRoot()) {
@@ -208,6 +264,10 @@ final class RedisStore implements
         }
     }
 
+    /**
+     * @param Key $key
+     * @param string ...$tags
+     */
     public function tag(Key $key, string ...$tags): void
     {
         foreach ($tags as $tag) {
@@ -215,6 +275,10 @@ final class RedisStore implements
         }
     }
 
+    /**
+     * @param string $tag
+     * @return int
+     */
     public function clearTag(string $tag): int
     {
         $members = $this->redis->sMembers($this->tagKey($tag));
@@ -224,6 +288,13 @@ final class RedisStore implements
         return $removed;
     }
 
+    /**
+     * @param Key $key
+     * @param int $amount
+     * @param ?int $initial
+     * @param ?Ttl $ttl
+     * @return int
+     */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
         return $this->guarded($key, function () use ($key, $amount, $initial, $ttl): int {
@@ -251,6 +322,13 @@ final class RedisStore implements
         });
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $expected
+     * @param mixed $value
+     * @param ?Ttl $ttl
+     * @return bool
+     */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
         return $this->guarded($key, function () use ($key, $expected, $value, $ttl): bool {
@@ -267,13 +345,20 @@ final class RedisStore implements
         });
     }
 
+    /**
+     * @param string $name
+     * @param Ttl $ttl
+     * @return Lock
+     */
     public function lock(string $name, Ttl $ttl): Lock
     {
         return new RedisLock($this->redis, $this->clock, $this->prefix . ':l:' . $name, $ttl);
     }
 
     /**
+     * @param Key $key
      * @param callable(): mixed $operation
+     * @return mixed
      */
     private function guarded(Key $key, callable $operation): mixed
     {
@@ -292,11 +377,21 @@ final class RedisStore implements
         }
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param ?int $expiresAt
+     * @param ?int $ttlSeconds
+     */
     private function write(Key $key, mixed $value, ?int $expiresAt, ?int $ttlSeconds): void
     {
         $this->persist(StoredRecord::forKey($key, $this->clock->now(), $expiresAt, $this->codec->encode($value)), $ttlSeconds);
     }
 
+    /**
+     * @param StoredRecord $record
+     * @param ?int $ttlSeconds
+     */
     private function persist(StoredRecord $record, ?int $ttlSeconds): void
     {
         $this->redis->set(
@@ -306,6 +401,11 @@ final class RedisStore implements
         );
     }
 
+    /**
+     * @param Key $key
+     * @param ?string $raw
+     * @return CacheEntry
+     */
     private function hydrate(Key $key, ?string $raw): CacheEntry
     {
         $record = $raw === null ? null : StoredRecord::fromString($raw);
@@ -317,6 +417,10 @@ final class RedisStore implements
         return CacheEntry::hit($key, $this->codec->decode($record->blob), $record->createdAt, $record->expiresAt);
     }
 
+    /**
+     * @param string $entryKey
+     * @return ?StoredRecord
+     */
     private function readEntry(string $entryKey): ?StoredRecord
     {
         $raw = $this->redis->get($entryKey);
@@ -324,6 +428,9 @@ final class RedisStore implements
         return $raw === null ? null : StoredRecord::fromString($raw);
     }
 
+    /**
+     * @param string $pattern
+     */
     private function deleteByPattern(string $pattern): void
     {
         $keys = [];
@@ -340,21 +447,37 @@ final class RedisStore implements
         }
     }
 
+    /**
+     * @param ?int $expiresAt
+     * @return ?int
+     */
     private function remainingSeconds(?int $expiresAt): ?int
     {
         return $expiresAt === null ? null : max(1, $expiresAt - $this->clock->now());
     }
 
+    /**
+     * @param ?int $expiresAt
+     * @return bool
+     */
     private function isExpired(?int $expiresAt): bool
     {
         return $expiresAt !== null && $expiresAt <= $this->clock->now();
     }
 
+    /**
+     * @param Key $key
+     * @return string
+     */
     private function entryKey(Key $key): string
     {
         return $this->prefix . ':e:' . $this->keyEncoder->encode($key);
     }
 
+    /**
+     * @param string $tag
+     * @return string
+     */
     private function tagKey(string $tag): string
     {
         return $this->prefix . ':t:' . $tag;

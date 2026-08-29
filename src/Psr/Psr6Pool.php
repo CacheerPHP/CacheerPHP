@@ -28,12 +28,20 @@ final class Psr6Pool implements CacheItemPoolInterface
      */
     private array $deferred = [];
 
+    /**
+     * @param Cache $cache
+     * @param Clock $clock
+     */
     public function __construct(
         private readonly Cache $cache,
         private readonly Clock $clock = new SystemClock(),
     ) {
     }
 
+    /**
+     * @param string $key
+     * @return CacheItemInterface
+     */
     public function getItem(string $key): CacheItemInterface
     {
         $this->validateKey($key);
@@ -63,6 +71,10 @@ final class Psr6Pool implements CacheItemPoolInterface
         return $items;
     }
 
+    /**
+     * @param string $key
+     * @return bool
+     */
     public function hasItem(string $key): bool
     {
         $this->validateKey($key);
@@ -70,6 +82,9 @@ final class Psr6Pool implements CacheItemPoolInterface
         return isset($this->deferred[$key]) || $this->cache->has($key);
     }
 
+    /**
+     * @return bool
+     */
     public function clear(): bool
     {
         $this->deferred = [];
@@ -78,6 +93,10 @@ final class Psr6Pool implements CacheItemPoolInterface
         return true;
     }
 
+    /**
+     * @param string $key
+     * @return bool
+     */
     public function deleteItem(string $key): bool
     {
         $this->validateKey($key);
@@ -89,6 +108,7 @@ final class Psr6Pool implements CacheItemPoolInterface
 
     /**
      * @param array<string> $keys
+     * @return bool
      */
     public function deleteItems(array $keys): bool
     {
@@ -99,6 +119,10 @@ final class Psr6Pool implements CacheItemPoolInterface
         return true;
     }
 
+    /**
+     * @param CacheItemInterface $item
+     * @return bool
+     */
     public function save(CacheItemInterface $item): bool
     {
         if (!$item instanceof Psr6Item) {
@@ -119,6 +143,10 @@ final class Psr6Pool implements CacheItemPoolInterface
         return true;
     }
 
+    /**
+     * @param CacheItemInterface $item
+     * @return bool
+     */
     public function saveDeferred(CacheItemInterface $item): bool
     {
         $this->deferred[$item->getKey()] = $item instanceof Psr6Item
@@ -128,6 +156,9 @@ final class Psr6Pool implements CacheItemPoolInterface
         return true;
     }
 
+    /**
+     * @return bool
+     */
     public function commit(): bool
     {
         $ok = true;
@@ -139,6 +170,9 @@ final class Psr6Pool implements CacheItemPoolInterface
         return $ok;
     }
 
+    /**
+     * @param string $key
+     */
     private function validateKey(string $key): void
     {
         if ($key === '') {

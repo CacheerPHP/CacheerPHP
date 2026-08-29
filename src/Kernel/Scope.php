@@ -6,6 +6,12 @@ namespace Silviooosilva\CacheerPhp\Kernel;
 
 use Silviooosilva\CacheerPhp\Exceptions\InvalidScopeException;
 
+/**
+ * An isolated, nestable keyspace — the typed replacement for v5's stringly
+ * namespaces.
+ *
+ * Segments are validated so a scope is always safe to encode into any backend.
+ */
 final readonly class Scope implements \Stringable
 {
     private const MAX_SEGMENTS = 64;
@@ -19,11 +25,18 @@ final readonly class Scope implements \Stringable
     {
     }
 
+    /**
+     * @return Scope
+     */
     public static function root(): self
     {
         return new self([]);
     }
 
+    /**
+     * @param string $segment
+     * @return Scope
+     */
     public static function named(string $segment): self
     {
         return new self([self::validateSegment($segment)]);
@@ -31,6 +44,7 @@ final readonly class Scope implements \Stringable
 
     /**
      * @param iterable<string> $segments
+     * @return Scope
      */
     public static function fromSegments(iterable $segments): self
     {
@@ -50,16 +64,27 @@ final readonly class Scope implements \Stringable
         return new self($validated);
     }
 
+    /**
+     * @param string $segment
+     * @return Scope
+     */
     public function child(string $segment): self
     {
         return $this->append(self::named($segment));
     }
 
+    /**
+     * @param Scope $scope
+     * @return Scope
+     */
     public function append(self $scope): self
     {
         return self::fromSegments([...$this->segments, ...$scope->segments]);
     }
 
+    /**
+     * @return bool
+     */
     public function isRoot(): bool
     {
         return $this->segments === [];
@@ -73,6 +98,10 @@ final readonly class Scope implements \Stringable
         return $this->segments;
     }
 
+    /**
+     * @param Scope $scope
+     * @return bool
+     */
     public function contains(self $scope): bool
     {
         if (count($this->segments) > count($scope->segments)) {
@@ -85,6 +114,8 @@ final readonly class Scope implements \Stringable
     /**
      * Collision-free internal identity. Backend-safe encoding belongs to the
      * storage pipeline introduced in Milestone 3.
+     *
+     * @return string
      */
     public function identity(): string
     {
@@ -94,11 +125,18 @@ final readonly class Scope implements \Stringable
         ));
     }
 
+    /**
+     * @return string
+     */
     public function __toString(): string
     {
         return implode('/', $this->segments);
     }
 
+    /**
+     * @param string $segment
+     * @return string
+     */
     private static function validateSegment(string $segment): string
     {
         if ($segment === '') {

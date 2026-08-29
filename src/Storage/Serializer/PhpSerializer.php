@@ -28,16 +28,27 @@ final class PhpSerializer implements Serializer
         $this->allowedClasses = $allowedClasses;
     }
 
+    /**
+     * @return string
+     */
     public function id(): string
     {
         return 'php';
     }
 
+    /**
+     * @param mixed $value
+     * @return string
+     */
     public function serialize(mixed $value): string
     {
         return serialize($value);
     }
 
+    /**
+     * @param string $payload
+     * @return mixed
+     */
     public function unserialize(string $payload): mixed
     {
         if ($payload === 'b:0;') {

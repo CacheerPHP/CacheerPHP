@@ -14,10 +14,20 @@ interface Serializer
 {
     /**
      * Stable, envelope-safe identifier (ASCII, no 0x1E separators), e.g. "php".
+     *
+     * @return string
      */
     public function id(): string;
 
+    /**
+     * @param mixed $value
+     * @return string
+     */
     public function serialize(mixed $value): string;
 
+    /**
+     * @param string $payload
+     * @return mixed
+     */
     public function unserialize(string $payload): mixed;
 }

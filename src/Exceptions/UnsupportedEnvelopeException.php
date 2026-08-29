@@ -13,16 +13,28 @@ namespace Silviooosilva\CacheerPhp\Exceptions;
  */
 final class UnsupportedEnvelopeException extends \RuntimeException implements CacheException
 {
+    /**
+     * @return UnsupportedEnvelopeException
+     */
     public static function unrecognized(): self
     {
         return new self('Cache payload is not a v6 envelope and no v5 reader is configured.');
     }
 
+    /**
+     * @param int $version
+     * @return UnsupportedEnvelopeException
+     */
     public static function version(int $version): self
     {
         return new self(sprintf('Unsupported cache envelope version %d.', $version));
     }
 
+    /**
+     * @param string $stage
+     * @param string $id
+     * @return UnsupportedEnvelopeException
+     */
     public static function stage(string $stage, string $id): self
     {
         return new self(sprintf(

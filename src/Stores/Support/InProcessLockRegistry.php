@@ -20,10 +20,19 @@ final class InProcessLockRegistry
      */
     private array $held = [];
 
+    /**
+     * @param Clock $clock
+     */
     public function __construct(private readonly Clock $clock)
     {
     }
 
+    /**
+     * @param string $name
+     * @param string $owner
+     * @param ?int $expiresAt
+     * @return bool
+     */
     public function acquire(string $name, string $owner, ?int $expiresAt): bool
     {
         $current = $this->held[$name] ?? null;
@@ -37,6 +46,11 @@ final class InProcessLockRegistry
         return true;
     }
 
+    /**
+     * @param string $name
+     * @param string $owner
+     * @return bool
+     */
     public function release(string $name, string $owner): bool
     {
         $current = $this->held[$name] ?? null;
@@ -52,6 +66,7 @@ final class InProcessLockRegistry
 
     /**
      * @param array{owner: string, expiresAt: int|null} $lock
+     * @return bool
      */
     private function isExpired(array $lock): bool
     {

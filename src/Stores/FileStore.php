@@ -63,14 +63,34 @@ final class FileStore implements
 
     private const ENTRY_SUFFIX = '.cache';
 
+    /**
+     * @var string
+     */
     private readonly string $root;
 
+    /**
+     * @var EnvelopeCodec
+     */
     private readonly EnvelopeCodec $codec;
 
+    /**
+     * @var KeyEncoder
+     */
     private readonly KeyEncoder $keyEncoder;
 
+    /**
+     * @var Clock
+     */
     private readonly Clock $clock;
 
+    /**
+     * @param string $directory
+     * @param ?EnvelopeCodec $codec
+     * @param ?KeyEncoder $keyEncoder
+     * @param ?Clock $clock
+     * @param int $directoryPermissions
+     * @param bool $migrateLegacyOnRead
+     */
     public function __construct(
         string $directory,
         ?EnvelopeCodec $codec = null,
@@ -86,6 +106,10 @@ final class FileStore implements
         $this->ensureDir($this->root);
     }
 
+    /**
+     * @param Key $key
+     * @return CacheEntry
+     */
     public function get(Key $key): CacheEntry
     {
         $record = $this->read($this->pathFor($key));
@@ -109,11 +133,20 @@ final class FileStore implements
         return CacheEntry::hit($key, $value, $record->createdAt, $record->expiresAt);
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param Ttl $ttl
+     */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
         $this->write($key, $value, $ttl->expiresAt($this->clock));
     }
 
+    /**
+     * @param Key $key
+     * @return bool
+     */
     public function delete(Key $key): bool
     {
         $path = $this->pathFor($key);
@@ -127,6 +160,10 @@ final class FileStore implements
         $this->removeTree($this->root . '/' . self::TAGS_DIR);
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return list<CacheEntry>
+     */
     public function getMany(iterable $keys): array
     {
         $entries = [];
@@ -138,6 +175,10 @@ final class FileStore implements
         return $entries;
     }
 
+    /**
+     * @param iterable $entries
+     * @param Ttl $ttl
+     */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
         $expiresAt = $ttl->expiresAt($this->clock);
@@ -147,6 +188,10 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param iterable<Key> $keys
+     * @return bool
+     */
     public function deleteMany(iterable $keys): bool
     {
         $deleted = true;
@@ -158,6 +203,11 @@ final class FileStore implements
         return $deleted;
     }
 
+    /**
+     * @param Key $key
+     * @param Ttl $ttl
+     * @return bool
+     */
     public function touch(Key $key, Ttl $ttl): bool
     {
         $record = $this->read($this->pathFor($key));
@@ -171,6 +221,9 @@ final class FileStore implements
         return true;
     }
 
+    /**
+     * @return int
+     */
     public function prune(): int
     {
         $removed = 0;
@@ -186,6 +239,10 @@ final class FileStore implements
         return $removed;
     }
 
+    /**
+     * @param ?Scope $scope
+     * @return iterable<CacheEntry>
+     */
     public function entries(?Scope $scope = null): iterable
     {
         $scope ??= Scope::root();
@@ -203,6 +260,9 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param Scope $scope
+     */
     public function clearScope(Scope $scope): void
     {
         if ($scope->isRoot()) {
@@ -219,6 +279,10 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param Key $key
+     * @param string ...$tags
+     */
     public function tag(Key $key, string ...$tags): void
     {
         $encoded = $this->keyEncoder->encode($key);
@@ -230,6 +294,10 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param string $tag
+     * @return int
+     */
     public function clearTag(string $tag): int
     {
         $file = $this->tagFile($tag);
@@ -255,6 +323,13 @@ final class FileStore implements
         return $removed;
     }
 
+    /**
+     * @param Key $key
+     * @param int $amount
+     * @param ?int $initial
+     * @param ?Ttl $ttl
+     * @return int
+     */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
         return $this->withKeyLock($key, function () use ($key, $amount, $initial, $ttl): int {
@@ -282,6 +357,13 @@ final class FileStore implements
         });
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $expected
+     * @param mixed $value
+     * @param ?Ttl $ttl
+     * @return bool
+     */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
         return $this->withKeyLock($key, function () use ($key, $expected, $value, $ttl): bool {
@@ -297,6 +379,11 @@ final class FileStore implements
         });
     }
 
+    /**
+     * @param string $name
+     * @param Ttl $ttl
+     * @return Lock
+     */
     public function lock(string $name, Ttl $ttl): Lock
     {
         $dir = $this->root . '/' . self::LOCKS_DIR;
@@ -306,7 +393,9 @@ final class FileStore implements
     }
 
     /**
+     * @param Key $key
      * @param callable(): mixed $operation
+     * @return mixed
      */
     private function withKeyLock(Key $key, callable $operation): mixed
     {
@@ -320,11 +409,19 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param Key $key
+     * @param mixed $value
+     * @param ?int $expiresAt
+     */
     private function write(Key $key, mixed $value, ?int $expiresAt): void
     {
         $this->persist(StoredRecord::forKey($key, $this->clock->now(), $expiresAt, $this->codec->encode($value)));
     }
 
+    /**
+     * @param StoredRecord $record
+     */
     private function persist(StoredRecord $record): void
     {
         $path = $this->pathFor($record->key());
@@ -332,6 +429,10 @@ final class FileStore implements
         $this->atomicWrite($path, $record->toString());
     }
 
+    /**
+     * @param string $path
+     * @param string $contents
+     */
     private function atomicWrite(string $path, string $contents): void
     {
         $temp = $path . '.' . bin2hex(random_bytes(6)) . '.tmp';
@@ -347,6 +448,10 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param string $path
+     * @return ?StoredRecord
+     */
     private function read(string $path): ?StoredRecord
     {
         if (!is_file($path)) {
@@ -361,16 +466,28 @@ final class FileStore implements
         return StoredRecord::fromString($raw);
     }
 
+    /**
+     * @param ?int $expiresAt
+     * @return bool
+     */
     private function isExpired(?int $expiresAt): bool
     {
         return $expiresAt !== null && $expiresAt <= $this->clock->now();
     }
 
+    /**
+     * @param Key $key
+     * @return string
+     */
     private function pathFor(Key $key): string
     {
         return $this->entryPath($this->keyEncoder->encode($key));
     }
 
+    /**
+     * @param string $encoded
+     * @return string
+     */
     private function entryPath(string $encoded): string
     {
         $safe = hash('sha256', $encoded);
@@ -378,6 +495,10 @@ final class FileStore implements
         return $this->root . '/' . self::ENTRIES_DIR . '/' . substr($safe, 0, 2) . '/' . $safe . self::ENTRY_SUFFIX;
     }
 
+    /**
+     * @param string $tag
+     * @return string
+     */
     private function tagFile(string $tag): string
     {
         return $this->root . '/' . self::TAGS_DIR . '/' . hash('sha256', $tag) . '.tag';
@@ -404,6 +525,9 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param string $dir
+     */
     private function ensureDir(string $dir): void
     {
         if (!is_dir($dir) && !@mkdir($dir, $this->directoryPermissions, true) && !is_dir($dir)) {
@@ -411,6 +535,9 @@ final class FileStore implements
         }
     }
 
+    /**
+     * @param string $dir
+     */
     private function removeTree(string $dir): void
     {
         if (!is_dir($dir)) {

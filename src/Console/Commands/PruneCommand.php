@@ -16,16 +16,28 @@ use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
  */
 final class PruneCommand implements Command
 {
+    /**
+     * @return string
+     */
     public function name(): string
     {
         return 'prune';
     }
 
+    /**
+     * @return string
+     */
     public function description(): string
     {
         return 'Remove expired entries (--dry-run to preview).';
     }
 
+    /**
+     * @param CommandInput $input
+     * @param CommandOutput $output
+     * @param ?CacheerContext $context
+     * @return int
+     */
     public function run(CommandInput $input, CommandOutput $output, ?CacheerContext $context): int
     {
         if ($context === null) {

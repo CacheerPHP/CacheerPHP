@@ -27,23 +27,46 @@ final class Psr6Item implements CacheItemInterface
 
     private const ABSOLUTE = 2;
 
+    /**
+     * @var mixed
+     */
     private mixed $value = null;
 
+    /**
+     * @var int
+     */
     private int $mode = self::NONE;
 
+    /**
+     * @var int
+     */
     private int $amount = 0;
 
+    /**
+     * @param string $key
+     * @param bool $hit
+     */
     private function __construct(
         private readonly string $key,
         private readonly bool $hit,
     ) {
     }
 
+    /**
+     * @param string $key
+     * @return Psr6Item
+     */
     public static function miss(string $key): self
     {
         return new self($key, false);
     }
 
+    /**
+     * @param string $key
+     * @param mixed $value
+     * @param ?int $expiresAt
+     * @return Psr6Item
+     */
     public static function hit(string $key, mixed $value, ?int $expiresAt): self
     {
         $item = new self($key, true);
@@ -57,21 +80,34 @@ final class Psr6Item implements CacheItemInterface
         return $item;
     }
 
+    /**
+     * @return string
+     */
     public function getKey(): string
     {
         return $this->key;
     }
 
+    /**
+     * @return mixed
+     */
     public function get(): mixed
     {
         return $this->hit ? $this->value : null;
     }
 
+    /**
+     * @return bool
+     */
     public function isHit(): bool
     {
         return $this->hit;
     }
 
+    /**
+     * @param mixed $value
+     * @return static
+     */
     public function set(mixed $value): static
     {
         $this->value = $value;
@@ -79,6 +115,10 @@ final class Psr6Item implements CacheItemInterface
         return $this;
     }
 
+    /**
+     * @param ?DateTimeInterface $expiration
+     * @return static
+     */
     public function expiresAt(?DateTimeInterface $expiration): static
     {
         if ($expiration === null) {
@@ -93,6 +133,10 @@ final class Psr6Item implements CacheItemInterface
         return $this;
     }
 
+    /**
+     * @param DateInterval|int|null $time
+     * @return static
+     */
     public function expiresAfter(int|DateInterval|null $time): static
     {
         if ($time === null) {
@@ -109,6 +153,7 @@ final class Psr6Item implements CacheItemInterface
 
     /**
      * @internal Used by the pool to persist the item.
+     * @return mixed
      */
     public function rawValue(): mixed
     {
@@ -116,8 +161,10 @@ final class Psr6Item implements CacheItemInterface
     }
 
     /**
+     * @param Clock $clock
      * @internal Resolve to a kernel TTL: null = forever, false = already
-     *           expired (delete), or a Ttl to store.
+          expired (delete), or a Ttl to store.
+     * @return Ttl|false|null
      */
     public function resolveTtl(Clock $clock): Ttl|false|null
     {
@@ -128,6 +175,10 @@ final class Psr6Item implements CacheItemInterface
         };
     }
 
+    /**
+     * @param Clock $clock
+     * @return Ttl|false
+     */
     private function fromAbsolute(Clock $clock): Ttl|false
     {
         $seconds = $this->amount - $clock->now();
@@ -135,6 +186,10 @@ final class Psr6Item implements CacheItemInterface
         return $seconds <= 0 ? false : Ttl::seconds($seconds);
     }
 
+    /**
+     * @param DateInterval $interval
+     * @return int
+     */
     private function intervalToSeconds(DateInterval $interval): int
     {
         $now = new DateTimeImmutable();

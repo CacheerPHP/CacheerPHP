@@ -20,10 +20,17 @@ final class CommandOutput
      */
     private array $data = [];
 
+    /**
+     * @param bool $json
+     */
     public function __construct(public readonly bool $json = false)
     {
     }
 
+    /**
+     * @param string $line
+     * @return CommandOutput
+     */
     public function line(string $line = ''): self
     {
         $this->lines[] = $line;
@@ -31,6 +38,11 @@ final class CommandOutput
         return $this;
     }
 
+    /**
+     * @param string $key
+     * @param mixed $value
+     * @return CommandOutput
+     */
     public function set(string $key, mixed $value): self
     {
         $this->data[$key] = $value;
@@ -54,6 +66,9 @@ final class CommandOutput
         return $this->lines;
     }
 
+    /**
+     * @return string
+     */
     public function render(): string
     {
         if ($this->json) {

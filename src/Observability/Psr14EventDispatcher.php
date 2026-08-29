@@ -13,10 +13,16 @@ use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
  */
 final class Psr14EventDispatcher implements EventDispatcher
 {
+    /**
+     * @param EventDispatcherInterface $psr
+     */
     public function __construct(private readonly EventDispatcherInterface $psr)
     {
     }
 
+    /**
+     * @param CacheEvent $event
+     */
     public function dispatch(CacheEvent $event): void
     {
         $this->psr->dispatch($event);

@@ -24,6 +24,7 @@ final class CommandInput
      * and options: --flag, --key=value.
      *
      * @param list<string> $tokens
+     * @return CommandInput
      */
     public static function fromTokens(array $tokens): self
     {
@@ -44,16 +45,30 @@ final class CommandInput
         return new self($arguments, $options);
     }
 
+    /**
+     * @param int $index
+     * @param ?string $default
+     * @return ?string
+     */
     public function argument(int $index, ?string $default = null): ?string
     {
         return $this->arguments[$index] ?? $default;
     }
 
+    /**
+     * @param string $name
+     * @param ?string $default
+     * @return ?string
+     */
     public function option(string $name, ?string $default = null): ?string
     {
         return $this->options[$name] ?? $default;
     }
 
+    /**
+     * @param string $name
+     * @return bool
+     */
     public function flag(string $name): bool
     {
         return array_key_exists($name, $this->options);

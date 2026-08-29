@@ -19,8 +19,17 @@ final class InProcessLock implements Lock
 {
     private const RETRY_MICROSECONDS = 50_000;
 
+    /**
+     * @var string
+     */
     private readonly string $owner;
 
+    /**
+     * @param InProcessLockRegistry $registry
+     * @param Clock $clock
+     * @param string $name
+     * @param Ttl $ttl
+     */
     public function __construct(
         private readonly InProcessLockRegistry $registry,
         private readonly Clock $clock,
@@ -30,11 +39,18 @@ final class InProcessLock implements Lock
         $this->owner = bin2hex(random_bytes(8));
     }
 
+    /**
+     * @return bool
+     */
     public function acquire(): bool
     {
         return $this->registry->acquire($this->name, $this->owner, $this->ttl->expiresAt($this->clock));
     }
 
+    /**
+     * @param float $seconds
+     * @return bool
+     */
     public function block(float $seconds): bool
     {
         $deadline = $this->clock->nowFloat() + $seconds;
@@ -52,6 +68,9 @@ final class InProcessLock implements Lock
         }
     }
 
+    /**
+     * @return bool
+     */
     public function release(): bool
     {
         return $this->registry->release($this->name, $this->owner);

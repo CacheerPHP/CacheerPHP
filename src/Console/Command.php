@@ -11,11 +11,20 @@ namespace Silviooosilva\CacheerPhp\Console;
  */
 interface Command
 {
+    /**
+     * @return string
+     */
     public function name(): string;
 
+    /**
+     * @return string
+     */
     public function description(): string;
 
     /**
+     * @param CommandInput $input
+     * @param CommandOutput $output
+     * @param ?CacheerContext $context
      * @return int Exit code (0 = success).
      */
     public function run(CommandInput $input, CommandOutput $output, ?CacheerContext $context): int;
