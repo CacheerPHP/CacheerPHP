@@ -38,8 +38,6 @@ final readonly class FormattedCacheer
     {
     }
 
-    // ------------------------------------------------------------------ read --
-
     /**
      * @param Key|string $key
      * @param mixed $default
@@ -88,8 +86,6 @@ final readonly class FormattedCacheer
     {
         return $this->cache->missing($key);
     }
-
-    // ----------------------------------------------------------------- write --
 
     /**
      * @param Key|string $key
@@ -171,8 +167,6 @@ final readonly class FormattedCacheer
         $this->cache->clear();
     }
 
-    // --------------------------------------------------------------- compute --
-
     /**
      * @param Key|string $key
      * @param Ttl|DateInterval|string|int|null $ttl
@@ -208,8 +202,6 @@ final readonly class FormattedCacheer
     {
         return new CacheDataFormatter($this->cache->flexible($key, $fresh, $stale, $callback));
     }
-
-    // ---------------------------------------------------------- capabilities --
 
     /**
      * @param class-string $capability
@@ -306,8 +298,6 @@ final readonly class FormattedCacheer
         return $this->cache->prune();
     }
 
-    // ----------------------------------------------------------------- views --
-
     /**
      * @param Scope|string $scope
      * @return FormattedCacheer
@@ -344,7 +334,7 @@ final readonly class FormattedCacheer
     }
 
     /**
-     * @return array{store: string, scope: string, policy: bool, capabilities: array<string, bool>}
+     * @return array
      */
     public function stats(): array
     {

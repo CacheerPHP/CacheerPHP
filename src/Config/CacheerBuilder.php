@@ -87,8 +87,6 @@ final class CacheerBuilder
         $this->pipeline = PipelineConfig::default();
     }
 
-    // ---------------------------------------------------------------- store --
-
     /**
      * @return CacheerBuilder
      */
@@ -138,8 +136,6 @@ final class CacheerBuilder
 
         return $this;
     }
-
-    // ------------------------------------------------------------- pipeline --
 
     /**
      * @param Serializer $serializer
@@ -226,8 +222,6 @@ final class CacheerBuilder
 
         return $this;
     }
-
-    // --------------------------------------------------------------- policy --
 
     /**
      * @param Ttl|string|int $ttl

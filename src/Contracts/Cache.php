@@ -26,8 +26,6 @@ use Silviooosilva\CacheerPhp\Support\FormattedCacheer;
  */
 interface Cache
 {
-    // ------------------------------------------------------------------ read --
-
     /**
      * The full entry — hit/miss, value, timestamps — rather than just the value.
      * The only way to distinguish a stored null from a miss.
@@ -64,8 +62,6 @@ interface Cache
      * @return array<string, mixed>
      */
     public function many(iterable $keys, mixed $default = null): array;
-
-    // ----------------------------------------------------------------- write --
 
     /**
      * @param Key|string $key
@@ -128,8 +124,6 @@ interface Cache
      */
     public function clear(): void;
 
-    // --------------------------------------------------------------- compute --
-
     /**
      * Return the cached value, or compute, store, and return it. Single-flighted
      * across workers when the store can lock, so a miss on a hot key does not
@@ -161,8 +155,6 @@ interface Cache
      * @return mixed
      */
     public function flexible(string|Key $key, int $fresh, int $stale, callable $callback): mixed;
-
-    // ---------------------------------------------------------- capabilities --
 
     /**
      * Whether the underlying store really honors a capability interface — ask
@@ -260,8 +252,6 @@ interface Cache
      * @throws \Silviooosilva\CacheerPhp\Exceptions\UnsupportedCapabilityException
      */
     public function prune(): int;
-
-    // ----------------------------------------------------------------- views --
 
     /**
      * An isolated keyspace within this cache. Nests, and can be cleared alone.

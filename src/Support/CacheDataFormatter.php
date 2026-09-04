@@ -6,21 +6,6 @@ namespace Silviooosilva\CacheerPhp\Support;
 
 use JsonException;
 
-/**
- * Formats a cached value as JSON, an array, an object, or a string.
- *
- * A standalone, stateless helper — it never touches the cache. There are two
- * ways to reach it, so pick whichever reads best:
- *
- *     // 1) Wrap any value explicitly.
- *     $json = (new CacheDataFormatter($cache->get('user:1')))->toJson();
- *
- *     // 2) Read through a formatted view, so get() returns one directly.
- *     $json = $cache->formatted()->get('user:1')->toJson();
- *
- * `toString()`/`toJson()` suit scalars and arrays; casting a non-serializable
- * value follows PHP's normal casting rules.
- */
 final readonly class CacheDataFormatter
 {
     /**
@@ -46,7 +31,7 @@ final readonly class CacheDataFormatter
     }
 
     /**
-     * @return array<array-key, mixed>
+     * @return array
      */
     public function toArray(): array
     {

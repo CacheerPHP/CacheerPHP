@@ -141,8 +141,6 @@ final readonly class Cacheer implements Cache
         return Telemetry::hasListeners() && !$store instanceof InstrumentedStore;
     }
 
-    // ------------------------------------------------------ named constructors --
-
     /**
      * Named constructor for the in-process array store: a dependency-free cache
      * that lives for the current request. Ideal for tests and short-lived CLI runs.
@@ -311,8 +309,6 @@ final readonly class Cacheer implements Cache
         return new CacheerBuilder();
     }
 
-    // ------------------------------------------------------------------ read --
-
     /**
      * @param Key|string $key
      * @return CacheEntry
@@ -359,8 +355,6 @@ final readonly class Cacheer implements Cache
     {
         return $this->operations->many($keys, $default);
     }
-
-    // ----------------------------------------------------------------- write --
 
     /**
      * @param Key|string $key
@@ -442,8 +436,6 @@ final readonly class Cacheer implements Cache
         $this->operations->clear();
     }
 
-    // --------------------------------------------------------------- compute --
-
     /**
      * @param Key|string $key
      * @param Ttl|DateInterval|string|int|null $ttl
@@ -479,8 +471,6 @@ final readonly class Cacheer implements Cache
     {
         return $this->operations->flexible($key, $fresh, $stale, $callback);
     }
-
-    // ---------------------------------------------------------- capabilities --
 
     /**
      * @param class-string $capability
@@ -577,8 +567,6 @@ final readonly class Cacheer implements Cache
         return $this->operations->prune();
     }
 
-    // ----------------------------------------------------------------- views --
-
     /**
      * @param Scope|string $scope
      * @return static
@@ -623,7 +611,7 @@ final readonly class Cacheer implements Cache
     }
 
     /**
-     * @return array{store: string, scope: string, policy: bool, capabilities: array<string, bool>}
+     * @return array
      */
     public function stats(): array
     {
