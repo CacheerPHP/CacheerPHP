@@ -241,7 +241,7 @@ Telemetry::listen(fn ($event) => $myCollector->record($event));  // opt in
 Telemetry::reset();                                              // opt back out
 ```
 
-Installing [`cacheerphp/monitor`](https://github.com/CacheerPHP/cacheer-monitor)
+Installing [`cacheerphp/monitor`](https://github.com/CacheerPHP/monitor)
 **does** add an autoload-time side effect: that package declares
 `autoload.files`, and its bootstrap registers a listener as soon as
 `vendor/autoload.php` is loaded. That is the point of it — zero-wiring
