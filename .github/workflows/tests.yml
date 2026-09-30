@@ -165,44 +165,7 @@ jobs:
         run: composer test:kernel
         env:
           DB_CONNECTION: sqlite
-
-  benchmark:
-    name: Baseline benchmark
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: pdo, pdo_sqlite, openssl, zlib
-          coverage: none
-
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      - name: Run payload matrix
-        run: |
-          mkdir -p build/benchmarks
-          composer benchmark:baseline > build/benchmarks/v5-baseline.json
-        env:
-          CACHEER_BENCH_DRIVERS: array,file
-          CACHEER_BENCH_ITERATIONS: 100
-
-      - name: Validate benchmark schema
-        run: composer test:benchmark
-
-      - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: v5-baseline-${{ github.sha }}
-          path: build/benchmarks/v5-baseline.json
-          if-no-files-found: error
-
+          
   redis:
     name: Redis / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
