@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Stores;
 
+use RuntimeException;
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
 use Silviooosilva\CacheerPhp\Contracts\CapabilityAware;
@@ -16,11 +17,14 @@ use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
+use Silviooosilva\CacheerPhp\Exceptions\StoreOperationFailedException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Capabilities;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Stores\Support\BackendFailure;
+use Silviooosilva\CacheerPhp\Stores\Support\FailClosedLock;
 use Silviooosilva\CacheerPhp\Support\CircuitBreaker;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 use Throwable;
@@ -53,6 +57,29 @@ final class ResilientStore implements
     private readonly CircuitBreaker $breaker;
 
     /**
+     * Writes made while the primary was unreachable are tracked (up to this
+     * many keys and bulk operations) so they can be invalidated on the primary
+     * once it is back; past the limit the primary is cleared instead.
+     */
+    private const MAX_OUTAGE_WRITES = 1000;
+
+    /**
+     * @var array<string, Key> keys written or deleted on the fallback alone
+     */
+    private array $outageKeys = [];
+
+    /**
+     * @var list<array{0: 'scope', 1: Scope}|array{0: 'tag', 1: string}> bulk invalidations made on the fallback alone
+     */
+    private array $outageBulk = [];
+
+    /**
+     * Whether the primary must be cleared on recovery (an outage clear(), or
+     * too many tracked writes).
+     */
+    private bool $clearPrimaryOnRecovery = false;
+
+    /**
      * @param Store $primary
      * @param Store $fallback
      * @param ?CircuitBreaker $breaker
@@ -80,6 +107,12 @@ final class ResilientStore implements
             return true;
         }
 
+        // Counters and locks run on the primary alone (see onPrimary(), lock()),
+        // so only the primary has to provide them.
+        if ($capability === AtomicStore::class || $capability === LockingStore::class) {
+            return Capabilities::supports($this->primary, $capability);
+        }
+
         return Capabilities::supports($this->primary, $capability)
             && Capabilities::supports($this->fallback, $capability);
     }
@@ -100,7 +133,7 @@ final class ResilientStore implements
      */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
-        $this->write(fn (Store $store) => $store->set($key, $value, $ttl));
+        $this->write(fn (Store $store) => $store->set($key, $value, $ttl), [$key]);
     }
 
     /**
@@ -109,12 +142,12 @@ final class ResilientStore implements
      */
     public function delete(Key $key): bool
     {
-        return $this->write(fn (Store $store): bool => $store->delete($key));
+        return $this->write(fn (Store $store): bool => $store->delete($key), [$key]);
     }
 
     public function clear(): void
     {
-        $this->write(fn (Store $store) => $store->clear());
+        $this->write(fn (Store $store) => $store->clear(), clearsAll: true);
     }
 
     /**
@@ -135,7 +168,7 @@ final class ResilientStore implements
     public function setMany(iterable $entries, Ttl $ttl): void
     {
         $entries = $this->materialize($entries);
-        $this->write(fn (Store $store) => $this->batch($store)->setMany($entries, $ttl));
+        $this->write(fn (Store $store) => $this->batch($store)->setMany($entries, $ttl), array_column($entries, 'key'));
     }
 
     /**
@@ -146,7 +179,7 @@ final class ResilientStore implements
     {
         $keys = $this->materialize($keys);
 
-        return $this->write(fn (Store $store): bool => $this->batch($store)->deleteMany($keys));
+        return $this->write(fn (Store $store): bool => $this->batch($store)->deleteMany($keys), $keys);
     }
 
     /**
@@ -156,7 +189,7 @@ final class ResilientStore implements
      */
     public function touch(Key $key, Ttl $ttl): bool
     {
-        return $this->write(fn (Store $store): bool => $this->touchable($store)->touch($key, $ttl));
+        return $this->write(fn (Store $store): bool => $this->touchable($store)->touch($key, $ttl), [$key]);
     }
 
     /**
@@ -184,7 +217,7 @@ final class ResilientStore implements
      */
     public function clearScope(Scope $scope): void
     {
-        $this->write(fn (Store $store) => $this->scopeFlushable($store)->clearScope($scope));
+        $this->write(fn (Store $store) => $this->scopeFlushable($store)->clearScope($scope), bulk: ['scope', $scope]);
     }
 
     /**
@@ -193,7 +226,7 @@ final class ResilientStore implements
      */
     public function tag(Key $key, string ...$tags): void
     {
-        $this->write(fn (Store $store) => $this->taggable($store)->tag($key, ...$tags));
+        $this->write(fn (Store $store) => $this->taggable($store)->tag($key, ...$tags), [$key]);
     }
 
     /**
@@ -202,7 +235,7 @@ final class ResilientStore implements
      */
     public function clearTag(string $tag): int
     {
-        return $this->write(fn (Store $store): int => $this->taggable($store)->clearTag($tag));
+        return $this->write(fn (Store $store): int => $this->taggable($store)->clearTag($tag), bulk: ['tag', $tag]);
     }
 
     /**
@@ -214,7 +247,7 @@ final class ResilientStore implements
      */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
-        return $this->write(fn (Store $store): int => $this->atomic($store)->increment($key, $amount, $initial, $ttl));
+        return $this->onPrimary('increment', $key, fn (Store $store): int => $this->atomic($store)->increment($key, $amount, $initial, $ttl));
     }
 
     /**
@@ -226,7 +259,7 @@ final class ResilientStore implements
      */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
-        return $this->write(fn (Store $store): bool => $this->atomic($store)->compareAndSwap($key, $expected, $value, $ttl));
+        return $this->onPrimary('compareAndSwap', $key, fn (Store $store): bool => $this->atomic($store)->compareAndSwap($key, $expected, $value, $ttl));
     }
 
     /**
@@ -236,9 +269,21 @@ final class ResilientStore implements
      */
     public function lock(string $name, Ttl $ttl): Lock
     {
-        $store = $this->breaker->canAttempt() ? $this->primary : $this->fallback;
+        if (!$this->breaker->canAttempt()) {
+            return new FailClosedLock(null, $this->breaker);
+        }
 
-        return $this->lockable($store)->lock($name, $ttl);
+        try {
+            return new FailClosedLock($this->lockable($this->primary)->lock($name, $ttl), $this->breaker);
+        } catch (Throwable $error) {
+            if (!BackendFailure::isOutage($error)) {
+                throw $error;
+            }
+
+            $this->breaker->recordFailure();
+
+            return new FailClosedLock(null, $this->breaker);
+        }
     }
 
     /**
@@ -261,11 +306,16 @@ final class ResilientStore implements
     {
         if ($this->breaker->canAttempt()) {
             try {
+                $this->reconcile();
                 $result = $operation($this->primary);
                 $this->breaker->recordSuccess();
 
                 return $result;
-            } catch (Throwable) {
+            } catch (Throwable $error) {
+                if (!BackendFailure::isOutage($error)) {
+                    throw $error;
+                }
+
                 $this->breaker->recordFailure();
             }
         }
@@ -274,22 +324,160 @@ final class ResilientStore implements
     }
 
     /**
+     * Writes to the primary (authoritative) and mirrors to the fallback; while
+     * the primary is unavailable, writes to the fallback alone and records what
+     * changed so reconcile() can invalidate it on the primary later.
+     *
      * @template T
      * @param callable(Store): T $operation
+     * @param list<Key> $keys the keys this write changes
+     * @param array{0: 'scope', 1: Scope}|array{0: 'tag', 1: string}|null $bulk a bulk invalidation it performs
+     * @param bool $clearsAll whether it clears the whole store
      * @return T
      */
-    private function write(callable $operation): mixed
+    private function write(callable $operation, array $keys = [], ?array $bulk = null, bool $clearsAll = false): mixed
     {
+        $primaryWritten = false;
+        $result = null;
+
         if ($this->breaker->canAttempt()) {
             try {
-                $operation($this->primary);
+                $this->reconcile();
+                $result = $operation($this->primary);
                 $this->breaker->recordSuccess();
-            } catch (Throwable) {
+                $primaryWritten = true;
+            } catch (Throwable $error) {
+                if (!BackendFailure::isOutage($error)) {
+                    throw $error;
+                }
+
                 $this->breaker->recordFailure();
             }
         }
 
-        return $operation($this->fallback);
+        if ($primaryWritten) {
+            // The primary is authoritative; the fallback is a best-effort mirror
+            // kept warm for the next outage, so its unavailability is ignored.
+            try {
+                $operation($this->fallback);
+            } catch (Throwable $mirrorError) {
+                if (!BackendFailure::isOutage($mirrorError)) {
+                    throw $mirrorError;
+                }
+            }
+
+            return $result;
+        }
+
+        // The primary was skipped or unreachable: the fallback's result stands,
+        // and the write is remembered so the primary can be reconciled later.
+        $result = $operation($this->fallback);
+        $this->recordOutageWrite($keys, $bulk, $clearsAll);
+
+        return $result;
+    }
+
+    /**
+     * Runs a counter or compare-and-swap on the primary alone. Mirroring it to
+     * the fallback would produce an independent, conflicting counter, so while
+     * the primary is unavailable the operation fails closed; after it succeeds,
+     * the fallback's copy of the key is dropped so an outage never serves a
+     * stale value.
+     *
+     * @template T
+     * @param string $name
+     * @param Key $key
+     * @param callable(Store): T $operation
+     * @return T
+     */
+    private function onPrimary(string $name, Key $key, callable $operation): mixed
+    {
+        if (!$this->breaker->canAttempt()) {
+            throw new StoreOperationFailedException($name, $key, new RuntimeException('The primary store is unavailable.'));
+        }
+
+        try {
+            $this->reconcile();
+            $result = $operation($this->primary);
+            $this->breaker->recordSuccess();
+        } catch (Throwable $error) {
+            if (!BackendFailure::isOutage($error)) {
+                throw $error;
+            }
+
+            $this->breaker->recordFailure();
+
+            throw new StoreOperationFailedException($name, $key, $error);
+        }
+
+        try {
+            $this->fallback->delete($key);
+        } catch (Throwable $mirrorError) {
+            if (!BackendFailure::isOutage($mirrorError)) {
+                throw $mirrorError;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<Key> $keys
+     * @param array{0: 'scope', 1: Scope}|array{0: 'tag', 1: string}|null $bulk
+     * @param bool $clearsAll
+     */
+    private function recordOutageWrite(array $keys, ?array $bulk, bool $clearsAll): void
+    {
+        if ($this->clearPrimaryOnRecovery) {
+            return;
+        }
+
+        if ($bulk !== null) {
+            $this->outageBulk[] = $bulk;
+        }
+
+        foreach ($keys as $key) {
+            $this->outageKeys[$key->identity()] = $key;
+        }
+
+        if ($clearsAll || count($this->outageKeys) + count($this->outageBulk) > self::MAX_OUTAGE_WRITES) {
+            $this->clearPrimaryOnRecovery = true;
+            $this->outageKeys = [];
+            $this->outageBulk = [];
+        }
+    }
+
+    /**
+     * Before the primary serves anything after an outage, invalidates on it
+     * every key and bulk scope written to the fallback alone, so values deleted
+     * or changed during the outage cannot reappear. Throws (leaving the record
+     * intact) if the primary is still unreachable.
+     */
+    private function reconcile(): void
+    {
+        if (!$this->clearPrimaryOnRecovery && $this->outageKeys === [] && $this->outageBulk === []) {
+            return;
+        }
+
+        if ($this->clearPrimaryOnRecovery) {
+            $this->primary->clear();
+        } else {
+            foreach ($this->outageKeys as $key) {
+                $this->primary->delete($key);
+            }
+
+            foreach ($this->outageBulk as [$kind, $target]) {
+                if ($kind === 'scope') {
+                    $this->scopeFlushable($this->primary)->clearScope($target);
+                } else {
+                    $this->taggable($this->primary)->clearTag($target);
+                }
+            }
+        }
+
+        $this->clearPrimaryOnRecovery = false;
+        $this->outageKeys = [];
+        $this->outageBulk = [];
     }
 
     /**

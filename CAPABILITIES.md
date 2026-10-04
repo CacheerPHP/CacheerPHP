@@ -35,7 +35,8 @@ Capabilities::supports($store, AtomicStore::class);    // on a bare store
 
 Both answer for the store that will actually run the operation — `TieredStore`
 defers to L2, `ResilientStore` requires both of its stores (writes reach the
-fallback), `InstrumentedStore` defers to the store it wraps, and nesting works.
+fallback) except for atomic counters and locks, which run on the primary alone,
+`InstrumentedStore` defers to the store it wraps, and nesting works.
 The kernel uses this internally, so an optional optimization degrades instead of
 failing: `remember()` single-flights through a lock when one is really available
 and falls back to a plain compute when it is not.
@@ -105,7 +106,14 @@ different scopes yields independent entries.
   default; `Ttl::forever()` opts out). L2 is written first, so a failed write
   never leaves a value only in L1.
 - `ResilientStore` serves from a fallback when the primary's circuit breaker is
-  open; it fails closed (miss), never returning stale or wrong data.
+  open; it fails closed (miss), never returning stale or wrong data. Only backend
+  outages fail over — programming errors and bad data are rethrown. The primary's
+  write result is authoritative and the fallback is a best-effort mirror.
+  Counters, compare-and-swap, and locks run on the primary alone and fail closed
+  during an outage (counters throw; locks are not acquired). Keys and bulk
+  invalidations written to the fallback alone during an outage are invalidated on
+  the primary before it serves again (more than 1,000, or an outage `clear()`,
+  clears the primary), so old data is not resurrected.
 
 **Storage pipeline.** Values are serialized → optionally compressed → optionally
 authenticated-encrypted (AES-256-GCM) into a versioned envelope. Decoding is

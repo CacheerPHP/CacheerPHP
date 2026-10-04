@@ -163,6 +163,15 @@ remains available on its own `5.x` line during migration.
   `l1MaxTtl`, L1 copies now live at most 60 seconds, so a single-key change by
   another worker is seen within that bound instead of never (until the value
   expired). Pass `Ttl::forever()` to keep the previous unbounded behavior.
+- `ResilientStore` settles its guarantees. Only backend outages trip the breaker
+  and fail over; programming errors and bad data (corrupt payloads, invalid
+  keys, overflows) are rethrown instead of being hidden by the fallback. The
+  primary's write result is authoritative (writes used to return the fallback's
+  result). Counters, compare-and-swap, and locks run on the primary alone and
+  fail closed during an outage, instead of diverging on the fallback or handing
+  two workers "the same" lock. Writes made on the fallback alone during an
+  outage are invalidated on the primary when it recovers, so deleted or changed
+  values no longer reappear.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of

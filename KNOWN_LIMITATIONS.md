@@ -21,6 +21,14 @@ trade-offs so you can design around them. Failure *modes* per capability are in
   for tags. A scoped tag includes its scope, so it counts toward the limit. The
   limit applies on every driver, including SQLite. Lock names have no limit.
 
+## Resilience is per process
+
+- `ResilientStore` keeps its circuit breaker and its record of outage writes in
+  memory. Each worker trips, recovers, and reconciles independently, and a worker
+  that restarts during an outage forgets its outage writes, so the primary can
+  serve values that were changed or deleted during that outage until they expire.
+- Counters and locks are unavailable while the primary is down, by design.
+
 ## Atomicity depends on the backend
 
 - `ArrayStore` counters and CAS are atomic **within one process only** — it is a
