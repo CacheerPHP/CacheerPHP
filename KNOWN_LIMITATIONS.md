@@ -85,6 +85,7 @@ trade-offs so you can design around them. Failure *modes* per capability are in
 
 ## Service matrix coverage
 
-- MySQL/MariaDB and PostgreSQL behavior is verified in CI service jobs; those
-  suites **skip locally** when the database is not running. SQLite (in-memory)
-  and Redis (via `predis`) cover the database and Redis paths locally.
+- MySQL/MariaDB, PostgreSQL, and Redis (through both `predis` and `ext-redis`)
+  are verified in CI service jobs, where an unavailable service fails the job
+  (`CACHEER_REQUIRE_REDIS` / `CACHEER_REQUIRE_DATABASE`). Locally those suites
+  **skip** when the service is not running; SQLite runs in memory everywhere.

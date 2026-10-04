@@ -23,13 +23,13 @@
     "psr-16",
     "psr-3"
   ],
-  "homepage": "https://github.com/silviooosilva",
+  "homepage": "https://cacheerphp.com",
   "type": "library",
   "license": "MIT",
   "support": {
     "issues": "https://github.com/silviooosilva/CacheerPHP/issues",
     "source": "https://github.com/silviooosilva/CacheerPHP",
-    "docs": "https://cacheerphp.com/docs/en/getting-started/",
+    "docs": "https://cacheerphp.com/docs/v6/en/getting-started/",
     "security": "https://github.com/silviooosilva/CacheerPHP/security/policy"
   },
   "bin": [

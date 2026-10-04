@@ -14,8 +14,12 @@ fixes (see §6).
 ## 1. Installation
 
 ```bash
-composer require silviooosilva/cacheer-php:^6.0
+composer require silviooosilva/cacheer-php:"^6.0@RC"
 ```
+
+Until 6.0.0 is tagged stable, the `@RC` flag lets Composer pick the release
+candidate; the same constraint moves to stable 6.0 once it ships. Without it,
+Composer installs the stable v5 line.
 
 v6 requires PHP 8.3+. The core installs with no backend clients: `ArrayStore`
 and `FileStore` work out of the box. Redis (`predis/predis` or `ext-redis`) and a

@@ -33,8 +33,12 @@
 ## Five-minute quick start
 
 ```sh
-composer require silviooosilva/cacheer-php
+composer require silviooosilva/cacheer-php:"^6.0@RC"
 ```
+
+Until 6.0.0 is tagged stable, the `@RC` flag lets Composer pick the release
+candidate; the same constraint moves to stable 6.0 once it ships. Without it,
+Composer installs the stable v5 line.
 
 The core installs with **no backend clients and no required extensions** —
 `ArrayStore` and `FileStore` work out of the box.
@@ -328,7 +332,7 @@ when the service is absent.
 - [SECURITY.md](SECURITY.md) — support windows and vulnerability reporting
 - [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) — documented edges
 - Runnable, CI-tested examples in [`Examples`](Examples)
-- Full docs site: [cacheerphp.com/docs](https://cacheerphp.com/docs/en/getting-started/)
+- Full docs site: [cacheerphp.com/docs](https://cacheerphp.com/docs/v6/en/getting-started/)
 - The v6 execution plan lives in [ROADMAP.md](ROADMAP.md)
 
 ## Contributing
@@ -338,7 +342,7 @@ and pull-request templates. Substantial changes start with an RFC.
 
 ## License
 
-CacheerPHP is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+CacheerPHP is open-sourced software licensed under the [MIT license](LICENSE).
 
 ## Support
 

@@ -107,6 +107,29 @@ If it passes, your store is a first-class CacheerPHP driver: it composes with
 `Cacheer`, scopes, tiering, resilience, the PSR-16/PSR-6 adapters, and the CLI
 exactly like the built-in stores.
 
+### Running it from your own project
+
+The suite ships with the package under `tests/Support/`, but Composer never loads
+a dependency's `autoload-dev`, so map it in **your** `composer.json` and install a
+test runner:
+
+```json
+{
+    "require-dev": {
+        "phpunit/phpunit": "^12.0"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\Support\\": "vendor/silviooosilva/cacheer-php/tests/Support/"
+        }
+    }
+}
+```
+
+Then `composer dump-autoload` and run your test with `vendor/bin/phpunit`. Time in
+the suite comes from `FakeClock`, so your store must take its clock (a
+`Contracts\Clock`) instead of calling `time()`.
+
 ## 5. Getting it listed as compatible
 
 A community adapter is listed as compatible when it: passes the conformance suite

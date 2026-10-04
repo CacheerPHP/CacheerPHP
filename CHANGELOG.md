@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [6.0.0] — Instance-first rewrite (release candidate)
 
+Published so far as `v6.0.0-RC1`. Everything under "Fixed since RC1" and the
+removal of the v5 compatibility reader are on the `6.x` branch and ship with the
+next tag.
+
 CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cacheer` kernel
 runs over a minimal four-method `Store` contract; everything else is an optional
 capability. Caches are never global — you construct one and inject it — and the
