@@ -6,6 +6,7 @@ namespace Silviooosilva\CacheerPhp\Core;
 
 use DateInterval;
 use InvalidArgumentException;
+use RuntimeException;
 use Silviooosilva\CacheerPhp\Config\CachePolicy;
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
@@ -189,8 +190,14 @@ final readonly class CacheOperations
         $resolved = $this->ttl($ttl, $value);
         $lock = $this->tryLock('cacheer:add:', $key);
 
-        if ($lock === null || !$lock->block(5.0)) {
+        if ($lock === null) {
             return $this->addUnlocked($key, $value, $resolved);
+        }
+
+        // add() promises an atomic check-and-set, so a timeout must not fall
+        // back to an unprotected one and report success.
+        if (!$lock->block(5.0)) {
+            throw new StoreOperationFailedException('add', $key, new RuntimeException('Timed out waiting for the add lock.'));
         }
 
         try {
@@ -706,12 +713,18 @@ final readonly class CacheOperations
     ): mixed {
         $lock = $this->tryLock('cacheer:sf:', $key);
 
-        if ($lock === null || !$lock->block(5.0)) {
-            if ($lock !== null) {
-                $this->events->dispatch(CacheEvent::lockContended($this->storeName(), (string) $key));
-            }
-
+        if ($lock === null) {
             return $this->compute($key, $ttl, $callback, $applyPolicy);
+        }
+
+        if (!$lock->block(5.0)) {
+            // Single-flight is a stampede optimization, not a guarantee: after a
+            // timeout, use the holder's result if it landed, else compute anyway.
+            $this->events->dispatch(CacheEvent::lockContended($this->storeName(), (string) $key));
+
+            $entry = $this->read($key);
+
+            return $entry->isHit() ? $entry->value() : $this->compute($key, $ttl, $callback, $applyPolicy);
         }
 
         try {

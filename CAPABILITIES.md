@@ -56,14 +56,26 @@ normalization stay distinct on every SQL engine. A Redis prefix cannot contain t
 - *File*: serialized by a per-key file lock; safe across processes on one host.
 - *Database*: row-locked read-modify-write (`FOR UPDATE` where supported;
   serialized transactions on SQLite).
-- *Redis*: server-side atomic operations.
+- *Redis*: a read-modify-write guarded by a per-key Redis lock.
 - *Failure*: incrementing a non-integer value throws
   [`StoreOperationFailedException`](src/Exceptions/StoreOperationFailedException.php).
+  On File and Redis, if the per-key lock cannot be acquired within 5 seconds,
+  the operation throws the same exception without touching the entry — it never
+  reports a success it did not make atomically.
 
 **Locks (`LockingStore`).** `acquire()` is non-blocking; `block($seconds)` waits
 up to a bound. Release is compare-and-delete (a lock only deletes its own token),
-so a slow holder cannot release a lock another worker has since acquired. Locks
-carry a TTL and self-expire, so a crashed holder never deadlocks the keyspace.
+so a slow holder cannot release a lock another worker has since acquired. Array,
+Database, and Redis locks carry a TTL and self-expire, so a crashed holder never
+deadlocks the keyspace. File locks are process-held `flock` locks: the operating
+system frees them when the holder releases or exits, and the TTL written to the
+lock file does not expire a live handle.
+
+`add()` serializes its check-and-write through a lock when the store has one; if
+that lock times out (5 seconds) it throws `StoreOperationFailedException` rather
+than fall back to an unprotected write. `remember()` treats its lock as a
+stampede optimization: after a timeout it returns the holder's result if one was
+stored, and otherwise computes the value itself.
 
 **Tags (`TaggableStore`).** Tagging associates already-stored keys with a tag;
 `clearTag()` invalidates them. Tag indexes are best-effort metadata: a key that

@@ -15,6 +15,7 @@ use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
+use Silviooosilva\CacheerPhp\Exceptions\StoreOperationFailedException;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
@@ -438,6 +439,103 @@ abstract class StoreConformance extends TestCase
         foreach ([$upper, $lower, $accent, $plain, $lock] as $held) {
             self::assertTrue($held->release());
         }
+    }
+
+    public function testReleaseFreesALockThatWasAcquiredTwice(): void
+    {
+        $store = $this->requireCapability(LockingStore::class);
+
+        $lock = $store->lock('job', Ttl::seconds(30));
+        $rival = $store->lock('job', Ttl::seconds(30));
+
+        self::assertTrue($lock->acquire());
+        $lock->acquire(); // re-entrant or not, a repeat must not lose ownership
+
+        self::assertTrue($lock->release());
+        self::assertTrue($rival->acquire(), 'A repeated acquire() must not leave the lock stuck.');
+        self::assertTrue($rival->release());
+    }
+
+    public function testAnExpiredLeaseCannotReleaseItsReplacement(): void
+    {
+        $store = $this->requireCapability(LockingStore::class);
+
+        $old = $store->lock('job', Ttl::seconds(10));
+        self::assertTrue($old->acquire());
+
+        $this->expireLease('job', Ttl::seconds(10));
+
+        $replacement = $store->lock('job', Ttl::seconds(10));
+        self::assertTrue($replacement->acquire());
+
+        self::assertFalse($old->release(), 'The old owner must not release the replacement lease.');
+        self::assertFalse($store->lock('job', Ttl::seconds(10))->acquire());
+        self::assertTrue($replacement->release());
+    }
+
+    public function testAFailedAtomicOperationReleasesItsGuard(): void
+    {
+        $store = $this->requireCapability(AtomicStore::class);
+        $key = Key::named('counter');
+
+        $this->store->set($key, 'not a number', Ttl::forever());
+
+        try {
+            $store->increment($key);
+            self::fail('Incrementing a non-integer must fail.');
+        } catch (\Throwable) {
+        }
+
+        self::assertTrue($store->compareAndSwap($key, 'not a number', 1), 'The guard must be released after a failure.');
+        self::assertSame(2, $store->increment($key));
+    }
+
+    public function testAtomicOperationsDoNotRunWhileAnotherWorkerHoldsTheGuard(): void
+    {
+        $store = $this->requireCapability(AtomicStore::class);
+        $key = Key::named('counter');
+
+        $this->store->set($key, 1, Ttl::forever());
+        $release = $this->holdAtomicGuard($key);
+
+        foreach ([
+            'increment'      => static fn (): mixed => $store->increment($key),
+            'compareAndSwap' => static fn (): mixed => $store->compareAndSwap($key, 1, 5),
+        ] as $operation => $attempt) {
+            try {
+                $attempt();
+                self::fail(sprintf('%s() must not succeed while the guard is held.', $operation));
+            } catch (StoreOperationFailedException $exception) {
+                self::assertSame($operation, $exception->operation);
+            }
+        }
+
+        self::assertSame(1, $this->store->get($key)->value(), 'A timed-out operation must not mutate the entry.');
+
+        $release();
+        self::assertSame(2, $store->increment($key));
+    }
+
+    /**
+     * Make a held lease expire as the backend would let it. Stores whose leases
+     * expire by the injected clock need nothing more than the default.
+     */
+    protected function expireLease(string $name, Ttl $ttl): void
+    {
+        $this->clock->advance((float) $ttl->inSeconds() + 1);
+    }
+
+    /**
+     * Hold, as a second worker would, the guard this store takes around one
+     * key's atomic read-modify-write; return a callable that releases it.
+     * Stores that guard atomic operations differently (in-process state, row
+     * locks) have no separate guard to hold, so the default skips.
+     *
+     * @return callable(): void
+     */
+    protected function holdAtomicGuard(Key $key): callable
+    {
+        self::markTestSkipped(sprintf('%s has no separately held atomic guard.', $this->store::class));
     }
 
     /**

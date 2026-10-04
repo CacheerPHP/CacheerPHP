@@ -215,6 +215,47 @@ final class CacheTest extends TestCase
         }
     }
 
+    public function testAddDoesNotReportSuccessWhenItsLockTimesOut(): void
+    {
+        $rival = $this->store->lock('cacheer:add:' . hash('sha256', Key::named('k')->identity()), Ttl::seconds(30));
+        self::assertTrue($rival->acquire());
+
+        try {
+            $this->cache->add('k', 'value', 60);
+            self::fail('add() must not succeed without holding its lock.');
+        } catch (StoreOperationFailedException $exception) {
+            self::assertSame('add', $exception->operation);
+        }
+
+        self::assertFalse($this->cache->has('k'), 'A timed-out add() must not write.');
+
+        $rival->release();
+        self::assertTrue($this->cache->add('k', 'value', 60));
+    }
+
+    public function testRememberRereadsAfterTimingOutOnAnotherWorkersLock(): void
+    {
+        $key = Key::named('k');
+        $rival = $this->store->lock('cacheer:sf:' . hash('sha256', $key->identity()), Ttl::seconds(30));
+        self::assertTrue($rival->acquire());
+
+        // The lock holder stores its result while this caller waits, but keeps
+        // the lock past the wait, so the caller times out.
+        $this->clock->onSleep = function () use ($key): void {
+            $this->store->set($key, 'from-other-worker', Ttl::seconds(60));
+        };
+
+        $calls = 0;
+        $value = $this->cache->remember('k', 60, function () use (&$calls): string {
+            $calls++;
+
+            return 'recomputed';
+        });
+
+        self::assertSame('from-other-worker', $value);
+        self::assertSame(0, $calls, 'A value stored during the wait must not be recomputed.');
+    }
+
     public function testCoreHasNoMagicDelegationOrStaticState(): void
     {
         $cache = new \ReflectionClass(Cacheer::class);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Silviooosilva\CacheerPhp\Stores;
 
 use InvalidArgumentException;
+use RuntimeException;
 use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
@@ -304,7 +305,7 @@ final class RedisStore implements
      */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
-        return $this->guarded($key, function () use ($key, $amount, $initial, $ttl): int {
+        return $this->guarded('increment', $key, function () use ($key, $amount, $initial, $ttl): int {
             $entry = $this->get($key);
 
             if ($entry->isHit()) {
@@ -338,7 +339,7 @@ final class RedisStore implements
      */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
-        return $this->guarded($key, function () use ($key, $expected, $value, $ttl): bool {
+        return $this->guarded('compareAndSwap', $key, function () use ($key, $expected, $value, $ttl): bool {
             $entry = $this->get($key);
 
             if ($entry->isMiss() || $entry->value() !== $expected) {
@@ -363,11 +364,15 @@ final class RedisStore implements
     }
 
     /**
+     * Runs a read-modify-write under this key's lock, and refuses to run it at
+     * all when the lock cannot be acquired in time.
+     *
+     * @param string $name
      * @param Key $key
      * @param callable(): mixed $operation
      * @return mixed
      */
-    private function guarded(Key $key, callable $operation): mixed
+    private function guarded(string $name, Key $key, callable $operation): mixed
     {
         $lock = new RedisLock(
             $this->redis,
@@ -375,7 +380,10 @@ final class RedisStore implements
             $this->prefix . ':lk:' . $this->keyEncoder->encode($key),
             Ttl::seconds(30),
         );
-        $lock->block(5.0);
+
+        if (!$lock->block(5.0)) {
+            throw new StoreOperationFailedException($name, $key, new RuntimeException('Timed out waiting for the key lock.'));
+        }
 
         try {
             return $operation();

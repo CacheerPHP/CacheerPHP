@@ -12,6 +12,7 @@ use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Storage\KeyEncoder\HashingKeyEncoder;
 use Silviooosilva\CacheerPhp\Stores\RedisStore;
 use Silviooosilva\CacheerPhp\Stores\Support\PredisConnection;
 use Tests\Support\FakeClock;
@@ -38,6 +39,22 @@ final class RedisStoreConformanceTest extends StoreConformance
         $this->prefix = 'cacheer-test:' . bin2hex(random_bytes(4));
 
         return new RedisStore(new PredisConnection($this->client), $this->prefix, clock: $clock);
+    }
+
+    protected function expireLease(string $name, Ttl $ttl): void
+    {
+        // Redis expires the lease itself (PX); removing it is what expiry does.
+        $this->client->del([$this->prefix . ':l:' . $name]);
+    }
+
+    protected function holdAtomicGuard(Key $key): callable
+    {
+        $guard = $this->prefix . ':lk:' . (new HashingKeyEncoder())->encode($key);
+        $this->client->set($guard, 'another-worker');
+
+        return function () use ($guard): void {
+            $this->client->del([$guard]);
+        };
     }
 
     protected function tearDown(): void

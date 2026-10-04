@@ -332,7 +332,7 @@ final class FileStore implements
      */
     public function increment(Key $key, int $amount = 1, ?int $initial = null, ?Ttl $ttl = null): int
     {
-        return $this->withKeyLock($key, function () use ($key, $amount, $initial, $ttl): int {
+        return $this->withKeyLock('increment', $key, function () use ($key, $amount, $initial, $ttl): int {
             $entry = $this->get($key);
 
             if ($entry->isHit()) {
@@ -366,7 +366,7 @@ final class FileStore implements
      */
     public function compareAndSwap(Key $key, mixed $expected, mixed $value, ?Ttl $ttl = null): bool
     {
-        return $this->withKeyLock($key, function () use ($key, $expected, $value, $ttl): bool {
+        return $this->withKeyLock('compareAndSwap', $key, function () use ($key, $expected, $value, $ttl): bool {
             $entry = $this->get($key);
 
             if ($entry->isMiss() || $entry->value() !== $expected) {
@@ -393,14 +393,21 @@ final class FileStore implements
     }
 
     /**
+     * Runs a read-modify-write under this key's lock, and refuses to run it at
+     * all when the lock cannot be acquired in time.
+     *
+     * @param string $name
      * @param Key $key
      * @param callable(): mixed $operation
      * @return mixed
      */
-    private function withKeyLock(Key $key, callable $operation): mixed
+    private function withKeyLock(string $name, Key $key, callable $operation): mixed
     {
         $lock = $this->lock('entry:' . $this->keyEncoder->encode($key), Ttl::seconds(30));
-        $lock->block(5.0);
+
+        if (!$lock->block(5.0)) {
+            throw new StoreOperationFailedException($name, $key, new RuntimeException('Timed out waiting for the key lock.'));
+        }
 
         try {
             return $operation();

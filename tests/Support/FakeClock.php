@@ -8,6 +8,14 @@ use Silviooosilva\CacheerPhp\Contracts\Clock;
 
 final class FakeClock implements Clock
 {
+    /**
+     * Runs on every sleep(), so a test can act as another worker while code
+     * under test is waiting (e.g. for a lock).
+     *
+     * @var ?\Closure(): void
+     */
+    public ?\Closure $onSleep = null;
+
     public function __construct(private float $timestamp = 1_700_000_000.0)
     {
     }
@@ -25,6 +33,10 @@ final class FakeClock implements Clock
     public function sleep(int $microseconds): void
     {
         $this->timestamp += $microseconds / 1_000_000;
+
+        if ($this->onSleep !== null) {
+            ($this->onSleep)();
+        }
     }
 
     public function advance(float $seconds): self

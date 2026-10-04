@@ -147,6 +147,14 @@ remains available on its own `5.x` line during migration.
   LIKE let `clearScope()` on `Tenant` delete `tenant/…`, and MySQL's default
   collation also merged case, accents, and Unicode normalization forms for
   `clearScope()`, `entries()`, and `flushTag()` (`Users` flushed `users`).
+- File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
+  their per-key lock times out; they throw `StoreOperationFailedException` and
+  leave the entry unchanged. `add()` likewise throws on a lock timeout instead of
+  falling back to an unlocked check-and-write that could report a false win.
+- `remember()` re-reads the entry after timing out on another worker's lock, so a
+  value that worker stored is used instead of being computed again.
+- A repeated `acquire()` on a held Redis lock no longer drops ownership, which
+  left `release()` a no-op and the lock stuck until its TTL.
 - `DatabaseStore` rejects a scope or tag longer than its 255-character column
   before writing, on every driver. Previously MySQL strict mode and PostgreSQL
   failed with a driver error, and MySQL non-strict mode silently truncated the

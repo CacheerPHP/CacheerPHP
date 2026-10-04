@@ -59,9 +59,16 @@ final class RedisLock implements Lock
     public function acquire(): bool
     {
         $seconds = $this->ttl->inSeconds();
-        $this->held = $this->redis->setIfAbsent($this->key, $this->token, $seconds === null ? null : $seconds * 1000);
 
-        return $this->held;
+        // A failed attempt means someone holds the lock — possibly this owner,
+        // on a repeat call — so it must not clear the record of holding it.
+        if (!$this->redis->setIfAbsent($this->key, $this->token, $seconds === null ? null : $seconds * 1000)) {
+            return false;
+        }
+
+        $this->held = true;
+
+        return true;
     }
 
     /**
