@@ -95,7 +95,10 @@ different scopes yields independent entries.
 **Serve-stale / resilience.**
 - `flexible()` serves a fresh value within the fresh window, a stale value while a
   single worker refreshes (deferred), and recomputes synchronously past the stale
-  window. A hard TTL of `stale` must still hold the value.
+  window. Age is measured from the value's creation time, so a value older than
+  the stale window is never served, whatever TTL it was stored with. A burst of
+  stale reads queues one refresh per key, and a queued refresh that finds the
+  value already fresh does nothing.
 - `ResilientStore` serves from a fallback when the primary's circuit breaker is
   open; it fails closed (miss), never returning stale or wrong data.
 

@@ -38,6 +38,13 @@ trade-offs so you can design around them. Failure *modes* per capability are in
   synchronously. Deferred refresh runs through the configured executor — the
   synchronous default refreshes in-process, so a true "after response" refresh
   requires wiring an appropriate `DeferredExecutor`.
+- `AfterResponseDeferredExecutor` flushes on shutdown. Long-running workers must
+  call `flush()` after each request or job, or queued refreshes wait until the
+  worker exits.
+- One refresh per key is pending at a time only while the refresh lock's lease
+  (30 seconds) lasts; a refresh queued longer than that can be duplicated by
+  another worker. Stores without locking cannot deduplicate scheduling at all;
+  their queued refreshes re-check freshness, so only the first one computes.
 
 ## v5 cached data is not read
 

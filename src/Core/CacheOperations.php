@@ -373,21 +373,28 @@ final readonly class CacheOperations
         $key = $this->key($key);
         $entry = $this->read($key);
 
-        if ($entry->isHit()) {
-            $freshUntil = ($entry->createdAt() ?? $this->clock->now()) + $fresh;
-            if ($this->clock->now() < $freshUntil) {
-                return $entry->value();
-            }
+        if ($this->isYoungerThan($entry, $fresh)) {
+            return $entry->value();
+        }
 
+        if ($this->isYoungerThan($entry, $stale)) {
             SafeDispatch::to($this->events, CacheEvent::staleServed($this->storeName(), (string) $key));
-            $this->scheduleRefresh($key, $stale, $callback);
+            $this->scheduleRefresh($key, $fresh, $stale, $callback);
 
             return $entry->value();
         }
 
-        // The stale window is an explicit contract from the caller, so a bound
-        // policy's jitter and negative TTL must not reshape it.
-        return $this->singleFlight($key, Ttl::seconds($stale), $callback, applyPolicy: false);
+        // A miss, or a value older than the caller's stale window (e.g. one
+        // written with a longer TTL): recompute synchronously. The stale window is
+        // an explicit contract, so a bound policy's jitter and negative TTL must
+        // not reshape it, and the locked re-read must respect it too.
+        return $this->singleFlight(
+            $key,
+            Ttl::seconds($stale),
+            $callback,
+            applyPolicy: false,
+            accept: fn (CacheEntry $found): bool => $this->isYoungerThan($found, $stale),
+        );
     }
 
     // ---------------------------------------------------------- capabilities --
@@ -713,6 +720,7 @@ final readonly class CacheOperations
      * @param Ttl|DateInterval|string|int|null $ttl
      * @param callable(): mixed $callback
      * @param bool $applyPolicy
+     * @param ?\Closure(CacheEntry): bool $accept whether a found entry may be returned instead of computing
      * @return mixed
      */
     private function singleFlight(
@@ -720,7 +728,10 @@ final readonly class CacheOperations
         Ttl|DateInterval|int|string|null $ttl,
         callable $callback,
         bool $applyPolicy = true,
+        ?\Closure $accept = null,
     ): mixed {
+        $accept ??= static fn (CacheEntry $found): bool => $found->isHit();
+
         $lock = $this->tryLock('cacheer:sf:', $key);
 
         if ($lock === null) {
@@ -734,12 +745,12 @@ final readonly class CacheOperations
 
             $entry = $this->read($key);
 
-            return $entry->isHit() ? $entry->value() : $this->compute($key, $ttl, $callback, $applyPolicy);
+            return $accept($entry) ? $entry->value() : $this->compute($key, $ttl, $callback, $applyPolicy);
         }
 
         try {
             $entry = $this->read($key);
-            if ($entry->isHit()) {
+            if ($accept($entry)) {
                 return $entry->value();
             }
 
@@ -769,33 +780,62 @@ final readonly class CacheOperations
     }
 
     /**
+     * Queues one background refresh per key. The refresh lock doubles as the
+     * "pending" marker: it is taken when the refresh is scheduled and released
+     * when it finishes, fails, or cannot be scheduled, so a burst of stale reads
+     * queues a single refresh (across processes, for as long as the lease
+     * lasts). A store that cannot lock still queues one task per stale read, but
+     * each re-checks freshness first, so only the first one computes.
+     *
      * @param Key $key
+     * @param int $fresh
      * @param int $stale
      * @param callable(): mixed $callback
      */
-    private function scheduleRefresh(Key $key, int $stale, callable $callback): void
+    private function scheduleRefresh(Key $key, int $fresh, int $stale, callable $callback): void
     {
-        $this->executor->defer(function () use ($key, $stale, $callback): void {
-            $lock = $this->tryLock('cacheer:swr:', $key);
+        $lock = $this->tryLock('cacheer:swr:', $key);
 
-            if ($lock === null) {
-                $this->compute($key, Ttl::seconds($stale), $callback, applyPolicy: false);
-                SafeDispatch::to($this->events, CacheEvent::refreshed($this->storeName(), (string) $key));
+        if ($lock !== null && !$lock->acquire()) {
+            return; // a refresh for this key is already pending or running
+        }
 
-                return;
-            }
+        try {
+            $this->executor->defer(function () use ($key, $fresh, $stale, $callback, $lock): void {
+                try {
+                    if ($this->isYoungerThan($this->read($key), $fresh)) {
+                        return; // refreshed since this task was queued
+                    }
 
-            if (!$lock->acquire()) {
-                return;
-            }
+                    $this->compute($key, Ttl::seconds($stale), $callback, applyPolicy: false);
+                    SafeDispatch::to($this->events, CacheEvent::refreshed($this->storeName(), (string) $key));
+                } finally {
+                    $lock?->release();
+                }
+            });
+        } catch (Throwable $exception) {
+            $lock?->release();
 
-            try {
-                $this->compute($key, Ttl::seconds($stale), $callback, applyPolicy: false);
-                SafeDispatch::to($this->events, CacheEvent::refreshed($this->storeName(), (string) $key));
-            } finally {
-                $lock->release();
-            }
-        });
+            throw $exception;
+        }
+    }
+
+    /**
+     * Whether an entry is a hit created less than $seconds ago.
+     *
+     * @param CacheEntry $entry
+     * @param int $seconds
+     * @return bool
+     */
+    private function isYoungerThan(CacheEntry $entry, int $seconds): bool
+    {
+        if ($entry->isMiss()) {
+            return false;
+        }
+
+        $now = $this->clock->now();
+
+        return $now < ($entry->createdAt() ?? $now) + $seconds;
     }
 
     /**

@@ -146,6 +146,12 @@ remains available on its own `5.x` line during migration.
   completed operation or replace a backend error, in the instrumented store,
   the kernel, or `TieredStore`. `MetricsCollector` no longer counts read sizes
   as `bytes_written`.
+- `flexible()` never serves a value older than the caller's stale window; a value
+  written under the same key with a longer TTL used to be served stale forever.
+  A burst of stale reads now queues one refresh per key instead of one per read
+  (the refresh lock marks it pending), a queued refresh re-checks freshness
+  first, and a refresh that fails or cannot be scheduled releases its pending
+  state.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of
