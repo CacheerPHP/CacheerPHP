@@ -136,6 +136,10 @@ remains available on its own `5.x` line during migration.
   Database and Redis stores.
 - Database expiration comparisons use explicit application timestamps
   consistently across SQLite, MySQL, and PostgreSQL.
+- Scoped `remember()`, `rememberForever()`, `add()`, `pull()`, `flexible()`,
+  and serve-stale-on-error reads now apply the scope once. Previously they read
+  a doubly-scoped key, so scoped `remember()` recomputed on every call, `add()`
+  overwrote existing entries, and `pull()` always returned the default.
 
 ## [5.2.0] - 2026-06-27
 

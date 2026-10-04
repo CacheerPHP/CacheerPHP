@@ -97,9 +97,7 @@ final readonly class CacheOperations
      */
     public function entry(string|Key $key): CacheEntry
     {
-        $key = $this->key($key);
-
-        return $this->run('get', $key, fn (): CacheEntry => $this->store->get($key));
+        return $this->read($this->key($key));
     }
 
     /**
@@ -148,7 +146,7 @@ final readonly class CacheOperations
             }
         } else {
             $entries = array_map(
-                fn (Key $key): CacheEntry => $this->run('get', $key, fn (): CacheEntry => $this->store->get($key)),
+                fn (Key $key): CacheEntry => $this->read($key),
                 $normalized,
             );
         }
@@ -208,9 +206,7 @@ final readonly class CacheOperations
      */
     public function delete(string|Key $key): bool
     {
-        $key = $this->key($key);
-
-        return $this->run('delete', $key, fn (): bool => $this->store->delete($key));
+        return $this->remove($this->key($key));
     }
 
     /**
@@ -221,13 +217,13 @@ final readonly class CacheOperations
     public function pull(string|Key $key, mixed $default = null): mixed
     {
         $key = $this->key($key);
-        $entry = $this->entry($key);
+        $entry = $this->read($key);
 
         if ($entry->isMiss()) {
             return $default;
         }
 
-        $this->delete($key);
+        $this->remove($key);
 
         return $entry->value();
     }
@@ -296,7 +292,7 @@ final readonly class CacheOperations
 
         $deleted = true;
         foreach ($normalized as $key) {
-            $deleted = $this->run('delete', $key, fn (): bool => $this->store->delete($key)) && $deleted;
+            $deleted = $this->remove($key) && $deleted;
         }
 
         return $deleted;
@@ -338,7 +334,7 @@ final readonly class CacheOperations
             return $this->rememberServingStale($key, $ttl, $callback);
         }
 
-        $entry = $this->entry($key);
+        $entry = $this->read($key);
         if ($entry->isHit()) {
             return $entry->value();
         }
@@ -366,7 +362,7 @@ final readonly class CacheOperations
         }
 
         $key = $this->key($key);
-        $entry = $this->entry($key);
+        $entry = $this->read($key);
 
         if ($entry->isHit()) {
             $freshUntil = ($entry->createdAt() ?? $this->clock->now()) + $fresh;
@@ -546,6 +542,29 @@ final readonly class CacheOperations
     }
 
     /**
+     * Reads an already-qualified key. Internal paths use this instead of
+     * {@see entry()}, which would apply the scope a second time.
+     *
+     * @param Key $key
+     * @return CacheEntry
+     */
+    private function read(Key $key): CacheEntry
+    {
+        return $this->run('get', $key, fn (): CacheEntry => $this->store->get($key));
+    }
+
+    /**
+     * Deletes an already-qualified key; the counterpart of {@see read()}.
+     *
+     * @param Key $key
+     * @return bool
+     */
+    private function remove(Key $key): bool
+    {
+        return $this->run('delete', $key, fn (): bool => $this->store->delete($key));
+    }
+
+    /**
      * Tags and lock names are keyspaces of their own, so a scoped cache must not
      * collide with another scope's tag or lock of the same name.
      *
@@ -603,7 +622,7 @@ final readonly class CacheOperations
      */
     private function addUnlocked(Key $key, mixed $value, Ttl $ttl): bool
     {
-        if ($this->entry($key)->isHit()) {
+        if ($this->read($key)->isHit()) {
             return false;
         }
 
@@ -629,7 +648,7 @@ final readonly class CacheOperations
         callable $callback,
     ): mixed {
         $grace = $this->policy?->graceSeconds() ?? 0;
-        $entry = $this->entry($key);
+        $entry = $this->read($key);
 
         if ($entry->isHit()) {
             $remaining = $entry->remainingTtl($this->clock);
@@ -696,7 +715,7 @@ final readonly class CacheOperations
         }
 
         try {
-            $entry = $this->entry($key);
+            $entry = $this->read($key);
             if ($entry->isHit()) {
                 return $entry->value();
             }
