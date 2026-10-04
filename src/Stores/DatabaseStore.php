@@ -137,10 +137,18 @@ final class DatabaseStore implements
      */
     public function delete(Key $key): bool
     {
-        $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE cache_key = :key");
-        $statement->execute([':key' => $this->keyEncoder->encode($key)]);
+        $encoded = $this->keyEncoder->encode($key);
 
-        return $statement->rowCount() > 0;
+        return $this->transaction(function () use ($encoded): bool {
+            // Deleting ends the entry's tag membership, so a later write of the
+            // same key cannot be removed by an old tag.
+            $this->pdo->prepare("DELETE FROM {$this->table}_tags WHERE cache_key = :key")->execute([':key' => $encoded]);
+
+            $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE cache_key = :key");
+            $statement->execute([':key' => $encoded]);
+
+            return $statement->rowCount() > 0;
+        });
     }
 
     public function clear(): void
@@ -273,8 +281,13 @@ final class DatabaseStore implements
         }
 
         [$where, $params] = $this->scopeClause($scope);
-        $statement = $this->pdo->prepare("DELETE FROM {$this->table} WHERE " . $where);
-        $statement->execute($params);
+
+        $this->transaction(function () use ($where, $params): void {
+            $this->pdo->prepare(
+                "DELETE FROM {$this->table}_tags WHERE cache_key IN (SELECT cache_key FROM {$this->table} WHERE {$where})",
+            )->execute($params);
+            $this->pdo->prepare("DELETE FROM {$this->table} WHERE " . $where)->execute($params);
+        });
     }
 
     /**
@@ -290,6 +303,11 @@ final class DatabaseStore implements
                     self::MAX_NAME_CHARACTERS,
                 ));
             }
+        }
+
+        // Tags group stored entries; a key with no live entry has nothing to group.
+        if ($this->get($key)->isMiss()) {
+            return;
         }
 
         $encoded = $this->keyEncoder->encode($key);
@@ -315,9 +333,13 @@ final class DatabaseStore implements
 
             $removed = 0;
             $delete = $this->pdo->prepare("DELETE FROM {$this->table} WHERE cache_key = :key");
+            $forget = $this->pdo->prepare("DELETE FROM {$this->table}_tags WHERE cache_key = :key");
             foreach ($keys as $cacheKey) {
                 $delete->execute([':key' => $cacheKey]);
                 $removed += $delete->rowCount();
+
+                // The entry is gone, so it leaves its other tags too.
+                $forget->execute([':key' => $cacheKey]);
             }
 
             $this->pdo->prepare("DELETE FROM {$this->table}_tags WHERE " . $where)->execute($params);

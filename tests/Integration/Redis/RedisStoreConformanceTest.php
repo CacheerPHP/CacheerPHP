@@ -123,6 +123,7 @@ final class RedisStoreConformanceTest extends StoreConformance
             'tags'      => ['t'],
             'locks'     => ['l'],
             'key locks' => ['lk'],
+            'key tags'  => ['kt'],
         ];
     }
 

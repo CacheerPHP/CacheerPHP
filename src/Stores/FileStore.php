@@ -60,6 +60,12 @@ final class FileStore implements
 
     private const TAGS_DIR = 'tags';
 
+    /**
+     * Per-entry list of the tags it belongs to (the reverse of TAGS_DIR), so an
+     * entry that ends can leave its tags without scanning every tag file.
+     */
+    private const KEY_TAGS_DIR = 'keytags';
+
     private const LOCKS_DIR = 'locks';
 
     private const ENTRY_SUFFIX = '.cache';
@@ -142,7 +148,10 @@ final class FileStore implements
      */
     public function delete(Key $key): bool
     {
-        $path = $this->pathFor($key);
+        $encoded = $this->keyEncoder->encode($key);
+        $this->forgetTags($encoded);
+
+        $path = $this->entryPath($encoded);
 
         return is_file($path) && @unlink($path);
     }
@@ -151,6 +160,7 @@ final class FileStore implements
     {
         $this->removeTree($this->root . '/' . self::ENTRIES_DIR);
         $this->removeTree($this->root . '/' . self::TAGS_DIR);
+        $this->removeTree($this->root . '/' . self::KEY_TAGS_DIR);
     }
 
     /**
@@ -267,6 +277,7 @@ final class FileStore implements
         foreach ($this->entryFiles() as $file) {
             $record = $this->read($file->getPathname());
             if ($record !== null && $scope->contains($record->key()->scope())) {
+                $this->forgetTags($this->keyEncoder->encode($record->key()));
                 @unlink($file->getPathname());
             }
         }
@@ -278,12 +289,20 @@ final class FileStore implements
      */
     public function tag(Key $key, string ...$tags): void
     {
+        // Tags group stored entries; a key with no live entry has nothing to group.
+        if ($this->get($key)->isMiss()) {
+            return;
+        }
+
         $encoded = $this->keyEncoder->encode($key);
+        $membership = $this->membershipFile($encoded);
+        $this->ensureDir(dirname($membership));
 
         foreach ($tags as $tag) {
             $file = $this->tagFile($tag);
             $this->ensureDir(dirname($file));
             @file_put_contents($file, $encoded . "\n", FILE_APPEND | LOCK_EX);
+            @file_put_contents($membership, hash('sha256', $tag) . "\n", FILE_APPEND | LOCK_EX);
         }
     }
 
@@ -309,6 +328,10 @@ final class FileStore implements
             if (is_file($path) && @unlink($path)) {
                 $removed++;
             }
+
+            // The entry is gone, so it leaves its other tags too. This tag's
+            // own file is removed below, so it need not be rewritten first.
+            $this->forgetTags($encoded, except: hash('sha256', $tag));
         }
 
         @unlink($file);
@@ -501,7 +524,80 @@ final class FileStore implements
      */
     private function tagFile(string $tag): string
     {
-        return $this->root . '/' . self::TAGS_DIR . '/' . hash('sha256', $tag) . '.tag';
+        return $this->tagFileFor(hash('sha256', $tag));
+    }
+
+    /**
+     * @param string $tagHash
+     * @return string
+     */
+    private function tagFileFor(string $tagHash): string
+    {
+        return $this->root . '/' . self::TAGS_DIR . '/' . $tagHash . '.tag';
+    }
+
+    /**
+     * @param string $encoded
+     * @return string
+     */
+    private function membershipFile(string $encoded): string
+    {
+        $safe = hash('sha256', $encoded);
+
+        return $this->root . '/' . self::KEY_TAGS_DIR . '/' . substr($safe, 0, 2) . '/' . $safe . '.tags';
+    }
+
+    /**
+     * Ends an entry's tag membership: removes the entry from every tag file its
+     * membership file lists, then the membership file itself.
+     *
+     * @param string $encoded
+     * @param ?string $except a tag hash whose file the caller is deleting anyway
+     */
+    private function forgetTags(string $encoded, ?string $except = null): void
+    {
+        $membership = $this->membershipFile($encoded);
+        if (!is_file($membership)) {
+            return;
+        }
+
+        $contents = @file_get_contents($membership);
+        foreach (array_unique(array_filter(explode("\n", (string) $contents))) as $tagHash) {
+            if ($tagHash !== $except) {
+                $this->removeTagLine($this->tagFileFor($tagHash), $encoded);
+            }
+        }
+
+        @unlink($membership);
+    }
+
+    /**
+     * @param string $file
+     * @param string $encoded
+     */
+    private function removeTagLine(string $file, string $encoded): void
+    {
+        $handle = @fopen($file, 'c+');
+        if ($handle === false) {
+            return;
+        }
+
+        try {
+            if (!@flock($handle, LOCK_EX)) {
+                return;
+            }
+
+            $lines = explode("\n", (string) stream_get_contents($handle));
+            $kept = array_filter($lines, static fn (string $line): bool => $line !== '' && $line !== $encoded);
+
+            ftruncate($handle, 0);
+            rewind($handle);
+            fwrite($handle, $kept === [] ? '' : implode("\n", $kept) . "\n");
+            fflush($handle);
+            flock($handle, LOCK_UN);
+        } finally {
+            fclose($handle);
+        }
     }
 
     /**

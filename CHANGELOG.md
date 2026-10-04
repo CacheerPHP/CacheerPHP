@@ -106,7 +106,7 @@ remains available on its own `5.x` line during migration.
   acquired instead of always failing.
 - `RedisStore` escapes its prefix in SCAN patterns, so `clear()`, `prune()`,
   `entries()`, and `clearScope()` on a prefix such as `app*` no longer reach
-  `appX`. A prefix containing a reserved `:e`, `:t`, `:l`, or `:lk` segment —
+  `appX`. A prefix containing a reserved `:e`, `:t`, `:l`, `:lk`, or `:kt` segment —
   which would nest it inside another store's keyspace — is now rejected with an
   `InvalidArgumentException`.
 - An encrypting pipeline refuses envelopes that declare no encryption, throwing
@@ -132,6 +132,13 @@ remains available on its own `5.x` line during migration.
   PHP used to turn the counter into a float, breaking every later increment.
 - A serve-stale grace that would overflow the TTL raises `InvalidTtlException`
   instead of a `TypeError`.
+- Ending an entry ends its tag membership on every store. After `delete()`,
+  `deleteMany()`, `clearScope()`, or `clearTag()` of one of its tags, the old
+  tag could still delete a new, untagged entry written under the same key
+  (ArrayStore also after `clear()`). Tagging a key with no live entry now records
+  nothing. File and Redis keep a small key-to-tags index for this, which on
+  Redis uses the new reserved `:kt` prefix segment. Membership still survives
+  overwrites and expiry, so a refreshed value stays tagged.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of

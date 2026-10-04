@@ -12,6 +12,9 @@ trade-offs so you can design around them. Failure *modes* per capability are in
 - Tag indexes are **best-effort metadata**. A key that expires before its tag is
   flushed is a no-op, not an error. Tags are for grouped invalidation, not for
   enumerating a guaranteed-complete set.
+- Tag membership survives expiry, so the tag index of a key that expires and is
+  never written, deleted, or flushed again keeps a small record until the next
+  `clear()` or `clearTag()`.
 - `DatabaseStore` stores scopes and tags in 255-character columns, so it rejects
   a scope path (segments joined by `/`) or a tag longer than 255 characters
   before writing — `InvalidScopeException` for scopes, `InvalidArgumentException`

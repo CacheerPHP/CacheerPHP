@@ -48,7 +48,7 @@ expired entry is a miss and lazily removes the entry; `touch()` on one is also a
 miss and never revives it. Scope, tag, and prefix
 names are matched literally and exactly: SQL `%`/`_` and Redis glob characters
 carry no special meaning, and names differing only by case, accent, or Unicode
-normalization stay distinct on every SQL engine. A Redis prefix cannot contain the segments `:e`, `:t`, `:l`, or `:lk`
+normalization stay distinct on every SQL engine. A Redis prefix cannot contain the segments `:e`, `:t`, `:l`, `:lk`, or `:kt`
 (e.g. `app:t`), because those would place it inside another store's keyspace;
 `RedisStore` rejects such a prefix with an `InvalidArgumentException`.
 
@@ -81,8 +81,12 @@ stampede optimization: after a timeout it returns the holder's result if one was
 stored, and otherwise computes the value itself.
 
 **Tags (`TaggableStore`).** Tagging associates already-stored keys with a tag;
-`clearTag()` invalidates them. Tag indexes are best-effort metadata: a key that
-expires before its tag is flushed is simply a no-op, never an error.
+`clearTag()` invalidates them. Tagging a key with no live entry records nothing.
+Membership lasts until the entry is deleted or cleared (`delete()`, `clear()`,
+`clearScope()`, or `clearTag()` of any of its tags), so an old tag can never
+remove a new entry written later under the same key. It survives overwrites and
+expiry, so a refreshed value stays tagged; a key that expires before its tag is
+flushed is simply a no-op, never an error. Every built-in store behaves the same.
 
 **Scopes (`FlushableScopeStore`).** `scope('x')->clear()` removes only that scope.
 Clearing the root scope clears the whole store. Scoping the same key name into

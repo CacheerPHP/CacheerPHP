@@ -57,7 +57,26 @@ final class RedisStore implements
     /**
      * The keyspace markers this store places after its prefix.
      */
-    private const MARKERS = ['e', 't', 'l', 'lk'];
+    private const MARKERS = ['e', 't', 'l', 'lk', 'kt'];
+
+    /**
+     * Ends one entry: removes it from every tag set its membership set lists
+     * (except one the caller is deleting anyway), then deletes the entry and the
+     * membership set. Returns how many entries were deleted (0 or 1).
+     *
+     * KEYS[1] entry, KEYS[2] its membership set; ARGV[1] tag key prefix,
+     * ARGV[2] the tag to skip (or '').
+     */
+    private const END_ENTRY = <<<'LUA'
+        for _, tag in ipairs(redis.call('SMEMBERS', KEYS[2])) do
+            if tag ~= ARGV[2] then
+                redis.call('SREM', ARGV[1] .. tag, KEYS[1])
+            end
+        end
+        local removed = redis.call('DEL', KEYS[1])
+        redis.call('DEL', KEYS[2])
+        return removed
+        LUA;
 
     /**
      * @var EnvelopeCodec
@@ -131,13 +150,14 @@ final class RedisStore implements
      */
     public function delete(Key $key): bool
     {
-        return $this->redis->delete([$this->entryKey($key)]) > 0;
+        return $this->endEntry($this->entryKey($key)) > 0;
     }
 
     public function clear(): void
     {
         $this->deleteByPattern($this->pattern('e'));
         $this->deleteByPattern($this->pattern('t'));
+        $this->deleteByPattern($this->pattern('kt'));
     }
 
     /**
@@ -268,8 +288,8 @@ final class RedisStore implements
             }
         }
 
-        if ($doomed !== []) {
-            $this->redis->delete($doomed);
+        foreach ($doomed as $entryKey) {
+            $this->endEntry($entryKey);
         }
     }
 
@@ -279,8 +299,15 @@ final class RedisStore implements
      */
     public function tag(Key $key, string ...$tags): void
     {
+        // Tags group stored entries; a key with no live entry has nothing to group.
+        if ($this->get($key)->isMiss()) {
+            return;
+        }
+
+        $entryKey = $this->entryKey($key);
         foreach ($tags as $tag) {
-            $this->redis->sAdd($this->tagKey($tag), $this->entryKey($key));
+            $this->redis->sAdd($this->tagKey($tag), $entryKey);
+            $this->redis->sAdd($this->membershipKey($entryKey), $tag);
         }
     }
 
@@ -290,8 +317,12 @@ final class RedisStore implements
      */
     public function clearTag(string $tag): int
     {
-        $members = $this->redis->sMembers($this->tagKey($tag));
-        $removed = $members === [] ? 0 : $this->redis->delete($members);
+        $removed = 0;
+        foreach ($this->redis->sMembers($this->tagKey($tag)) as $entryKey) {
+            // The entry also leaves its other tags; this tag's set goes below.
+            $removed += $this->endEntry($entryKey, except: $tag);
+        }
+
         $this->redis->delete([$this->tagKey($tag)]);
 
         return $removed;
@@ -497,6 +528,31 @@ final class RedisStore implements
     private function tagKey(string $tag): string
     {
         return $this->prefix . ':t:' . $tag;
+    }
+
+    /**
+     * The set of tags an entry belongs to — the reverse of its tag sets.
+     *
+     * @param string $entryKey
+     * @return string
+     */
+    private function membershipKey(string $entryKey): string
+    {
+        return $this->prefix . ':kt:' . substr($entryKey, strlen($this->prefix . ':e:'));
+    }
+
+    /**
+     * @param string $entryKey
+     * @param string $except
+     * @return int
+     */
+    private function endEntry(string $entryKey, string $except = ''): int
+    {
+        return (int) $this->redis->eval(
+            self::END_ENTRY,
+            [$entryKey, $this->membershipKey($entryKey)],
+            [$this->prefix . ':t:', $except],
+        );
     }
 
     /**

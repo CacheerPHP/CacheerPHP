@@ -46,9 +46,20 @@ final class ArrayStore implements
     private array $items = [];
 
     /**
+     * Tag => key identities. Membership lasts until the entry is deleted or
+     * cleared; it survives overwrites and expiry, as on every store.
+     *
      * @var array<string, array<string, true>>
      */
     private array $tags = [];
+
+    /**
+     * Key identity => tags: the reverse of $tags, so ending an entry drops its
+     * memberships without scanning every tag.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private array $tagsByKey = [];
 
     /**
      * @var InProcessLockRegistry
@@ -107,6 +118,9 @@ final class ArrayStore implements
      */
     public function delete(Key $key): bool
     {
+        // Deleting ends the entry's tag membership even when it already expired.
+        $this->forgetTags($key->identity());
+
         if ($this->get($key)->isMiss()) {
             return false;
         }
@@ -119,6 +133,8 @@ final class ArrayStore implements
     public function clear(): void
     {
         $this->items = [];
+        $this->tags = [];
+        $this->tagsByKey = [];
     }
 
     /**
@@ -251,6 +267,7 @@ final class ArrayStore implements
         foreach ($this->items as $identity => $entry) {
             if ($scope->contains($entry->key()->scope())) {
                 unset($this->items[$identity]);
+                $this->forgetTags($identity);
             }
         }
     }
@@ -261,8 +278,15 @@ final class ArrayStore implements
      */
     public function tag(Key $key, string ...$tags): void
     {
+        // Tags group stored entries; a key with no live entry has nothing to group.
+        if ($this->get($key)->isMiss()) {
+            return;
+        }
+
+        $identity = $key->identity();
         foreach ($tags as $tag) {
-            $this->tags[$tag][$key->identity()] = true;
+            $this->tags[$tag][$identity] = true;
+            $this->tagsByKey[$identity][$tag] = true;
         }
     }
 
@@ -279,11 +303,30 @@ final class ArrayStore implements
                 unset($this->items[$identity]);
                 $removed++;
             }
+
+            // The entry is gone, so it leaves its other tags too.
+            $this->forgetTags($identity);
         }
 
         unset($this->tags[$tag]);
 
         return $removed;
+    }
+
+    /**
+     * @param string $identity
+     */
+    private function forgetTags(string $identity): void
+    {
+        foreach (array_keys($this->tagsByKey[$identity] ?? []) as $tag) {
+            unset($this->tags[$tag][$identity]);
+
+            if ($this->tags[$tag] === []) {
+                unset($this->tags[$tag]);
+            }
+        }
+
+        unset($this->tagsByKey[$identity]);
     }
 
     /**

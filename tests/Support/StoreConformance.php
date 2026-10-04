@@ -401,6 +401,93 @@ abstract class StoreConformance extends TestCase
         self::assertSame('c', $this->store->get(Key::named('page:1'))->value());
     }
 
+    /**
+     * Each way an entry can end, followed by an unrelated, untagged write of the
+     * same key. The old tag must not be able to delete the new entry.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function tagEndings(): array
+    {
+        return [
+            'delete'     => ['delete'],
+            'deleteMany' => ['deleteMany'],
+            'clear'      => ['clear'],
+            'clearScope' => ['clearScope'],
+            'clearTag'   => ['clearTag'],
+        ];
+    }
+
+    #[DataProvider('tagEndings')]
+    public function testAnEndedEntryLeavesNoTagMembershipBehind(string $ending): void
+    {
+        $store = $this->requireCapability(TaggableStore::class);
+        $key = Key::named('reused')->within(Scope::named('tenant'));
+        $sibling = Key::named('sibling')->within(Scope::named('other'));
+
+        $this->store->set($key, 'old', Ttl::forever());
+        $this->store->set($sibling, 'sibling', Ttl::forever());
+        $store->tag($key, 'group', 'second');
+        $store->tag($sibling, 'second');
+
+        match ($ending) {
+            'delete'     => $this->store->delete($key),
+            'deleteMany' => $this->requireCapability(BatchStore::class)->deleteMany([$key]),
+            'clear'      => $this->store->clear(),
+            'clearScope' => $this->requireCapability(FlushableScopeStore::class)->clearScope(Scope::named('tenant')),
+            'clearTag'   => $store->clearTag('group'),
+        };
+
+        $this->store->set($key, 'new and untagged', Ttl::forever());
+
+        self::assertSame(0, $store->clearTag('group'));
+        self::assertSame('new and untagged', $this->store->get($key)->value(), 'An old tag must not delete a new entry.');
+
+        // Its other tag forgot it too, while still grouping what it should.
+        $expected = $ending === 'clear' ? 0 : 1;
+        self::assertSame($expected, $store->clearTag('second'));
+        self::assertSame('new and untagged', $this->store->get($key)->value());
+    }
+
+    public function testTaggingAKeyThatIsNotStoredRecordsNothing(): void
+    {
+        $store = $this->requireCapability(TaggableStore::class);
+        $missing = Key::named('missing');
+        $expired = Key::named('expired');
+
+        $this->store->set($expired, 'value', Ttl::seconds(1));
+        $this->clock->advance(2);
+
+        $store->tag($missing, 'group');
+        $store->tag($expired, 'group');
+
+        $this->store->set($missing, 'later', Ttl::forever());
+        $this->store->set($expired, 'later', Ttl::forever());
+
+        self::assertSame(0, $store->clearTag('group'));
+        self::assertTrue($this->store->get($missing)->isHit());
+    }
+
+    public function testTagsSurviveOverwriteAndExpiry(): void
+    {
+        // Agreed behavior: membership belongs to the key until the entry is
+        // deleted or cleared, so an overwritten or refreshed value stays tagged.
+        $store = $this->requireCapability(TaggableStore::class);
+        $overwritten = Key::named('overwritten');
+        $refreshed = Key::named('refreshed');
+
+        $this->store->set($overwritten, 'v1', Ttl::forever());
+        $this->store->set($refreshed, 'v1', Ttl::seconds(1));
+        $store->tag($overwritten, 'group');
+        $store->tag($refreshed, 'group');
+
+        $this->store->set($overwritten, 'v2', Ttl::forever());
+        $this->clock->advance(2);
+        $this->store->set($refreshed, 'v2', Ttl::forever());
+
+        self::assertSame(2, $store->clearTag('group'));
+    }
+
     public function testAtomicIncrementAndCompareAndSwap(): void
     {
         $store = $this->requireCapability(AtomicStore::class);
