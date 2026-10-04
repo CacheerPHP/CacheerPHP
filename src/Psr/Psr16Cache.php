@@ -8,7 +8,11 @@ use DateInterval;
 use DateTimeImmutable;
 use Psr\SimpleCache\CacheInterface;
 use Silviooosilva\CacheerPhp\Contracts\Cache;
+use Silviooosilva\CacheerPhp\Exceptions\CacheException;
 use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
+use Silviooosilva\CacheerPhp\Exceptions\InvalidKeyException;
+use Silviooosilva\CacheerPhp\Exceptions\InvalidTtlException;
+use Silviooosilva\CacheerPhp\Kernel\Key;
 
 /**
  * PSR-16 (SimpleCache) adapter over the v6 kernel.
@@ -41,7 +45,7 @@ final class Psr16Cache implements CacheInterface
     /**
      * @param string $key
      * @param mixed $value
-     * @param DateInterval|int|null $ttl
+     * @param null|int|DateInterval $ttl
      * @return bool
      */
     public function set(string $key, mixed $value, null|int|DateInterval $ttl = null): bool
@@ -49,15 +53,15 @@ final class Psr16Cache implements CacheInterface
         $key = $this->validateKey($key);
         $seconds = $this->normalizeTtl($ttl);
 
-        if ($seconds !== null && $seconds <= 0) {
-            $this->cache->delete($key);
+        return $this->attempt(function () use ($key, $value, $seconds): void {
+            if ($seconds !== null && $seconds <= 0) {
+                $this->cache->delete($key);
 
-            return true;
-        }
+                return;
+            }
 
-        $this->cache->set($key, $value, $seconds);
-
-        return true;
+            $this->cache->set($key, $value, $seconds);
+        });
     }
 
     /**
@@ -66,9 +70,11 @@ final class Psr16Cache implements CacheInterface
      */
     public function delete(string $key): bool
     {
-        $this->cache->delete($this->validateKey($key));
+        $key = $this->validateKey($key);
 
-        return true;
+        return $this->attempt(function () use ($key): void {
+            $this->cache->delete($key);
+        });
     }
 
     /**
@@ -76,9 +82,9 @@ final class Psr16Cache implements CacheInterface
      */
     public function clear(): bool
     {
-        $this->cache->clear();
-
-        return true;
+        return $this->attempt(function (): void {
+            $this->cache->clear();
+        });
     }
 
     /**
@@ -92,30 +98,39 @@ final class Psr16Cache implements CacheInterface
     }
 
     /**
-     * @param iterable<string, mixed> $values
-     * @param DateInterval|int|null $ttl
+     * @param iterable<mixed> $values
+     * @param null|int|DateInterval $ttl
      * @return bool
      */
     public function setMultiple(iterable $values, null|int|DateInterval $ttl = null): bool
     {
-        $seconds = $this->normalizeTtl($ttl);
-
+        // Validate every key first, so an invalid one rejects the whole call
+        // before anything is written.
+        $validated = [];
         foreach ($values as $key => $value) {
-            $this->set((string) $key, $value, $seconds);
+            $validated[] = [$this->validateKey($key), $value];
         }
 
-        return true;
+        $seconds = $this->normalizeTtl($ttl);
+        $ok = true;
+        foreach ($validated as [$key, $value]) {
+            $ok = $this->set($key, $value, $seconds) && $ok;
+        }
+
+        return $ok;
     }
 
     /**
-     * @param iterable<string> $keys
+     * @param iterable<mixed> $keys
      * @return bool
      */
     public function deleteMultiple(iterable $keys): bool
     {
-        $this->cache->deleteMany($this->validateKeys($keys));
+        $keys = $this->validateKeys($keys);
 
-        return true;
+        return $this->attempt(function () use ($keys): void {
+            $this->cache->deleteMany($keys);
+        });
     }
 
     /**
@@ -128,11 +143,23 @@ final class Psr16Cache implements CacheInterface
     }
 
     /**
-     * @param string $key
+     * Applies the PSR-16 key rules and the native ones, so every invalid key is
+     * reported as the PSR InvalidArgumentException. Integer keys are accepted,
+     * since PHP turns numeric array keys passed to setMultiple() into integers.
+     *
+     * @param mixed $key
      * @return string
      */
-    private function validateKey(string $key): string
+    private function validateKey(mixed $key): string
     {
+        if (is_int($key)) {
+            $key = (string) $key;
+        }
+
+        if (!is_string($key)) {
+            throw CacheInvalidArgumentException::create(sprintf('Cache keys must be strings, %s given.', get_debug_type($key)));
+        }
+
         if ($key === '') {
             throw CacheInvalidArgumentException::create('Cache key must not be empty.');
         }
@@ -143,18 +170,44 @@ final class Psr16Cache implements CacheInterface
             );
         }
 
+        try {
+            Key::named($key);
+        } catch (InvalidKeyException $exception) {
+            throw CacheInvalidArgumentException::create($exception->getMessage());
+        }
+
         return $key;
     }
 
     /**
-     * @param iterable<string> $keys
+     * Runs a write and reports a store failure as false, as PSR-16 requires;
+     * an invalid TTL still surfaces as the PSR InvalidArgumentException.
+     *
+     * @param callable(): void $operation
+     * @return bool
+     */
+    private function attempt(callable $operation): bool
+    {
+        try {
+            $operation();
+
+            return true;
+        } catch (InvalidKeyException|InvalidTtlException $exception) {
+            throw CacheInvalidArgumentException::create($exception->getMessage());
+        } catch (CacheException) {
+            return false;
+        }
+    }
+
+    /**
+     * @param iterable<mixed> $keys
      * @return list<string>
      */
     private function validateKeys(iterable $keys): array
     {
         $validated = [];
         foreach ($keys as $key) {
-            $validated[] = $this->validateKey((string) $key);
+            $validated[] = $this->validateKey($key);
         }
 
         return $validated;

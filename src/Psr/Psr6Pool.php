@@ -8,7 +8,11 @@ use Psr\Cache\CacheItemInterface;
 use Psr\Cache\CacheItemPoolInterface;
 use Silviooosilva\CacheerPhp\Contracts\Cache;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Exceptions\CacheException;
 use Silviooosilva\CacheerPhp\Exceptions\CacheInvalidArgumentException;
+use Silviooosilva\CacheerPhp\Exceptions\InvalidKeyException;
+use Silviooosilva\CacheerPhp\Exceptions\InvalidTtlException;
+use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
@@ -24,7 +28,11 @@ final class Psr6Pool implements CacheItemPoolInterface
     private const RESERVED = '{}()/\\@:';
 
     /**
-     * @var array<string, Psr6Item>
+     * Items queued by saveDeferred(), copied and with their expiry pinned to an
+     * absolute time when queued. null marks one already expired when queued,
+     * which commit() deletes.
+     *
+     * @var array<string, ?Psr6Item>
      */
     private array $deferred = [];
 
@@ -46,8 +54,8 @@ final class Psr6Pool implements CacheItemPoolInterface
     {
         $this->validateKey($key);
 
-        if (isset($this->deferred[$key])) {
-            return $this->deferred[$key];
+        if (array_key_exists($key, $this->deferred)) {
+            return $this->readDeferred($key);
         }
 
         $entry = $this->cache->entry($key);
@@ -58,14 +66,15 @@ final class Psr6Pool implements CacheItemPoolInterface
     }
 
     /**
-     * @param array<string> $keys
+     * @param array<mixed> $keys
      * @return iterable<string, CacheItemInterface>
      */
     public function getItems(array $keys = []): iterable
     {
         $items = [];
+
         foreach ($keys as $key) {
-            $items[$key] = $this->getItem($key);
+            $items[$this->validateKey($key)] = $this->getItem($key);
         }
 
         return $items;
@@ -79,7 +88,11 @@ final class Psr6Pool implements CacheItemPoolInterface
     {
         $this->validateKey($key);
 
-        return isset($this->deferred[$key]) || $this->cache->has($key);
+        if (array_key_exists($key, $this->deferred)) {
+            return $this->readDeferred($key)->isHit();
+        }
+
+        return $this->cache->has($key);
     }
 
     /**
@@ -88,9 +101,10 @@ final class Psr6Pool implements CacheItemPoolInterface
     public function clear(): bool
     {
         $this->deferred = [];
-        $this->cache->clear();
 
-        return true;
+        return $this->attempt(function (): void {
+            $this->cache->clear();
+        });
     }
 
     /**
@@ -101,22 +115,26 @@ final class Psr6Pool implements CacheItemPoolInterface
     {
         $this->validateKey($key);
         unset($this->deferred[$key]);
-        $this->cache->delete($key);
 
-        return true;
+        return $this->attempt(function () use ($key): void {
+            $this->cache->delete($key);
+        });
     }
 
     /**
-     * @param array<string> $keys
+     * @param array<mixed> $keys
      * @return bool
      */
     public function deleteItems(array $keys): bool
     {
-        foreach ($keys as $key) {
-            $this->deleteItem($key);
+        $validated = array_map($this->validateKey(...), $keys);
+
+        $ok = true;
+        foreach ($validated as $key) {
+            $ok = $this->deleteItem($key) && $ok;
         }
 
-        return true;
+        return $ok;
     }
 
     /**
@@ -125,22 +143,25 @@ final class Psr6Pool implements CacheItemPoolInterface
      */
     public function save(CacheItemInterface $item): bool
     {
+        $key = $this->validateKey($item->getKey());
+
         if (!$item instanceof Psr6Item) {
-            $this->cache->set($item->getKey(), $item->get(), null);
-
-            return true;
+            return $this->attempt(function () use ($key, $item): void {
+                $this->cache->set($key, $item->get(), null);
+            });
         }
 
-        $ttl = $item->resolveTtl($this->clock);
-        if ($ttl === false) {
-            $this->cache->delete($item->getKey());
+        return $this->attempt(function () use ($key, $item): void {
+            $ttl = $item->resolveTtl($this->clock);
 
-            return true;
-        }
+            if ($ttl === false) {
+                $this->cache->delete($key);
 
-        $this->cache->set($item->getKey(), $item->rawValue(), $ttl);
+                return;
+            }
 
-        return true;
+            $this->cache->set($key, $item->rawValue(), $ttl);
+        });
     }
 
     /**
@@ -149,9 +170,20 @@ final class Psr6Pool implements CacheItemPoolInterface
      */
     public function saveDeferred(CacheItemInterface $item): bool
     {
-        $this->deferred[$item->getKey()] = $item instanceof Psr6Item
-            ? $item
-            : Psr6Item::hit($item->getKey(), $item->get(), null);
+        $key = $this->validateKey($item->getKey());
+
+        if (!$item instanceof Psr6Item) {
+            $this->deferred[$key] = Psr6Item::hit($key, $item->get(), null);
+
+            return true;
+        }
+
+        // Copy the item so later changes to it do not alter what is queued, and
+        // pin a relative expiry now: its lifetime starts here, not at commit().
+        $ttl = $this->guardArguments(fn (): mixed => $item->resolveTtl($this->clock));
+        $this->deferred[$key] = $ttl === false
+            ? null
+            : Psr6Item::hit($key, $item->rawValue(), $ttl === null ? null : $this->guardArguments(fn (): ?int => $ttl->expiresAt($this->clock)));
 
         return true;
     }
@@ -162,19 +194,84 @@ final class Psr6Pool implements CacheItemPoolInterface
     public function commit(): bool
     {
         $ok = true;
-        foreach ($this->deferred as $item) {
-            $ok = $this->save($item) && $ok;
+
+        foreach ($this->deferred as $key => $item) {
+            $ok = ($item === null
+                ? $this->attempt(function () use ($key): void {
+                    $this->cache->delete($key);
+                })
+                : $this->save($item)) && $ok;
         }
+
         $this->deferred = [];
 
         return $ok;
     }
 
     /**
+     * A copy of a queued item: a hit until its pinned expiry, then a miss.
+     *
      * @param string $key
+     * @return Psr6Item
      */
-    private function validateKey(string $key): void
+    private function readDeferred(string $key): Psr6Item
     {
+        $item = $this->deferred[$key];
+
+        if ($item === null || $item->resolveTtl($this->clock) === false) {
+            return Psr6Item::miss($key);
+        }
+
+        return clone $item;
+    }
+
+    /**
+     * Runs a write and reports a store failure as false, as PSR-6 requires;
+     * invalid input still surfaces as the PSR InvalidArgumentException.
+     *
+     * @param callable(): void $operation
+     * @return bool
+     */
+    private function attempt(callable $operation): bool
+    {
+        try {
+            $this->guardArguments($operation);
+
+            return true;
+        } catch (CacheInvalidArgumentException $exception) {
+            throw $exception;
+        } catch (CacheException) {
+            return false;
+        }
+    }
+
+    /**
+     * @template T
+     * @param callable(): T $operation
+     * @return T
+     */
+    private function guardArguments(callable $operation): mixed
+    {
+        try {
+            return $operation();
+        } catch (InvalidKeyException|InvalidTtlException $exception) {
+            throw CacheInvalidArgumentException::create($exception->getMessage());
+        }
+    }
+
+    /**
+     * Applies the PSR-6 key rules and the native ones, so every invalid key is
+     * reported as the PSR InvalidArgumentException.
+     *
+     * @param mixed $key
+     * @return string
+     */
+    private function validateKey(mixed $key): string
+    {
+        if (!is_string($key)) {
+            throw CacheInvalidArgumentException::create(sprintf('Cache keys must be strings, %s given.', get_debug_type($key)));
+        }
+
         if ($key === '') {
             throw CacheInvalidArgumentException::create('Cache key must not be empty.');
         }
@@ -184,5 +281,9 @@ final class Psr6Pool implements CacheItemPoolInterface
                 sprintf('Cache key "%s" contains reserved characters (%s).', $key, self::RESERVED),
             );
         }
+
+        $this->guardArguments(static fn (): Key => Key::named($key));
+
+        return $key;
     }
 }

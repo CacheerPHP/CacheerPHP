@@ -12,6 +12,7 @@ use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Psr\Psr16Cache;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Tests\Support\FakeClock;
+use Tests\Support\ToggleableStore;
 
 final class Psr16CacheTest extends TestCase
 {
@@ -95,5 +96,65 @@ final class Psr16CacheTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         $this->psr->set('', 'v');
+    }
+
+    public function testInvalidNativeKeysBecomePsrExceptions(): void
+    {
+        $long = str_repeat('k', 1025);
+
+        foreach ([
+            'get'            => static fn (Psr16Cache $c): mixed => $c->get($long),
+            'set'            => static fn (Psr16Cache $c): mixed => $c->set("a\x01b", 'v'),
+            'has'            => static fn (Psr16Cache $c): mixed => $c->has("a\nb"),
+            'delete'         => static fn (Psr16Cache $c): mixed => $c->delete($long),
+            'getMultiple'    => static fn (Psr16Cache $c): mixed => $c->getMultiple(['ok', $long]),
+            'non-string key' => static fn (Psr16Cache $c): mixed => $c->getMultiple(['ok', null]),
+            'setMultiple'    => static fn (Psr16Cache $c): mixed => $c->setMultiple([$long => 'v']),
+            'deleteMultiple' => static fn (Psr16Cache $c): mixed => $c->deleteMultiple([['nested']]),
+        ] as $case => $attempt) {
+            try {
+                $attempt($this->psr);
+                self::fail(sprintf('%s: an invalid key must be rejected.', $case));
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function testATtlBeyondThePlatformLimitIsAPsrException(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->psr->set('k', 'v', PHP_INT_MAX);
+    }
+
+    public function testStoreFailuresAreReportedAsFalse(): void
+    {
+        $store = new ToggleableStore(new ArrayStore($this->clock));
+        $psr = new Psr16Cache(new Cacheer($store, $this->clock));
+        $store->failing = true;
+
+        self::assertFalse($psr->set('k', 'v'));
+        self::assertFalse($psr->delete('k'));
+        self::assertFalse($psr->clear());
+        self::assertFalse($psr->setMultiple(['a' => 1, 'b' => 2]));
+        self::assertFalse($psr->deleteMultiple(['a', 'b']));
+    }
+
+    public function testFalsyValuesKeepTheirTypeThroughAPersistentStore(): void
+    {
+        $dir = sys_get_temp_dir() . '/cacheer-psr16-' . bin2hex(random_bytes(4));
+        $psr = new Psr16Cache(Cacheer::file($dir));
+
+        try {
+            foreach (['false' => false, 'zero' => 0, 'float' => 0.0, 'empty' => '', 'array' => [], 'null' => null] as $key => $value) {
+                self::assertTrue($psr->set($key, $value));
+                self::assertSame($value, $psr->get($key, 'default'), sprintf('"%s" must round-trip exactly.', $key));
+                self::assertTrue($psr->has($key));
+            }
+        } finally {
+            Cacheer::file($dir)->clear();
+            @rmdir($dir . '/entries');
+            @rmdir($dir);
+        }
     }
 }

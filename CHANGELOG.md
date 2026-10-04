@@ -152,6 +152,13 @@ remains available on its own `5.x` line during migration.
   (the refresh lock marks it pending), a queued refresh re-checks freshness
   first, and a refresh that fails or cannot be scheduled releases its pending
   state.
+- PSR adapters follow their contracts. A PSR-6 item saved with
+  `saveDeferred()` reads as a hit before `commit()` (it read as `null`), is
+  queued as a copy, and its relative expiry starts when it is queued. Native key
+  rules (length, control characters) and non-string batch keys now raise the
+  PSR `InvalidArgumentException` instead of `InvalidKeyException` or a silent
+  cast, and so does an out-of-range TTL. Write methods return `false` on a store
+  failure instead of throwing.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of
