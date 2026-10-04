@@ -5,7 +5,7 @@
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="./art/logo.svg">
       <source media="(prefers-color-scheme: light)" srcset="./art/logo-light.svg">
-      <img src="./art/logo.svg" width="420" alt="CacheerPHP"/>
+      <img src="./art/logo-light.svg" width="420" alt="CacheerPHP"/>
     </picture>
   </a>
 </p>
@@ -15,10 +15,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/silviooosilva/CacheerPHP/releases"><img src="https://img.shields.io/github/release/silviooosilva/CacheerPHP.svg?style=for-the-badge&color=f2b93c" alt="Latest Version"/></a>
-  <img src="https://img.shields.io/packagist/dependency-v/silviooosilva/cacheer-php/PHP?style=for-the-badge&color=f2b93c" alt="PHP Version"/>
-  <img src="https://img.shields.io/packagist/dt/silviooosilva/cacheer-php?style=for-the-badge&color=f2b93c" alt="Downloads"/>
-  <a href="https://github.com/silviooosilva/CacheerPHP"><img src="https://img.shields.io/badge/maintainer-@silviooosilva-f2b93c.svg?style=for-the-badge&color=f2b93c" alt="Maintainer"/></a>
+  <a href="https://github.com/silviooosilva/CacheerPHP/releases"><img src="https://img.shields.io/github/release/silviooosilva/CacheerPHP.svg?style=for-the-badge&color=315dc9" alt="Latest Version"/></a>
+  <img src="https://img.shields.io/packagist/dependency-v/silviooosilva/cacheer-php/PHP?style=for-the-badge&color=315dc9" alt="PHP Version"/>
+  <img src="https://img.shields.io/packagist/dt/silviooosilva/cacheer-php?style=for-the-badge&color=315dc9" alt="Downloads"/>
+  <a href="https://github.com/silviooosilva/CacheerPHP"><img src="https://img.shields.io/badge/maintainer-@silviooosilva-315dc9.svg?style=for-the-badge&color=315dc9" alt="Maintainer"/></a>
 </p>
 
 ---
