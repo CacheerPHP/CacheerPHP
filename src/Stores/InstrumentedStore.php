@@ -22,6 +22,7 @@ use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Observability\CacheEvent;
+use Silviooosilva\CacheerPhp\Observability\SafeDispatch;
 use Throwable;
 
 /**
@@ -93,9 +94,9 @@ final class InstrumentedStore implements
 
         if ($entry->isHit()) {
             [$bytes, $hasValue, $value] = $this->capture($entry->value());
-            $this->events->dispatch(CacheEvent::hit($this->name, (string) $key, $duration, $bytes, $hasValue, $value));
+            SafeDispatch::to($this->events, CacheEvent::hit($this->name, (string) $key, $duration, $bytes, $hasValue, $value));
         } else {
-            $this->events->dispatch(CacheEvent::miss($this->name, (string) $key, $duration));
+            SafeDispatch::to($this->events, CacheEvent::miss($this->name, (string) $key, $duration));
         }
 
         return $entry;
@@ -114,7 +115,7 @@ final class InstrumentedStore implements
         });
 
         [$bytes, $hasValue, $captured] = $this->capture($value);
-        $this->events->dispatch(CacheEvent::written($this->name, (string) $key, $this->elapsed($start), $bytes, $hasValue, $captured));
+        SafeDispatch::to($this->events, CacheEvent::written($this->name, (string) $key, $this->elapsed($start), $bytes, $hasValue, $captured));
     }
 
     /**
@@ -125,7 +126,7 @@ final class InstrumentedStore implements
     {
         $start = microtime(true);
         $existed = $this->guard($key, fn (): bool => $this->inner->delete($key));
-        $this->events->dispatch(CacheEvent::deleted($this->name, (string) $key, $this->elapsed($start), $existed));
+        SafeDispatch::to($this->events, CacheEvent::deleted($this->name, (string) $key, $this->elapsed($start), $existed));
 
         return $existed;
     }
@@ -136,7 +137,7 @@ final class InstrumentedStore implements
         $this->guard(null, function (): void {
             $this->inner->clear();
         });
-        $this->events->dispatch(CacheEvent::cleared($this->name, $this->elapsed($start)));
+        SafeDispatch::to($this->events, CacheEvent::cleared($this->name, $this->elapsed($start)));
     }
 
     /**
@@ -145,9 +146,30 @@ final class InstrumentedStore implements
      */
     public function getMany(iterable $keys): array
     {
-        $entries = [];
-        foreach ($keys as $key) {
-            $entries[] = $this->get($key);
+        $batch = Capabilities::as($this->inner, BatchStore::class);
+        if ($batch === null) {
+            $entries = [];
+            foreach ($keys as $key) {
+                $entries[] = $this->get($key);
+            }
+
+            return $entries;
+        }
+
+        // Forward to the native batch so monitoring keeps its behavior; the
+        // per-key events follow, sharing the batch's duration.
+        $keys = [...$keys];
+        $start = microtime(true);
+        $entries = $this->guard(null, fn (): array => $batch->getMany($keys));
+        $duration = $this->elapsed($start) / max(1, count($entries));
+
+        foreach ($entries as $entry) {
+            if ($entry->isHit()) {
+                [$bytes, $hasValue, $value] = $this->capture($entry->value());
+                SafeDispatch::to($this->events, CacheEvent::hit($this->name, (string) $entry->key(), $duration, $bytes, $hasValue, $value));
+            } else {
+                SafeDispatch::to($this->events, CacheEvent::miss($this->name, (string) $entry->key(), $duration));
+            }
         }
 
         return $entries;
@@ -159,8 +181,27 @@ final class InstrumentedStore implements
      */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
+        $batch = Capabilities::as($this->inner, BatchStore::class);
+        if ($batch === null) {
+            foreach ($entries as $entry) {
+                $this->set($entry['key'], $entry['value'], $ttl);
+            }
+
+            return;
+        }
+
+        // The native batch keeps its atomicity (e.g. a database transaction):
+        // a failing entry rolls back the whole batch, exactly as unmonitored.
+        $entries = [...$entries];
+        $start = microtime(true);
+        $this->guard(null, function () use ($batch, $entries, $ttl): void {
+            $batch->setMany($entries, $ttl);
+        });
+        $duration = $this->elapsed($start) / max(1, count($entries));
+
         foreach ($entries as $entry) {
-            $this->set($entry['key'], $entry['value'], $ttl);
+            [$bytes, $hasValue, $captured] = $this->capture($entry['value']);
+            SafeDispatch::to($this->events, CacheEvent::written($this->name, (string) $entry['key'], $duration, $bytes, $hasValue, $captured));
         }
     }
 
@@ -170,9 +211,25 @@ final class InstrumentedStore implements
      */
     public function deleteMany(iterable $keys): bool
     {
-        $deleted = true;
+        $batch = Capabilities::as($this->inner, BatchStore::class);
+        if ($batch === null) {
+            $deleted = true;
+            foreach ($keys as $key) {
+                $deleted = $this->delete($key) && $deleted;
+            }
+
+            return $deleted;
+        }
+
+        $keys = [...$keys];
+        $start = microtime(true);
+        $deleted = $this->guard(null, fn (): bool => $batch->deleteMany($keys));
+        $duration = $this->elapsed($start) / max(1, count($keys));
+
+        // A native batch reports one result for all keys, so each delete event
+        // carries that result rather than a per-key existence check.
         foreach ($keys as $key) {
-            $deleted = $this->delete($key) && $deleted;
+            SafeDispatch::to($this->events, CacheEvent::deleted($this->name, (string) $key, $duration, $deleted));
         }
 
         return $deleted;
@@ -191,7 +248,7 @@ final class InstrumentedStore implements
         // Reported as a write: no value changed, but the entry did. Without this
         // a renewed TTL is invisible to telemetry.
         if ($touched) {
-            $this->events->dispatch(CacheEvent::written($this->name, (string) $key, $this->elapsed($start)));
+            SafeDispatch::to($this->events, CacheEvent::written($this->name, (string) $key, $this->elapsed($start)));
         }
 
         return $touched;
@@ -204,7 +261,7 @@ final class InstrumentedStore implements
     {
         $start = microtime(true);
         $removed = $this->prunable()->prune();
-        $this->events->dispatch(CacheEvent::pruned($this->name, $this->elapsed($start), $removed));
+        SafeDispatch::to($this->events, CacheEvent::pruned($this->name, $this->elapsed($start), $removed));
 
         return $removed;
     }
@@ -225,7 +282,7 @@ final class InstrumentedStore implements
     {
         $start = microtime(true);
         $this->scopeFlushable()->clearScope($scope);
-        $this->events->dispatch(CacheEvent::cleared($this->name, $this->elapsed($start)));
+        SafeDispatch::to($this->events, CacheEvent::cleared($this->name, $this->elapsed($start)));
     }
 
     /**
@@ -239,7 +296,7 @@ final class InstrumentedStore implements
             $this->taggable()->tag($key, ...$tags);
         });
 
-        $this->events->dispatch(CacheEvent::written(
+        SafeDispatch::to($this->events, CacheEvent::written(
             $this->name,
             (string) $key,
             $this->elapsed($start),
@@ -258,7 +315,7 @@ final class InstrumentedStore implements
 
         // A tag flush is a bulk invalidation, so it reports as a clear carrying
         // how many entries went with it.
-        $this->events->dispatch(CacheEvent::pruned($this->name, $this->elapsed($start), $removed));
+        SafeDispatch::to($this->events, CacheEvent::pruned($this->name, $this->elapsed($start), $removed));
 
         return $removed;
     }
@@ -277,7 +334,7 @@ final class InstrumentedStore implements
 
         // Counters are writes; the new value rides along in `count` so a
         // dashboard can chart it without value capture being enabled.
-        $this->events->dispatch(CacheEvent::written(
+        SafeDispatch::to($this->events, CacheEvent::written(
             $this->name,
             (string) $key,
             $this->elapsed($start),
@@ -302,7 +359,7 @@ final class InstrumentedStore implements
         // Only a successful swap wrote anything.
         if ($swapped) {
             [$bytes, $hasValue, $captured] = $this->capture($value);
-            $this->events->dispatch(CacheEvent::written(
+            SafeDispatch::to($this->events, CacheEvent::written(
                 $this->name,
                 (string) $key,
                 $this->elapsed($start),
@@ -338,7 +395,7 @@ final class InstrumentedStore implements
         try {
             return $operationFn();
         } catch (Throwable $exception) {
-            $this->events->dispatch(CacheEvent::failed($this->name, $key === null ? null : (string) $key, $this->elapsed($start), $exception));
+            SafeDispatch::to($this->events, CacheEvent::failed($this->name, $key === null ? null : (string) $key, $this->elapsed($start), $exception));
 
             throw $exception;
         }

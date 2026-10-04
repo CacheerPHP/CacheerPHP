@@ -46,7 +46,8 @@ final class MetricsCollector
     {
         $this->counts[$event->type->value] = ($this->counts[$event->type->value] ?? 0) + 1;
 
-        if ($event->bytes !== null) {
+        // Hits carry the size of the value read; only writes add to bytes written.
+        if ($event->type === CacheEventType::Write && $event->bytes !== null) {
             $this->bytesWritten += $event->bytes;
         }
 

@@ -33,6 +33,7 @@ use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Observability\CacheEvent;
 use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
+use Silviooosilva\CacheerPhp\Observability\SafeDispatch;
 use Silviooosilva\CacheerPhp\Support\SyncDeferredExecutor;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 use Throwable;
@@ -378,7 +379,7 @@ final readonly class CacheOperations
                 return $entry->value();
             }
 
-            $this->events->dispatch(CacheEvent::staleServed($this->storeName(), (string) $key));
+            SafeDispatch::to($this->events, CacheEvent::staleServed($this->storeName(), (string) $key));
             $this->scheduleRefresh($key, $stale, $callback);
 
             return $entry->value();
@@ -729,7 +730,7 @@ final readonly class CacheOperations
         if (!$lock->block(5.0)) {
             // Single-flight is a stampede optimization, not a guarantee: after a
             // timeout, use the holder's result if it landed, else compute anyway.
-            $this->events->dispatch(CacheEvent::lockContended($this->storeName(), (string) $key));
+            SafeDispatch::to($this->events, CacheEvent::lockContended($this->storeName(), (string) $key));
 
             $entry = $this->read($key);
 
@@ -779,7 +780,7 @@ final readonly class CacheOperations
 
             if ($lock === null) {
                 $this->compute($key, Ttl::seconds($stale), $callback, applyPolicy: false);
-                $this->events->dispatch(CacheEvent::refreshed($this->storeName(), (string) $key));
+                SafeDispatch::to($this->events, CacheEvent::refreshed($this->storeName(), (string) $key));
 
                 return;
             }
@@ -790,7 +791,7 @@ final readonly class CacheOperations
 
             try {
                 $this->compute($key, Ttl::seconds($stale), $callback, applyPolicy: false);
-                $this->events->dispatch(CacheEvent::refreshed($this->storeName(), (string) $key));
+                SafeDispatch::to($this->events, CacheEvent::refreshed($this->storeName(), (string) $key));
             } finally {
                 $lock->release();
             }

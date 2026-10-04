@@ -63,6 +63,10 @@ trade-offs so you can design around them. Failure *modes* per capability are in
 - Cache **values are never captured** by events, metrics, or the logging
   subscriber by default. `InstrumentedStore` can capture values only when
   explicitly enabled with a redactor — intended for debugging, not production.
+- Telemetry is best-effort: a failing listener or dispatcher is ignored rather
+  than reported, so it never changes a cache operation's outcome.
+- An instrumented native `deleteMany()` reports one result for the whole batch,
+  so each per-key delete event carries that shared result.
 
 ## Service matrix coverage
 

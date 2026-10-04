@@ -24,6 +24,7 @@ use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Observability\CacheEvent;
 use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
+use Silviooosilva\CacheerPhp\Observability\SafeDispatch;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 
 /**
@@ -351,7 +352,7 @@ final class TieredStore implements
             $entry->expiresAt(),
             $this->promotionTtl($entry),
         );
-        $this->events->dispatch(CacheEvent::promoted('TieredStore', (string) $key));
+        SafeDispatch::to($this->events, CacheEvent::promoted('TieredStore', (string) $key));
     }
 
     /**

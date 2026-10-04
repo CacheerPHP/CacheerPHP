@@ -139,6 +139,13 @@ remains available on its own `5.x` line during migration.
   nothing. File and Redis keep a small key-to-tags index for this, which on
   Redis uses the new reserved `:kt` prefix segment. Membership still survives
   overwrites and expiry, so a refreshed value stays tagged.
+- Monitoring no longer changes cache behavior. `InstrumentedStore` forwards
+  `getMany`/`setMany`/`deleteMany` to the inner store's native batch, so a
+  monitored database batch rolls back as a whole instead of committing entries
+  one by one. A throwing listener or custom dispatcher can no longer fail a
+  completed operation or replace a backend error, in the instrumented store,
+  the kernel, or `TieredStore`. `MetricsCollector` no longer counts read sizes
+  as `bytes_written`.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of
