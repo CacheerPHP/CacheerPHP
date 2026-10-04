@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Storage;
 
+use InvalidArgumentException;
 use Silviooosilva\CacheerPhp\Contracts\Compressor;
 use Silviooosilva\CacheerPhp\Contracts\Encrypter;
 use Silviooosilva\CacheerPhp\Contracts\Serializer;
@@ -15,7 +16,8 @@ use Silviooosilva\CacheerPhp\Exceptions\ValueTooLargeException;
  *
  * Encode runs serialize -> compress -> encrypt; decode reverses it, selecting
  * each stage by the id recorded in the envelope. A blob that is not a v6
- * envelope is rejected as unsupported.
+ * envelope is rejected as unsupported, and so is a plaintext envelope when this
+ * pipeline encrypts. The value limit applies on read to every pipeline.
  * Failures are deterministic and typed; the codec never returns unauthenticated
  * or over-limit data.
  */
@@ -33,6 +35,9 @@ final class EnvelopeCodec
         private readonly ?Encrypter $encrypter = null,
         private readonly int $maxValueBytes = 0,
     ) {
+        if ($maxValueBytes < 0) {
+            throw new InvalidArgumentException('The maximum value size cannot be negative; use 0 for no limit.');
+        }
     }
 
     /**
@@ -83,12 +88,24 @@ final class EnvelopeCodec
         $envelope = Envelope::fromString($blob);
         $payload = $envelope->payload;
 
+        // A pipeline that encrypts only trusts what it can authenticate, so an
+        // envelope declaring "no encryption" is refused rather than believed.
+        if ($this->encrypter !== null && $envelope->encrypterId === Envelope::NONE) {
+            throw UnsupportedEnvelopeException::unencrypted();
+        }
+
         if ($envelope->encrypterId !== Envelope::NONE) {
             $payload = $this->encrypterFor($envelope->encrypterId)->decrypt($payload, $envelope->keyId);
         }
 
         if ($envelope->compressorId !== Envelope::NONE) {
             $payload = $this->compressorFor($envelope->compressorId)->decompress($payload, $this->maxValueBytes);
+        }
+
+        // Decompression stops at the limit as it inflates; this covers the
+        // plain and encrypted-only paths, so no oversized value is unserialized.
+        if ($this->maxValueBytes > 0 && strlen($payload) > $this->maxValueBytes) {
+            throw ValueTooLargeException::onRead($this->maxValueBytes);
         }
 
         if ($envelope->serializerId !== $this->serializer->id()) {

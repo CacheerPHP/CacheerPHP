@@ -32,7 +32,7 @@ final class ValueTooLargeException extends \RuntimeException implements CacheExc
     public static function onRead(int $limit): self
     {
         return new self(sprintf(
-            'Decompressed cache value exceeds the configured limit of %d bytes.',
+            'Cache value read exceeds the configured limit of %d bytes.',
             $limit,
         ));
     }

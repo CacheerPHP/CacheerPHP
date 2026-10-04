@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Config;
 
+use InvalidArgumentException;
 use Silviooosilva\CacheerPhp\Contracts\Compressor;
 use Silviooosilva\CacheerPhp\Contracts\Encrypter;
 use Silviooosilva\CacheerPhp\Contracts\Serializer;
@@ -106,6 +107,10 @@ final readonly class PipelineConfig
      */
     public function withMaxValueBytes(int $maxValueBytes): self
     {
+        if ($maxValueBytes < 0) {
+            throw new InvalidArgumentException('The maximum value size cannot be negative; use 0 for no limit.');
+        }
+
         return new self($this->serializer, $this->compressor, $this->encrypter, $maxValueBytes);
     }
 

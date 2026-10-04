@@ -28,7 +28,14 @@ credit reporters who want credit.
 
 - v6 encrypts values with **authenticated AES-256-GCM** and supports key
   rotation via a keyring. Decoding rejects tampered or truncated ciphertext with
-  a typed exception; it never returns unauthenticated data.
+  a typed exception; it never returns unauthenticated data. An encrypting
+  pipeline also refuses envelopes that declare no encryption, so plaintext
+  planted in the backend cannot bypass authentication.
+- Without encryption the cache backend is trusted: `PhpSerializer` allows every
+  class by default. On a shared backend, enable encryption or restrict classes
+  with `new PhpSerializer(allowedClasses: false)`.
+- The configured value limit (`withMaxValueBytes`) is enforced on read for every
+  pipeline, and decompression stops as soon as it is exceeded.
 - v6 never decodes v5's unauthenticated **AES-256-CBC** payloads: a blob that is
   not an authenticated v6 envelope is rejected. Upgrades start with a cold cache
   instead — see [MIGRATION.md](MIGRATION.md#5-cached-data-v6-starts-cold).

@@ -79,6 +79,10 @@ final readonly class Envelope
             throw UnsupportedEnvelopeException::unrecognized();
         }
 
+        if (strlen($blob) <= strlen(self::MAGIC)) {
+            throw CorruptedPayloadException::truncatedHeader();
+        }
+
         $version = ord($blob[strlen(self::MAGIC)]);
         if ($version !== self::VERSION) {
             throw UnsupportedEnvelopeException::version($version);

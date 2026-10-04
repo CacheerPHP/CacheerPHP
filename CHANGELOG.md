@@ -109,6 +109,16 @@ remains available on its own `5.x` line during migration.
   `appX`. A prefix containing a reserved `:e`, `:t`, `:l`, or `:lk` segment —
   which would nest it inside another store's keyspace — is now rejected with an
   `InvalidArgumentException`.
+- An encrypting pipeline refuses envelopes that declare no encryption, throwing
+  `UnsupportedEnvelopeException`. Anyone able to write to the backend could
+  previously plant an unauthenticated plaintext envelope that was unserialized.
+  Clear the cache (or use a new keyspace) when enabling encryption.
+- The value limit now applies on read to plain and encrypted-only pipelines too,
+  not just to decompression, so no oversized payload reaches `unserialize()`. A
+  negative limit is rejected with `InvalidArgumentException`.
+- An envelope cut off right after its magic bytes is reported as
+  `CorruptedPayloadException` instead of raising a PHP warning and a misleading
+  "version 0" error.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of

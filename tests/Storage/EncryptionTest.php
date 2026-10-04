@@ -11,6 +11,7 @@ use Silviooosilva\CacheerPhp\Exceptions\CorruptedPayloadException;
 use Silviooosilva\CacheerPhp\Exceptions\UnsupportedEnvelopeException;
 use Silviooosilva\CacheerPhp\Storage\Encryption\Keyring;
 use Silviooosilva\CacheerPhp\Storage\Encryption\OpenSslGcmEncrypter;
+use Silviooosilva\CacheerPhp\Storage\Envelope;
 
 final class EncryptionTest extends TestCase
 {
@@ -30,6 +31,37 @@ final class EncryptionTest extends TestCase
 
         self::assertStringNotContainsString('top-secret', $blob);
         self::assertSame('top-secret', $codec->decode($blob));
+    }
+
+    public function testAnEncryptingPipelineRefusesPlaintextEnvelopes(): void
+    {
+        // Anyone able to write to the backend could otherwise plant an
+        // unauthenticated envelope that simply declares "no encryption".
+        $planted = PipelineConfig::default()->codec()->encode(['role' => 'admin']);
+        $codec = PipelineConfig::default()->withKeyring($this->keyring())->codec();
+
+        $this->expectException(UnsupportedEnvelopeException::class);
+        $codec->decode($planted);
+    }
+
+    public function testAnEncryptingPipelineRefusesPlaintextEvenWhenCompressed(): void
+    {
+        $planted = PipelineConfig::default()->withGzip()->codec()->encode(['role' => 'admin']);
+        $codec = PipelineConfig::default()->withGzip()->withKeyring($this->keyring())->codec();
+
+        $this->expectException(UnsupportedEnvelopeException::class);
+        $codec->decode($planted);
+    }
+
+    public function testTruncatedCiphertextIsRejectedAsCorrupt(): void
+    {
+        $codec = PipelineConfig::default()->withKeyring($this->keyring())->codec();
+        $blob = $codec->encode('value');
+        $envelope = Envelope::fromString($blob);
+        $truncated = new Envelope($envelope->serializerId, $envelope->compressorId, $envelope->encrypterId, $envelope->keyId, substr($envelope->payload, 0, 20));
+
+        $this->expectException(CorruptedPayloadException::class);
+        $codec->decode($truncated->toString());
     }
 
     public function testTamperedCiphertextIsRejectedByAuthentication(): void

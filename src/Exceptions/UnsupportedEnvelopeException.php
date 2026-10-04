@@ -22,6 +22,14 @@ final class UnsupportedEnvelopeException extends \RuntimeException implements Ca
     }
 
     /**
+     * @return UnsupportedEnvelopeException
+     */
+    public static function unencrypted(): self
+    {
+        return new self('Cache envelope is not encrypted, but this pipeline only reads encrypted values.');
+    }
+
+    /**
      * @param int $version
      * @return UnsupportedEnvelopeException
      */

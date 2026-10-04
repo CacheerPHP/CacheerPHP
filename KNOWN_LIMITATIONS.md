@@ -47,6 +47,13 @@ trade-offs so you can design around them. Failure *modes* per capability are in
 - The default pipeline does **not** encrypt or compress. Enable AES-256-GCM
   (`ext-openssl`) and gzip (`ext-zlib`) explicitly via `PipelineConfig`. Never
   cache secrets in a store without encryption enabled.
+- Turning encryption on for an existing cache requires clearing it (or a new
+  keyspace): an encrypting pipeline refuses the old plaintext entries with
+  `UnsupportedEnvelopeException` instead of treating them as trusted.
+- Without encryption the backend is trusted. `PhpSerializer` allows every class
+  by default, so anyone able to write to a shared backend can plant objects that
+  are unserialized on read; restrict it with `new PhpSerializer(allowedClasses:
+  false)` or enable encryption.
 
 ## Observability records metadata only
 

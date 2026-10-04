@@ -96,7 +96,9 @@ different scopes yields independent entries.
 authenticated-encrypted (AES-256-GCM) into a versioned envelope. Decoding is
 deterministic and typed: an over-limit, unauthenticated, or unrecognized blob
 raises a typed exception rather than returning corrupt data. Anything that is not
-a v6 envelope — including a v5 payload — is rejected, never decoded.
+a v6 envelope — including a v5 payload — is rejected, never decoded. A pipeline
+with encryption reads only encrypted envelopes, and the configured value limit is
+enforced on read for every pipeline before anything is unserialized.
 
 ## Writing your own store
 

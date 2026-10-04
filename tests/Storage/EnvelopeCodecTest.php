@@ -85,6 +85,12 @@ final class EnvelopeCodecTest extends TestCase
         }
     }
 
+    public function testDecodeRejectsAnEnvelopeCutOffBeforeItsVersion(): void
+    {
+        $this->expectException(CorruptedPayloadException::class);
+        PipelineConfig::default()->codec()->decode("\x00CFE");
+    }
+
     public function testDecodeRejectsATruncatedEnvelopeHeader(): void
     {
         // A v6 magic with an incomplete header (fewer than the required fields).
