@@ -159,6 +159,10 @@ remains available on its own `5.x` line during migration.
   PSR `InvalidArgumentException` instead of `InvalidKeyException` or a silent
   cast, and so does an out-of-range TTL. Write methods return `false` on a store
   failure instead of throwing.
+- `TieredStore` bounds how stale a worker's L1 can get: without an explicit
+  `l1MaxTtl`, L1 copies now live at most 60 seconds, so a single-key change by
+  another worker is seen within that bound instead of never (until the value
+  expired). Pass `Ttl::forever()` to keep the previous unbounded behavior.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of

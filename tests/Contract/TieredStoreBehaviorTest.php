@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Contract;
 
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
@@ -12,6 +13,7 @@ use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Stores\TieredStore;
 use Silviooosilva\CacheerPhp\Support\AfterResponseDeferredExecutor;
 use Tests\Support\FakeClock;
+use Tests\Support\ToggleableStore;
 
 final class TieredStoreBehaviorTest extends TestCase
 {
@@ -163,5 +165,50 @@ final class TieredStoreBehaviorTest extends TestCase
         $this->clock->advance(15);
         self::assertSame('value-1', $workerB->flexible('report', 30, 300, $factory));
         self::assertSame(1, $executor->pending(), 'Promotion must not restart a value\'s freshness.');
+    }
+
+    public function testAnotherWorkersSingleKeyWriteReachesL1WithinTheDefaultBound(): void
+    {
+        $shared = new ArrayStore($this->clock);
+        $workerA = new TieredStore(new ArrayStore($this->clock), $shared, $this->clock);
+        $workerB = new TieredStore(new ArrayStore($this->clock), $shared, $this->clock);
+        $key = Key::named('profile');
+
+        $workerA->set($key, 'v1', Ttl::forever());
+        self::assertSame('v1', $workerB->get($key)->value()); // now in B's L1
+
+        // A single-key write does not bump the generation token, so B may keep
+        // serving its L1 copy — but only up to the L1 bound (60s by default).
+        $workerA->set($key, 'v2', Ttl::forever());
+        $this->clock->advance(61);
+
+        self::assertSame('v2', $workerB->get($key)->value());
+    }
+
+    public function testAForeverL1CapOptsOutOfTheBound(): void
+    {
+        $tiered = new TieredStore($this->l1, $this->l2, $this->clock, Ttl::forever());
+        $key = Key::named('pinned');
+
+        $tiered->set($key, 'v', Ttl::forever());
+        $this->clock->advance(3600);
+        $this->l2->delete($key);
+
+        self::assertSame('v', $tiered->get($key)->value(), 'With no cap the L1 copy lives as long as the value.');
+    }
+
+    public function testAFailedL2WriteLeavesNoL1Copy(): void
+    {
+        $l2 = new ToggleableStore(new ArrayStore($this->clock));
+        $tiered = new TieredStore($this->l1, $l2, $this->clock);
+        $l2->failing = true;
+
+        try {
+            $tiered->set(Key::named('k'), 'v', Ttl::forever());
+            self::fail('The write must fail when L2 does.');
+        } catch (RuntimeException) {
+        }
+
+        self::assertTrue($this->l1->get(Key::named('k'))->isMiss(), 'L2 is written first, so a failed write never lands only in L1.');
     }
 }

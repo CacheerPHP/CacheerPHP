@@ -99,6 +99,11 @@ different scopes yields independent entries.
   the stale window is never served, whatever TTL it was stored with. A burst of
   stale reads queues one refresh per key, and a queued refresh that finds the
   value already fresh does nothing.
+- `TieredStore` treats L2 as the source of truth. Bulk invalidations reach every
+  worker's L1 through a shared generation token; a single-key change by another
+  worker is seen once the local copy lapses, at most `l1MaxTtl` (60 seconds by
+  default; `Ttl::forever()` opts out). L2 is written first, so a failed write
+  never leaves a value only in L1.
 - `ResilientStore` serves from a fallback when the primary's circuit breaker is
   open; it fails closed (miss), never returning stale or wrong data.
 

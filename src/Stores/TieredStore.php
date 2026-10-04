@@ -55,6 +55,14 @@ final class TieredStore implements
      */
     private const L1_RECORD = 'cacheer.tiered';
 
+    /**
+     * How long an L1 copy is trusted when no cap is given. Bulk invalidations
+     * reach other workers through the generation token, but a single-key write
+     * or delete by another worker is only seen once the local copy lapses, so
+     * this bounds how stale a worker's L1 can be. Pass Ttl::forever() to opt out.
+     */
+    private const DEFAULT_L1_MAX_SECONDS = 60;
+
     private const GENERATION_KEY = '__cacheer_tier_generation__';
 
     /**
@@ -415,18 +423,16 @@ final class TieredStore implements
      */
     private function capForL1(Ttl $ttl): Ttl
     {
-        if ($this->l1MaxTtl === null) {
-            return $ttl;
-        }
+        $cap = $this->l1MaxTtl ?? Ttl::seconds(self::DEFAULT_L1_MAX_SECONDS);
 
-        $max = $this->l1MaxTtl->inSeconds();
+        $max = $cap->inSeconds();
         if ($max === null) {
             return $ttl;
         }
 
         $seconds = $ttl->inSeconds();
 
-        return $seconds === null ? $this->l1MaxTtl : Ttl::seconds(min($seconds, $max));
+        return $seconds === null ? $cap : Ttl::seconds(min($seconds, $max));
     }
 
     private function syncGeneration(): void
