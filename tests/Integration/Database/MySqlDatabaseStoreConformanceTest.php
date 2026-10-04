@@ -56,7 +56,7 @@ final class MySqlDatabaseStoreConformanceTest extends StoreConformance
                 $options,
             );
         } catch (\Throwable $exception) {
-            self::markTestSkipped('MySQL is not available: ' . $exception->getMessage());
+            self::serviceUnavailable('CACHEER_REQUIRE_DATABASE', 'MySQL is not available: ' . $exception->getMessage());
         }
 
         DatabaseStoreSchema::drop($this->pdo, self::TABLE);

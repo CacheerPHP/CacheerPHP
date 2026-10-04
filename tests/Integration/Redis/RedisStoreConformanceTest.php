@@ -7,6 +7,7 @@ namespace Tests\Integration\Redis;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Predis\Client;
+use Silviooosilva\CacheerPhp\Contracts\RedisConnection;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
@@ -14,59 +15,101 @@ use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Storage\KeyEncoder\HashingKeyEncoder;
 use Silviooosilva\CacheerPhp\Stores\RedisStore;
+use Silviooosilva\CacheerPhp\Stores\Support\PhpRedisConnection;
 use Silviooosilva\CacheerPhp\Stores\Support\PredisConnection;
 use Tests\Support\FakeClock;
 use Tests\Support\StoreConformance;
 
 final class RedisStoreConformanceTest extends StoreConformance
 {
-    private Client $client;
+    private ?RedisConnection $connection = null;
 
     private string $prefix;
 
     protected function createStore(FakeClock $clock): Store
     {
+        $this->prefix = 'cacheer-test:' . bin2hex(random_bytes(4));
+        $this->connection = self::connect();
+
+        return new RedisStore($this->connection, $this->prefix, clock: $clock);
+    }
+
+    /**
+     * Connects with the client CI selects (REDIS_CLIENT=predis|phpredis), so
+     * both advertised connection adapters run the same suite.
+     */
+    private static function connect(): RedisConnection
+    {
+        $client = getenv('REDIS_CLIENT') ?: 'predis';
         $host = getenv('REDIS_HOST') ?: '127.0.0.1';
         $port = (int) (getenv('REDIS_PORT') ?: 6379);
+        $database = (int) (getenv('REDIS_DB') ?: 0);
+
+        // A refused connection also raises a PHP warning before the client
+        // throws; the exception carries the reason, so the warning is noise
+        // that would turn a clean skip into a "warning" result.
+        set_error_handler(static fn (): bool => true);
 
         try {
-            $this->client = new Client(['host' => $host, 'port' => $port]);
-            $this->client->ping();
+            if ($client === 'phpredis') {
+                if (!extension_loaded('redis')) {
+                    self::serviceUnavailable('CACHEER_REQUIRE_REDIS', 'REDIS_CLIENT=phpredis but the redis extension is not loaded.');
+                }
+
+                $redis = new \Redis();
+                $redis->connect($host, $port, 2.0);
+                $redis->select($database);
+                $redis->ping();
+
+                return new PhpRedisConnection($redis);
+            }
+
+            $predis = new Client(['host' => $host, 'port' => $port, 'database' => $database, 'timeout' => 2.0]);
+            $predis->ping();
+
+            return new PredisConnection($predis);
         } catch (\Throwable $exception) {
-            self::markTestSkipped('Redis is not available: ' . $exception->getMessage());
+            self::serviceUnavailable('CACHEER_REQUIRE_REDIS', 'Redis is not available: ' . $exception->getMessage());
+        } finally {
+            restore_error_handler();
         }
-
-        $this->prefix = 'cacheer-test:' . bin2hex(random_bytes(4));
-
-        return new RedisStore(new PredisConnection($this->client), $this->prefix, clock: $clock);
     }
 
     protected function expireLease(string $name, Ttl $ttl): void
     {
         // Redis expires the lease itself (PX); removing it is what expiry does.
-        $this->client->del([$this->prefix . ':l:' . $name]);
+        $this->redis()->delete([$this->prefix . ':l:' . $name]);
     }
 
     protected function holdAtomicGuard(Key $key): callable
     {
         $guard = $this->prefix . ':lk:' . (new HashingKeyEncoder())->encode($key);
-        $this->client->set($guard, 'another-worker');
+        $this->redis()->set($guard, 'another-worker', null);
 
         return function () use ($guard): void {
-            $this->client->del([$guard]);
+            $this->redis()->delete([$guard]);
         };
     }
 
     protected function tearDown(): void
     {
-        if (isset($this->client)) {
-            $keys = $this->client->keys($this->prefix . ':*');
+        // Only clean up when a connection was made; an unavailable server is a
+        // skip (or, when required, a failure) — never a teardown error.
+        if ($this->connection !== null) {
+            $keys = [...$this->connection->scan($this->prefix . ':*')];
             if ($keys !== []) {
-                $this->client->del($keys);
+                $this->connection->delete($keys);
             }
         }
 
         parent::tearDown();
+    }
+
+    private function redis(): RedisConnection
+    {
+        assert($this->connection !== null);
+
+        return $this->connection;
     }
 
     /**
@@ -155,7 +198,7 @@ final class RedisStoreConformanceTest extends StoreConformance
 
     private function redisStore(string $prefix): RedisStore
     {
-        return new RedisStore(new PredisConnection($this->client), $prefix, clock: $this->clock);
+        return new RedisStore($this->redis(), $prefix, clock: $this->clock);
     }
 
     /**

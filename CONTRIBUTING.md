@@ -100,7 +100,9 @@ library itself reads none; there is no `.env` file):
 - `DB_CONNECTION` — `mysql` or `pgsql` selects which database suite runs; SQLite
   always runs in memory. `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and
   `DB_PASSWORD` locate the server.
-- `REDIS_HOST` and `REDIS_PORT` locate Redis (default `127.0.0.1:6379`).
+- `REDIS_HOST`, `REDIS_PORT`, and `REDIS_DB` locate Redis (default
+  `127.0.0.1:6379`, database 0). `REDIS_CLIENT` picks the connection adapter the
+  suite runs on: `predis` (default) or `phpredis` (needs `ext-redis`).
 
 ```bash
 DB_CONNECTION=mysql DB_DATABASE=cacheer_test DB_USERNAME=root composer test:integration:database

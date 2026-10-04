@@ -44,7 +44,7 @@ final class PgsqlDatabaseStoreConformanceTest extends StoreConformance
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 5],
             );
         } catch (\Throwable $exception) {
-            self::markTestSkipped('PostgreSQL is not available: ' . $exception->getMessage());
+            self::serviceUnavailable('CACHEER_REQUIRE_DATABASE', 'PostgreSQL is not available: ' . $exception->getMessage());
         }
 
         DatabaseStoreSchema::drop($this->pdo, self::TABLE);

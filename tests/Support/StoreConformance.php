@@ -38,6 +38,23 @@ abstract class StoreConformance extends TestCase
      */
     abstract protected function createStore(FakeClock $clock): Store;
 
+    /**
+     * Reports a backend that could not be reached. Locally that is a clean
+     * skip; when CI marks the service as required (e.g. CACHEER_REQUIRE_REDIS=1)
+     * it is a failure, so a missing service can never produce a green run.
+     *
+     * @param string $requiredBy the environment flag that makes the service required
+     * @param string $reason
+     */
+    protected static function serviceUnavailable(string $requiredBy, string $reason): never
+    {
+        if (getenv($requiredBy) === '1') {
+            self::fail(sprintf('%s (required by %s=1).', $reason, $requiredBy));
+        }
+
+        self::markTestSkipped($reason);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

@@ -167,7 +167,7 @@ jobs:
           DB_CONNECTION: sqlite
           
   redis:
-    name: Redis / PHP ${{ matrix.php }}
+    name: Redis / ${{ matrix.client }} / PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -175,6 +175,12 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.3', '8.5']
+        client: ['predis']
+        include:
+          # PhpRedisConnection is a shipped, advertised adapter (ext-redis is
+          # suggested), so it runs the same suite once.
+          - php: '8.3'
+            client: 'phpredis'
 
     services:
       redis:
@@ -195,7 +201,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: pdo, pdo_sqlite, openssl, zlib
+          extensions: pdo, pdo_sqlite, openssl, zlib${{ matrix.client == 'phpredis' && ', redis' || '' }}
           coverage: none
 
       - name: Install dependencies
@@ -206,7 +212,7 @@ jobs:
         env:
           CACHEER_REQUIRE_REDIS: '1'
           DB_CONNECTION: sqlite
-          REDIS_CLIENT: predis
+          REDIS_CLIENT: ${{ matrix.client }}
           REDIS_HOST: 127.0.0.1
           REDIS_PORT: 6379
           REDIS_DB: 0
