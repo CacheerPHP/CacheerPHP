@@ -89,7 +89,6 @@ final class FileStore implements
      * @param ?KeyEncoder $keyEncoder
      * @param ?Clock $clock
      * @param int $directoryPermissions
-     * @param bool $migrateLegacyOnRead
      */
     public function __construct(
         string $directory,
@@ -97,7 +96,6 @@ final class FileStore implements
         ?KeyEncoder $keyEncoder = null,
         ?Clock $clock = null,
         private readonly int $directoryPermissions = 0775,
-        private readonly bool $migrateLegacyOnRead = false,
     ) {
         $this->root = rtrim($directory, '/\\');
         $this->codec = $codec ?? PipelineConfig::default()->codec();
@@ -124,13 +122,7 @@ final class FileStore implements
             return CacheEntry::miss($key);
         }
 
-        $value = $this->codec->decode($record->blob);
-
-        if ($this->migrateLegacyOnRead && $this->codec->isLegacyBlob($record->blob)) {
-            $this->persist(StoredRecord::forKey($key, $record->createdAt, $record->expiresAt, $this->codec->encode($value)));
-        }
-
-        return CacheEntry::hit($key, $value, $record->createdAt, $record->expiresAt);
+        return CacheEntry::hit($key, $this->codec->decode($record->blob), $record->createdAt, $record->expiresAt);
     }
 
     /**

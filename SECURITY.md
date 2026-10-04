@@ -29,11 +29,9 @@ credit reporters who want credit.
 - v6 encrypts values with **authenticated AES-256-GCM** and supports key
   rotation via a keyring. Decoding rejects tampered or truncated ciphertext with
   a typed exception; it never returns unauthenticated data.
-- The v5 compatibility reader decrypts legacy **AES-256-CBC** payloads, which are
-  unauthenticated by design. It exists only to migrate old data; wrong keys or
-  tampering surface as a failed `unserialize`, not a cryptographic error. New
-  writes always use the authenticated v6 envelope. See
-  [MIGRATION.md](MIGRATION.md#5-data-compatibility-and-rewrite-on-read).
+- v6 never decodes v5's unauthenticated **AES-256-CBC** payloads: a blob that is
+  not an authenticated v6 envelope is rejected. Upgrades start with a cold cache
+  instead — see [MIGRATION.md](MIGRATION.md#5-cached-data-v6-starts-cold).
 - Never cache secrets in a store without encryption enabled, and never log cache
   values — the observability layer records metadata only, and value capture is
   off by default.

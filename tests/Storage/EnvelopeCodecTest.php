@@ -69,6 +69,22 @@ final class EnvelopeCodecTest extends TestCase
         PipelineConfig::default()->codec()->decode($tampered);
     }
 
+    public function testDecodeRejectsABlobThatIsNotAnEnvelope(): void
+    {
+        // Pre-v6 payloads (e.g. a v5 serialized value) and arbitrary bytes are
+        // never decoded, whatever stages the codec is configured with.
+        $codec = PipelineConfig::default()->withGzip()->codec();
+
+        foreach ([serialize(['data' => 'v5-value']), 'plain text', ''] as $blob) {
+            try {
+                $codec->decode($blob);
+                self::fail('A non-envelope blob must be rejected.');
+            } catch (UnsupportedEnvelopeException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
     public function testDecodeRejectsATruncatedEnvelopeHeader(): void
     {
         // A v6 magic with an incomplete header (fewer than the required fields).

@@ -6,18 +6,11 @@ namespace Tests\Kernel;
 
 use PHPUnit\Framework\TestCase;
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Console\Application;
 use Silviooosilva\CacheerPhp\Console\CacheerContext;
-use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Psr\Psr16Cache;
 use Silviooosilva\CacheerPhp\Psr\Psr6Pool;
-use Silviooosilva\CacheerPhp\Storage\Compat\V5PayloadReader;
-use Silviooosilva\CacheerPhp\Storage\Envelope;
-use Silviooosilva\CacheerPhp\Storage\KeyEncoder\HashingKeyEncoder;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
-use Silviooosilva\CacheerPhp\Stores\FileStore;
-use Silviooosilva\CacheerPhp\Stores\Support\StoredRecord;
 use Tests\Support\FakeClock;
 
 /**
@@ -80,27 +73,25 @@ final class ReleaseRehearsalTest extends TestCase
         self::assertSame('ok', Cacheer::file($this->dir)->get('persisted'));
     }
 
-    public function testV5DataUpgradesThroughRewriteOnRead(): void
+    public function testV6StartsColdBesideV5DataAndLeavesItForRollback(): void
     {
-        $clock = new FakeClock();
-        $key = Key::named('legacy:value');
+        // A value exactly as v5.2's FileCacheStore wrote it: md5(key).cache
+        // holding a serialized envelope, directly under the cache directory.
+        $v5File = $this->dir . '/' . md5('legacy:value') . '.cache';
+        @mkdir($this->dir, 0775, true);
+        file_put_contents($v5File, serialize(['data' => 'legacy-value', 'expires_at' => PHP_INT_MAX, 'ttl' => 3600]));
 
-        // Seed a value in the v5 on-disk format (an untransformed payload).
-        $codec = PipelineConfig::default()->withV5Reader(new V5PayloadReader())->codec();
-        $encoder = new HashingKeyEncoder();
-        $safe = hash('sha256', $encoder->encode($key));
-        $path = $this->dir . '/entries/' . substr($safe, 0, 2) . '/' . $safe . '.cache';
-        @mkdir(dirname($path), 0775, true);
-        file_put_contents($path, StoredRecord::forKey($key, 1_000, null, 'legacy-value')->toString());
+        // v6 uses its own layout, so the upgrade starts cold rather than
+        // misreading v5 data.
+        $cache = Cacheer::file($this->dir);
+        self::assertNull($cache->get('legacy:value'));
 
-        // A store told to migrate legacy data reads it and rewrites it as v6.
-        $cache = new Cacheer(new FileStore($this->dir, $codec, clock: $clock, migrateLegacyOnRead: true), $clock);
-        self::assertSame('legacy-value', $cache->get('legacy:value'));
+        $cache->set('legacy:value', 'v6-value');
+        self::assertSame('v6-value', $cache->get('legacy:value'));
 
-        // The entry on disk is now a v6 envelope — the modern API owns it.
-        $record = StoredRecord::fromString((string) file_get_contents($path));
-        self::assertNotNull($record);
-        self::assertTrue(Envelope::isEnvelope($record->blob));
+        // Clearing v6 never touches v5's files, so rolling back still finds them.
+        $cache->clear();
+        self::assertFileExists($v5File);
     }
 
     public function testPsrAdaptersResolveOverTheKernel(): void

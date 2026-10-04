@@ -36,16 +36,11 @@ trade-offs so you can design around them. Failure *modes* per capability are in
   synchronous default refreshes in-process, so a true "after response" refresh
   requires wiring an appropriate `DeferredExecutor`.
 
-## v5 data compatibility
+## v5 cached data is not read
 
-- v5 payloads are **not self-describing**. Reading them requires constructing the
-  pipeline with a `V5PayloadReader` that matches the compression/encryption the
-  v5 app used.
-- v5 used unauthenticated AES-256-**CBC**. A wrong key or tampering surfaces only
-  as a failed `unserialize`, never cryptographically. New writes always use the
-  authenticated v6 envelope.
-- Rewrite-on-read is implemented for `FileStore` and `DatabaseStore`. `RedisStore`
-  entries migrate on their next write (legacy reads keep working until then).
+- v6 does not read entries written by v5: the storage layouts and payload formats
+  differ, so an upgrade starts with a cold cache in a new keyspace. See
+  [MIGRATION.md §5](MIGRATION.md#5-cached-data-v6-starts-cold).
 
 ## Encryption and compression are opt-in
 

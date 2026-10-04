@@ -48,6 +48,14 @@ remains available on its own `5.x` line during migration.
 - **Removed.** `Cacheer::array()` (a verbatim alias of `inMemory()`) and the
   unused v5 exception island (`BaseException`, `CacheFileException`,
   `CacheDatabaseException`, `CacheRedisException`, `ConnectionException`).
+- **v5 compatibility reader removed (since RC1).** `V5PayloadReader`,
+  `PipelineConfig::withV5Reader()`, `EnvelopeCodec::isLegacyBlob()`, and the
+  `migrateLegacyOnRead` option on `FileStore`/`DatabaseStore` are gone. They only
+  ran on records already in v6 layout, so real v5 files, tables, and Redis keys
+  were never read; and with a reader configured, any non-envelope blob bypassed
+  the encrypted read path and reached an unrestricted `unserialize()`. Upgrades
+  now start with a cold cache in a separate keyspace (MIGRATION.md §5), and every
+  non-envelope blob is rejected.
 
 ### Highlights
 
@@ -63,8 +71,7 @@ remains available on its own `5.x` line during migration.
   `ResilientStore` (circuit-breaker fallback), single-flight `remember()`,
   stale-while-revalidate `flexible()`, and typed `CachePolicy` — all composable.
 - **Storage pipeline.** serialize → optional gzip → optional authenticated
-  AES-256-GCM into a versioned, tamper-evident envelope, with key rotation and a
-  v5 compatibility reader plus opt-in rewrite-on-read.
+  AES-256-GCM into a versioned, tamper-evident envelope, with key rotation.
 - **Standards & observability.** PSR-16 and PSR-6 adapters, a PSR-3 logging
   subscriber, a PSR-14 event bridge, typed cache events, and a `MetricsCollector`
   (values are never captured).
@@ -74,9 +81,8 @@ remains available on its own `5.x` line during migration.
   policy in one chain (the v6 take on v5's OptionBuilder), and a
   `CacheDataFormatter` (`toJson`/`toArray`/`toObject`/`toString`) reachable
   standalone or through an opt-in `formatted()` view.
-- **Migration.** An optional Rector rename set, rewrite-on-read for v5 payloads
-  (`FileStore`/`DatabaseStore`), and end-to-end fresh-install / v5-upgrade
-  rehearsals in CI.
+- **Migration.** An optional Rector rename set, a cold-keyspace upgrade path, and
+  end-to-end fresh-install / v5-upgrade rehearsals in CI.
 
 ### Breaking changes
 

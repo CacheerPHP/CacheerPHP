@@ -282,8 +282,9 @@ v6 is a new major with an instance-first API. Migrating is mostly mechanical:
 - Rename the v5 methods to the v6 names — `putCache`→`set`, `getCache`→`get`,
   `flushCache`→`clear`, and the positional namespace → `scope()`. The optional
   [`rector.php`](rector.php) set automates the common renames.
-- Your existing cached data upgrades itself: `FileStore`/`DatabaseStore` can
-  **rewrite v5 payloads into the v6 envelope on read** during the transition.
+- Cached data starts cold: v6 uses its own storage layout and does not read v5
+  entries, so values are recomputed on first use. Keep the v5 keyspace until
+  you are past your rollback window, then delete it.
 - Can't migrate a service yet? Pin it to `^5.2` — it still receives security fixes.
 
 The method-by-method mapping and database migration/rollback steps are in

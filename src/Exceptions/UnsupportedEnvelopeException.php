@@ -7,8 +7,8 @@ namespace Silviooosilva\CacheerPhp\Exceptions;
 /**
  * Raised when a payload is well-formed but this pipeline cannot read it: an
  * unknown envelope version, a stage id (serializer, compressor, encrypter) the
- * configured pipeline does not provide, or a legacy payload with no v5 reader
- * configured. Distinct from a corrupt payload, which is untrusted rather than
+ * configured pipeline does not provide, or a blob that is not a v6 envelope at
+ * all (such as a v5 payload). Distinct from a corrupt payload, which is untrusted rather than
  * merely unsupported.
  */
 final class UnsupportedEnvelopeException extends \RuntimeException implements CacheException
@@ -18,7 +18,7 @@ final class UnsupportedEnvelopeException extends \RuntimeException implements Ca
      */
     public static function unrecognized(): self
     {
-        return new self('Cache payload is not a v6 envelope and no v5 reader is configured.');
+        return new self('Cache payload is not a v6 envelope.');
     }
 
     /**

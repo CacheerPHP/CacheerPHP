@@ -6,7 +6,7 @@ counters) declared by interface.
 
 Migrating is mostly mechanical: rename the v5 methods to the v6 names (a Rector
 set automates the common ones), move the positional namespace onto `scope()`, and
-let your existing cached data upgrade itself via rewrite-on-read. There is no
+start v6 with a cold cache in its own keyspace (§5). There is no
 drop-in v5 facade — the migration is the rename, not a runtime shim. If a service
 can't move yet, keep it on `^5.2`, which still receives security and correctness
 fixes (see §6).
@@ -97,31 +97,33 @@ There is no runtime v5 shim, but you don't have to convert everything at once:
 - If a whole service can't move yet, pin it to `^5.2` and migrate it later. v5 and
   v6 are different major lines, not two APIs on one install.
 
-## 5. Data compatibility and rewrite-on-read
+## 5. Cached data: v6 starts cold
 
-v6 writes an authenticated, versioned envelope. It can still **read** values
-written by v5 during the migration window: construct the store's pipeline with a
-[`V5PayloadReader`](src/Storage/Compat/V5PayloadReader.php) that mirrors the
-compression/encryption v5 used (v5 payloads are not self-describing).
+v6 does not read v5's cached data. The two versions use different storage
+layouts and payload formats, so a v6 store simply never sees v5 entries: the
+first v6 request for each key is a miss, and the value is recomputed and stored
+in the v6 format. A cache is derived data, so nothing is lost — expect a warm-up
+period with more misses than usual, as after any cache flush.
 
-`FileStore` and `DatabaseStore` can also **rewrite on read** — the first time a
-legacy value is read it is re-encoded in the v6 envelope in place, preserving its
-creation and expiry timestamps:
+| Backend | v5 layout | v6 layout |
+|---|---|---|
+| File | `{dir}/[md5(namespace)/]md5(key).cache` | `{dir}/entries/…` and `{dir}/locks/…` |
+| Database | table `cacheer_table` (default) | table `cacheer_store` (default), new schema |
+| Redis | `{namespace}[ns:]key`, tags as `tag:…` | `{prefix}:e:…`, `{prefix}:t:…`, `{prefix}:l:…` |
 
-```php
-$pipeline = PipelineConfig::default()->withV5Reader(new V5PayloadReader(compression: true));
-$store = new FileStore('/var/cache', $pipeline->codec(), migrateLegacyOnRead: true);
-```
+Keep the two keyspaces apart:
 
-Notes and limitations:
+- **File**: point v6 at a new directory. Sharing the v5 directory works — v6 only
+  touches `entries/` and `locks/` — but a separate one makes cleanup trivial.
+- **Database**: use a table name different from your v5 table. If both were
+  `cacheer_store`, `DatabaseStoreSchema::migrate()` would keep the v5 table and
+  v6 queries would then fail on its columns.
+- **Redis**: use a v6 `$prefix` that is not your v5 namespace, or a separate
+  logical database.
 
-- v5's AES-256-**CBC** payloads are unauthenticated. A wrong key or tampering can
-  only surface as a failed `unserialize`, never cryptographically. New writes
-  always use the authenticated v6 envelope.
-- Rewrite-on-read is opt-in (`migrateLegacyOnRead: true`) so a read-only rollout
-  never mutates data unexpectedly.
-- Redis entries migrate naturally: they are rewritten in the v6 envelope on their
-  next write, and legacy reads keep working until then.
+Once you are past your rollback window, delete the v5 data: the v5 cache
+directory, the v5 table, or the v5 Redis keys (by your v5 namespace with
+`SCAN`/`UNLINK`, or by letting their TTLs expire).
 
 ## 6. Database migration and rollback
 
@@ -145,9 +147,12 @@ discards cached data; it never loses source-of-truth data:
 DatabaseStoreSchema::drop($pdo, 'cacheer_store');
 ```
 
-To roll back to v5 entirely: keep the v5 keyspace untouched (v6 rewrite-on-read
-is opt-in), pin `silviooosilva/cacheer-php:^5.2` again, and clear any v6-only
-envelopes v6 may have written (`vendor/bin/cacheer clear --force`).
+To roll back to v5 entirely: pin `silviooosilva/cacheer-php:^5.2` again and point
+it at its original keyspace, which v6 never modified. v6 also never updated or
+invalidated v5 entries, so v5 can serve values cached before the upgrade:
+**flush the v5 cache when rolling back** unless that staleness is acceptable.
+Then drop the v6 keyspace (`vendor/bin/cacheer clear --force`, or
+`DatabaseStoreSchema::drop()`).
 
 ## 7. Support window
 

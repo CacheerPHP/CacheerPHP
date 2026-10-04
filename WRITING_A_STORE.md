@@ -76,8 +76,7 @@ degrade optional optimizations rather than fail.
 Persistent stores should encode values through
 [`EnvelopeCodec`](src/Storage/EnvelopeCodec.php), obtained from a typed
 [`PipelineConfig`](src/Config/PipelineConfig.php). You get serialization,
-optional compression, authenticated encryption, size limits, and v5
-rewrite-on-read for free:
+optional compression, authenticated encryption, and size limits for free:
 
 ```php
 $codec = PipelineConfig::default()->withGzip()->codec();

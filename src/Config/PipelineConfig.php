@@ -7,7 +7,6 @@ namespace Silviooosilva\CacheerPhp\Config;
 use Silviooosilva\CacheerPhp\Contracts\Compressor;
 use Silviooosilva\CacheerPhp\Contracts\Encrypter;
 use Silviooosilva\CacheerPhp\Contracts\Serializer;
-use Silviooosilva\CacheerPhp\Storage\Compat\V5PayloadReader;
 use Silviooosilva\CacheerPhp\Storage\Compression\GzipCompressor;
 use Silviooosilva\CacheerPhp\Storage\Encryption\Keyring;
 use Silviooosilva\CacheerPhp\Storage\Encryption\OpenSslGcmEncrypter;
@@ -29,14 +28,12 @@ final readonly class PipelineConfig
      * @param ?Compressor $compressor
      * @param ?Encrypter $encrypter
      * @param int $maxValueBytes
-     * @param ?V5PayloadReader $v5Reader
      */
     private function __construct(
         private Serializer $serializer,
         private ?Compressor $compressor,
         private ?Encrypter $encrypter,
         private int $maxValueBytes,
-        private ?V5PayloadReader $v5Reader,
     ) {
     }
 
@@ -47,7 +44,7 @@ final readonly class PipelineConfig
      */
     public static function default(): self
     {
-        return new self(new PhpSerializer(), null, null, 0, null);
+        return new self(new PhpSerializer(), null, null, 0);
     }
 
     /**
@@ -56,7 +53,7 @@ final readonly class PipelineConfig
      */
     public function withSerializer(Serializer $serializer): self
     {
-        return new self($serializer, $this->compressor, $this->encrypter, $this->maxValueBytes, $this->v5Reader);
+        return new self($serializer, $this->compressor, $this->encrypter, $this->maxValueBytes);
     }
 
     /**
@@ -73,7 +70,7 @@ final readonly class PipelineConfig
      */
     public function withCompressor(Compressor $compressor): self
     {
-        return new self($this->serializer, $compressor, $this->encrypter, $this->maxValueBytes, $this->v5Reader);
+        return new self($this->serializer, $compressor, $this->encrypter, $this->maxValueBytes);
     }
 
     /**
@@ -91,7 +88,7 @@ final readonly class PipelineConfig
      */
     public function withEncrypter(Encrypter $encrypter): self
     {
-        return new self($this->serializer, $this->compressor, $encrypter, $this->maxValueBytes, $this->v5Reader);
+        return new self($this->serializer, $this->compressor, $encrypter, $this->maxValueBytes);
     }
 
     /**
@@ -109,16 +106,7 @@ final readonly class PipelineConfig
      */
     public function withMaxValueBytes(int $maxValueBytes): self
     {
-        return new self($this->serializer, $this->compressor, $this->encrypter, $maxValueBytes, $this->v5Reader);
-    }
-
-    /**
-     * @param V5PayloadReader $reader
-     * @return PipelineConfig
-     */
-    public function withV5Reader(V5PayloadReader $reader): self
-    {
-        return new self($this->serializer, $this->compressor, $this->encrypter, $this->maxValueBytes, $reader);
+        return new self($this->serializer, $this->compressor, $this->encrypter, $maxValueBytes);
     }
 
     /**
@@ -131,7 +119,6 @@ final readonly class PipelineConfig
             $this->compressor,
             $this->encrypter,
             $this->maxValueBytes,
-            $this->v5Reader,
         );
     }
 }

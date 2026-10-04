@@ -9,14 +9,13 @@ use Silviooosilva\CacheerPhp\Contracts\Encrypter;
 use Silviooosilva\CacheerPhp\Contracts\Serializer;
 use Silviooosilva\CacheerPhp\Exceptions\UnsupportedEnvelopeException;
 use Silviooosilva\CacheerPhp\Exceptions\ValueTooLargeException;
-use Silviooosilva\CacheerPhp\Storage\Compat\V5PayloadReader;
 
 /**
  * Turns a cache value into a versioned envelope and back.
  *
  * Encode runs serialize -> compress -> encrypt; decode reverses it, selecting
  * each stage by the id recorded in the envelope. A blob that is not a v6
- * envelope is handed to the configured v5 reader, or rejected as unsupported.
+ * envelope is rejected as unsupported.
  * Failures are deterministic and typed; the codec never returns unauthenticated
  * or over-limit data.
  */
@@ -27,14 +26,12 @@ final class EnvelopeCodec
      * @param ?Compressor $compressor
      * @param ?Encrypter $encrypter
      * @param int $maxValueBytes
-     * @param ?V5PayloadReader $v5Reader
      */
     public function __construct(
         private readonly Serializer $serializer,
         private readonly ?Compressor $compressor = null,
         private readonly ?Encrypter $encrypter = null,
         private readonly int $maxValueBytes = 0,
-        private readonly ?V5PayloadReader $v5Reader = null,
     ) {
     }
 
@@ -80,7 +77,7 @@ final class EnvelopeCodec
     public function decode(string $blob): mixed
     {
         if (!Envelope::isEnvelope($blob)) {
-            return $this->decodeLegacy($blob);
+            throw UnsupportedEnvelopeException::unrecognized();
         }
 
         $envelope = Envelope::fromString($blob);
@@ -99,32 +96,6 @@ final class EnvelopeCodec
         }
 
         return $this->serializer->unserialize($payload);
-    }
-
-    /**
-     * True when the blob is not a v6 envelope and a v5 reader is configured to
-     * decode it. Stores use this to detect values that should be rewritten in
-     * the v6 format on read during a migration.
-     *
-     * @param string $blob
-     * @return bool
-     */
-    public function isLegacyBlob(string $blob): bool
-    {
-        return $this->v5Reader !== null && !Envelope::isEnvelope($blob);
-    }
-
-    /**
-     * @param string $blob
-     * @return mixed
-     */
-    private function decodeLegacy(string $blob): mixed
-    {
-        if ($this->v5Reader === null) {
-            throw UnsupportedEnvelopeException::unrecognized();
-        }
-
-        return $this->v5Reader->read($blob);
     }
 
     /**

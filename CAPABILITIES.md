@@ -95,9 +95,8 @@ different scopes yields independent entries.
 **Storage pipeline.** Values are serialized → optionally compressed → optionally
 authenticated-encrypted (AES-256-GCM) into a versioned envelope. Decoding is
 deterministic and typed: an over-limit, unauthenticated, or unrecognized blob
-raises a typed exception rather than returning corrupt data. See
-[MIGRATION.md](MIGRATION.md#5-data-compatibility-and-rewrite-on-read) for reading
-v5 payloads.
+raises a typed exception rather than returning corrupt data. Anything that is not
+a v6 envelope — including a v5 payload — is rejected, never decoded.
 
 ## Writing your own store
 
