@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Stores;
 
+use InvalidArgumentException;
 use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
@@ -52,6 +53,11 @@ final class RedisStore implements
     LockingStore
 {
     /**
+     * The keyspace markers this store places after its prefix.
+     */
+    private const MARKERS = ['e', 't', 'l', 'lk'];
+
+    /**
      * @var EnvelopeCodec
      */
     private readonly EnvelopeCodec $codec;
@@ -80,6 +86,7 @@ final class RedisStore implements
         ?KeyEncoder $keyEncoder = null,
         ?Clock $clock = null,
     ) {
+        self::assertSafePrefix($this->prefix);
         $this->codec = $codec ?? PipelineConfig::default()->codec();
         $this->keyEncoder = $keyEncoder ?? new HashingKeyEncoder();
         $this->clock = $clock ?? new SystemClock();
@@ -127,8 +134,8 @@ final class RedisStore implements
 
     public function clear(): void
     {
-        $this->deleteByPattern($this->prefix . ':e:*');
-        $this->deleteByPattern($this->prefix . ':t:*');
+        $this->deleteByPattern($this->pattern('e'));
+        $this->deleteByPattern($this->pattern('t'));
     }
 
     /**
@@ -209,7 +216,7 @@ final class RedisStore implements
     {
         $removed = 0;
 
-        foreach ($this->redis->scan($this->prefix . ':e:*') as $entryKey) {
+        foreach ($this->redis->scan($this->pattern('e')) as $entryKey) {
             $record = $this->readEntry($entryKey);
             if ($record !== null && $this->isExpired($record->expiresAt)) {
                 $removed += $this->redis->delete([$entryKey]);
@@ -227,7 +234,7 @@ final class RedisStore implements
     {
         $scope ??= Scope::root();
 
-        foreach ($this->redis->scan($this->prefix . ':e:*') as $entryKey) {
+        foreach ($this->redis->scan($this->pattern('e')) as $entryKey) {
             $record = $this->readEntry($entryKey);
             if ($record === null || $this->isExpired($record->expiresAt)) {
                 continue;
@@ -252,7 +259,7 @@ final class RedisStore implements
         }
 
         $doomed = [];
-        foreach ($this->redis->scan($this->prefix . ':e:*') as $entryKey) {
+        foreach ($this->redis->scan($this->pattern('e')) as $entryKey) {
             $record = $this->readEntry($entryKey);
             if ($record !== null && $scope->contains($record->key()->scope())) {
                 $doomed[] = $entryKey;
@@ -481,6 +488,39 @@ final class RedisStore implements
     private function tagKey(string $tag): string
     {
         return $this->prefix . ':t:' . $tag;
+    }
+
+    /**
+     * A SCAN pattern for one of this store's keyspaces. The prefix is escaped so
+     * glob metacharacters in it match literally rather than other prefixes.
+     *
+     * @param string $marker
+     * @return string
+     */
+    private function pattern(string $marker): string
+    {
+        return addcslashes($this->prefix, '*?[]\\') . ':' . $marker . ':*';
+    }
+
+    /**
+     * Rejects a prefix that would nest inside another store's keyspace: with
+     * "app:e", every key would sit under the entries of a store prefixed "app",
+     * whose clear() and SCANs would reach it. Ordinary namespacing ("app:cache")
+     * is unaffected.
+     *
+     * @param string $prefix
+     */
+    private static function assertSafePrefix(string $prefix): void
+    {
+        $segments = array_slice(explode(':', $prefix), 1);
+
+        if (array_intersect($segments, self::MARKERS) !== []) {
+            throw new InvalidArgumentException(sprintf(
+                'Redis prefix "%s" cannot contain the segments ":%s"; they are reserved for the store\'s own keyspaces.',
+                $prefix,
+                implode('", ":', self::MARKERS),
+            ));
+        }
     }
 
     /**

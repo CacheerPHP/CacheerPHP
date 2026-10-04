@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Stores;
 
+use InvalidArgumentException;
 use PDO;
 use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
@@ -18,6 +19,7 @@ use Silviooosilva\CacheerPhp\Contracts\PrunableStore;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
+use Silviooosilva\CacheerPhp\Exceptions\InvalidScopeException;
 use Silviooosilva\CacheerPhp\Exceptions\StoreOperationFailedException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
@@ -50,6 +52,12 @@ final class DatabaseStore implements
     AtomicStore,
     LockingStore
 {
+    /**
+     * Characters the scope and tag columns hold (VARCHAR(255) on MySQL and
+     * PostgreSQL). Enforced on every driver so behavior does not change with it.
+     */
+    private const MAX_NAME_CHARACTERS = 255;
+
     /**
      * @var string
      */
@@ -184,6 +192,10 @@ final class DatabaseStore implements
     {
         $expiresAt = $ttl->expiresAt($this->clock);
 
+        foreach ($entries as $entry) {
+            $this->assertStorableScope($entry['key']);
+        }
+
         $this->transaction(function () use ($entries, $expiresAt): void {
             foreach ($entries as $entry) {
                 $this->upsert($entry['key'], $entry['value'], $expiresAt);
@@ -289,6 +301,15 @@ final class DatabaseStore implements
      */
     public function tag(Key $key, string ...$tags): void
     {
+        foreach ($tags as $tag) {
+            if (self::characters($tag) > self::MAX_NAME_CHARACTERS) {
+                throw new InvalidArgumentException(sprintf(
+                    'A tag cannot exceed %d characters in DatabaseStore (scoped tags include the scope).',
+                    self::MAX_NAME_CHARACTERS,
+                ));
+            }
+        }
+
         $encoded = $this->keyEncoder->encode($key);
         $insert = $this->pdo->prepare("INSERT INTO {$this->table}_tags (tag, cache_key) VALUES (:tag, :key)");
 
@@ -303,9 +324,11 @@ final class DatabaseStore implements
      */
     public function clearTag(string $tag): int
     {
-        return $this->transaction(function () use ($tag): int {
-            $select = $this->pdo->prepare("SELECT DISTINCT cache_key FROM {$this->table}_tags WHERE tag = :tag");
-            $select->execute([':tag' => $tag]);
+        [$where, $params] = $this->tagClause($tag);
+
+        return $this->transaction(function () use ($where, $params): int {
+            $select = $this->pdo->prepare("SELECT DISTINCT cache_key FROM {$this->table}_tags WHERE " . $where);
+            $select->execute($params);
             $keys = $select->fetchAll(PDO::FETCH_COLUMN);
 
             $removed = 0;
@@ -315,7 +338,7 @@ final class DatabaseStore implements
                 $removed += $delete->rowCount();
             }
 
-            $this->pdo->prepare("DELETE FROM {$this->table}_tags WHERE tag = :tag")->execute([':tag' => $tag]);
+            $this->pdo->prepare("DELETE FROM {$this->table}_tags WHERE " . $where)->execute($params);
 
             return $removed;
         });
@@ -384,7 +407,9 @@ final class DatabaseStore implements
      */
     public function lock(string $name, Ttl $ttl): Lock
     {
-        return new DatabaseLock($this->pdo, $this->table, $this->clock, $name, $ttl);
+        // Hashed, as FileStore does, so a name of any length fits lock_name and
+        // stays exact under a case- or accent-insensitive collation.
+        return new DatabaseLock($this->pdo, $this->table, $this->clock, hash('sha256', $name), $ttl);
     }
 
     /**
@@ -414,6 +439,8 @@ final class DatabaseStore implements
      */
     private function upsert(Key $key, mixed $value, ?int $expiresAt): void
     {
+        $this->assertStorableScope($key);
+
         $params = [
             ':key'     => $this->keyEncoder->encode($key),
             ':scope'   => (string) $key->scope(),
@@ -446,6 +473,30 @@ final class DatabaseStore implements
     }
 
     /**
+     * @param Key $key
+     */
+    private function assertStorableScope(Key $key): void
+    {
+        if (self::characters((string) $key->scope()) > self::MAX_NAME_CHARACTERS) {
+            throw new InvalidScopeException(sprintf(
+                'A scope cannot exceed %d characters in DatabaseStore, including "/" separators.',
+                self::MAX_NAME_CHARACTERS,
+            ));
+        }
+    }
+
+    /**
+     * Characters as a VARCHAR column counts them; bytes when not valid UTF-8.
+     *
+     * @param string $value
+     * @return int
+     */
+    private static function characters(string $value): int
+    {
+        return preg_match('//u', $value) === 1 ? (int) preg_match_all('/./su', $value) : strlen($value);
+    }
+
+    /**
      * @param Scope $scope
      * @return array{0: string, 1: array<string, int|string>}
      */
@@ -455,10 +506,49 @@ final class DatabaseStore implements
             return ['', []];
         }
 
+        $name = (string) $scope;
+
+        // SQLite's `=` is exact but its LIKE ignores case, so match the prefix
+        // with instr() instead.
+        if ($this->driver === 'sqlite') {
+            return [
+                '(scope = :scope OR instr(scope, :prefix) = 1)',
+                [':scope' => $name, ':prefix' => $name . '/'],
+            ];
+        }
+
+        // Segments may contain LIKE wildcards, and MySQL/PostgreSQL treat a
+        // backslash as LIKE's default escape. An explicit escape character makes
+        // the prefix literal, so a scope cannot match a neighbour.
+        $pattern = strtr($name, ['!' => '!!', '%' => '!%', '_' => '!_']) . '/%';
+        $clause = "(scope = :scope OR scope LIKE :pattern ESCAPE '!')";
+        $params = [':scope' => $name, ':pattern' => $pattern];
+
+        if ($this->driver !== 'mysql') {
+            return [$clause, $params];
+        }
+
+        // MySQL's default collations equate case, accents, and normalization
+        // forms. Keep the indexed match and recheck it byte-for-byte.
         return [
-            '(scope = :scope OR scope LIKE :prefix)',
-            [':scope' => (string) $scope, ':prefix' => (string) $scope . '/%'],
+            $clause . " AND (scope COLLATE utf8mb4_bin = :exact OR scope COLLATE utf8mb4_bin LIKE :exactPattern ESCAPE '!')",
+            $params + [':exact' => $name, ':exactPattern' => $pattern],
         ];
+    }
+
+    /**
+     * Exact tag matching; see {@see scopeClause()} for why MySQL needs a recheck.
+     *
+     * @param string $tag
+     * @return array{0: string, 1: array<string, string>}
+     */
+    private function tagClause(string $tag): array
+    {
+        if ($this->driver !== 'mysql') {
+            return ['tag = :tag', [':tag' => $tag]];
+        }
+
+        return ['tag = :tag AND tag COLLATE utf8mb4_bin = :exact', [':tag' => $tag, ':exact' => $tag]];
     }
 
     /**

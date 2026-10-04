@@ -140,6 +140,25 @@ remains available on its own `5.x` line during migration.
   and serve-stale-on-error reads now apply the scope once. Previously they read
   a doubly-scoped key, so scoped `remember()` recomputed on every call, `add()`
   overwrote existing entries, and `pull()` always returned the default.
+- `DatabaseStore` matches scopes literally when clearing or inspecting a scope.
+  A `_`, `%`, or (on MySQL/PostgreSQL) `\` in a scope name was treated as a
+  LIKE pattern character, so clearing `tenant_a` also deleted `tenantXa/…`.
+- `DatabaseStore` compares scopes and tags exactly. SQLite's case-insensitive
+  LIKE let `clearScope()` on `Tenant` delete `tenant/…`, and MySQL's default
+  collation also merged case, accents, and Unicode normalization forms for
+  `clearScope()`, `entries()`, and `flushTag()` (`Users` flushed `users`).
+- `DatabaseStore` rejects a scope or tag longer than its 255-character column
+  before writing, on every driver. Previously MySQL strict mode and PostgreSQL
+  failed with a driver error, and MySQL non-strict mode silently truncated the
+  scope, so the entry escaped `entries()` and scoped `clear()`.
+- `DatabaseStore` lock names are stored hashed. On MySQL, `lock('Report')` and
+  `lock('report')` no longer contend, and names over 255 characters can be
+  acquired instead of always failing.
+- `RedisStore` escapes its prefix in SCAN patterns, so `clear()`, `prune()`,
+  `entries()`, and `clearScope()` on a prefix such as `app*` no longer reach
+  `appX`. A prefix containing a reserved `:e`, `:t`, `:l`, or `:lk` segment —
+  which would nest it inside another store's keyspace — is now rejected with an
+  `InvalidArgumentException`.
 
 ## [5.2.0] - 2026-06-27
 

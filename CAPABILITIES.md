@@ -44,7 +44,12 @@ and falls back to a plain compute when it is not.
 
 **Core.** `clear()` only affects this store's configured keyspace (directory,
 table, or key prefix) — never anything else in the same backend. `get()` on an
-expired entry is a miss and lazily removes the entry.
+expired entry is a miss and lazily removes the entry. Scope, tag, and prefix
+names are matched literally and exactly: SQL `%`/`_` and Redis glob characters
+carry no special meaning, and names differing only by case, accent, or Unicode
+normalization stay distinct on every SQL engine. A Redis prefix cannot contain the segments `:e`, `:t`, `:l`, or `:lk`
+(e.g. `app:t`), because those would place it inside another store's keyspace;
+`RedisStore` rejects such a prefix with an `InvalidArgumentException`.
 
 **Atomic (`increment` / `compareAndSwap`).**
 - *Array*: atomic within one process; not shared across processes.

@@ -240,6 +240,134 @@ abstract class StoreConformance extends TestCase
         self::assertSame('r', $this->store->get(Key::named('root'))->value());
     }
 
+    /**
+     * Scope segments may contain characters that are wildcards or escapes in a
+     * backend's pattern language (SQL LIKE `%`, `_`, `\`). Each target scope is
+     * paired with a neighbour that such a pattern would wrongly match.
+     *
+     * @return array<string, array{string, string}>
+     */
+    public static function patternLookalikeScopes(): array
+    {
+        return [
+            'underscore' => ['tenant_a', 'tenantXa'],
+            'percent'    => ['a%', 'abc'],
+            'backslash'  => ['a\\', 'a'],
+        ];
+    }
+
+    #[DataProvider('patternLookalikeScopes')]
+    public function testClearScopeTreatsScopeNamesLiterally(string $target, string $neighbour): void
+    {
+        $store = $this->requireCapability(FlushableScopeStore::class);
+        $scope = Scope::named($target);
+        $other = Scope::named($neighbour);
+
+        $this->store->set(Key::named('own')->within($scope), 'own', Ttl::forever());
+        $this->store->set(Key::named('nested')->within($scope->child('x')), 'nested', Ttl::forever());
+        $this->store->set(Key::named('other')->within($other), 'other', Ttl::forever());
+        $this->store->set(Key::named('other-nested')->within($other->child('x')), 'other-nested', Ttl::forever());
+
+        $store->clearScope($scope);
+
+        self::assertTrue($this->store->get(Key::named('own')->within($scope))->isMiss());
+        self::assertTrue($this->store->get(Key::named('nested')->within($scope->child('x')))->isMiss());
+        self::assertSame('other', $this->store->get(Key::named('other')->within($other))->value());
+        self::assertSame(
+            'other-nested',
+            $this->store->get(Key::named('other-nested')->within($other->child('x')))->value(),
+            'Clearing one scope must not reach a neighbouring scope.',
+        );
+    }
+
+    #[DataProvider('patternLookalikeScopes')]
+    public function testInspectionTreatsScopeNamesLiterally(string $target, string $neighbour): void
+    {
+        $store = $this->requireCapability(InspectableStore::class);
+        $scope = Scope::named($target);
+        $other = Scope::named($neighbour);
+
+        $this->store->set(Key::named('own')->within($scope), 'own', Ttl::forever());
+        $this->store->set(Key::named('nested')->within($scope->child('x')), 'nested', Ttl::forever());
+        $this->store->set(Key::named('other')->within($other), 'other', Ttl::forever());
+        $this->store->set(Key::named('other-nested')->within($other->child('x')), 'other-nested', Ttl::forever());
+
+        $values = array_map(
+            static fn ($entry): mixed => $entry->value(),
+            iterator_to_array($store->entries($scope), false),
+        );
+        sort($values);
+
+        self::assertSame(['nested', 'own'], $values);
+    }
+
+    /**
+     * Names that differ only by case, accent, or Unicode normalization are
+     * distinct scopes and tags; a backend collation must not merge them.
+     *
+     * @return array<string, array{string, string}>
+     */
+    public static function collationLookalikeNames(): array
+    {
+        return [
+            'case'          => ['Tenant', 'tenant'],
+            'accent'        => ['café', 'cafe'],
+            'normalization' => ["caf\u{00E9}", "cafe\u{0301}"],
+        ];
+    }
+
+    #[DataProvider('collationLookalikeNames')]
+    public function testClearScopeDistinguishesCaseAndUnicode(string $target, string $neighbour): void
+    {
+        $store = $this->requireCapability(FlushableScopeStore::class);
+        $scope = Scope::named($target);
+        $other = Scope::named($neighbour);
+
+        $this->store->set(Key::named('own')->within($scope->child('x')), 'own', Ttl::forever());
+        $this->store->set(Key::named('other')->within($other), 'other', Ttl::forever());
+        $this->store->set(Key::named('other-nested')->within($other->child('x')), 'other-nested', Ttl::forever());
+
+        $store->clearScope($scope);
+
+        self::assertTrue($this->store->get(Key::named('own')->within($scope->child('x')))->isMiss());
+        self::assertSame('other', $this->store->get(Key::named('other')->within($other))->value());
+        self::assertSame('other-nested', $this->store->get(Key::named('other-nested')->within($other->child('x')))->value());
+    }
+
+    #[DataProvider('collationLookalikeNames')]
+    public function testInspectionDistinguishesCaseAndUnicode(string $target, string $neighbour): void
+    {
+        $store = $this->requireCapability(InspectableStore::class);
+        $scope = Scope::named($target);
+        $other = Scope::named($neighbour);
+
+        $this->store->set(Key::named('own')->within($scope), 'own', Ttl::forever());
+        $this->store->set(Key::named('other')->within($other), 'other', Ttl::forever());
+
+        $values = array_map(
+            static fn ($entry): mixed => $entry->value(),
+            iterator_to_array($store->entries($scope), false),
+        );
+        sort($values);
+
+        self::assertSame(['own'], $values);
+    }
+
+    #[DataProvider('collationLookalikeNames')]
+    public function testClearTagDistinguishesCaseAndUnicode(string $target, string $neighbour): void
+    {
+        $store = $this->requireCapability(TaggableStore::class);
+
+        $this->store->set(Key::named('own'), 'own', Ttl::forever());
+        $this->store->set(Key::named('other'), 'other', Ttl::forever());
+        $store->tag(Key::named('own'), $target);
+        $store->tag(Key::named('other'), $neighbour);
+
+        self::assertSame(1, $store->clearTag($target));
+        self::assertTrue($this->store->get(Key::named('own'))->isMiss());
+        self::assertSame('other', $this->store->get(Key::named('other'))->value());
+    }
+
     public function testTaggingGroupsKeysAndClearTagRemovesThem(): void
     {
         $store = $this->requireCapability(TaggableStore::class);
@@ -284,6 +412,32 @@ abstract class StoreConformance extends TestCase
         self::assertTrue($lock->release());
         self::assertTrue($rival->acquire());
         self::assertTrue($rival->release());
+    }
+
+    public function testLockNamesAreExactAndMayBeLong(): void
+    {
+        $store = $this->requireCapability(LockingStore::class);
+        $long = str_repeat('l', 300);
+
+        // Names differing only by case or accent are different locks.
+        $upper = $store->lock('Report', Ttl::seconds(30));
+        $lower = $store->lock('report', Ttl::seconds(30));
+        $accent = $store->lock('relatório', Ttl::seconds(30));
+        $plain = $store->lock('relatorio', Ttl::seconds(30));
+        self::assertTrue($upper->acquire());
+        self::assertTrue($lower->acquire());
+        self::assertTrue($accent->acquire());
+        self::assertTrue($plain->acquire());
+
+        // A long name is still one acquirable, exclusive lock.
+        $lock = $store->lock($long, Ttl::seconds(30));
+        self::assertTrue($lock->acquire());
+        self::assertFalse($store->lock($long, Ttl::seconds(30))->acquire());
+        self::assertTrue($store->lock(substr($long, 0, 299), Ttl::seconds(30))->acquire());
+
+        foreach ([$upper, $lower, $accent, $plain, $lock] as $held) {
+            self::assertTrue($held->release());
+        }
     }
 
     /**

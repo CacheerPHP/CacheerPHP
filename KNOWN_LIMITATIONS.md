@@ -12,6 +12,11 @@ trade-offs so you can design around them. Failure *modes* per capability are in
 - Tag indexes are **best-effort metadata**. A key that expires before its tag is
   flushed is a no-op, not an error. Tags are for grouped invalidation, not for
   enumerating a guaranteed-complete set.
+- `DatabaseStore` stores scopes and tags in 255-character columns, so it rejects
+  a scope path (segments joined by `/`) or a tag longer than 255 characters
+  before writing — `InvalidScopeException` for scopes, `InvalidArgumentException`
+  for tags. A scoped tag includes its scope, so it counts toward the limit. The
+  limit applies on every driver, including SQLite. Lock names have no limit.
 
 ## Atomicity depends on the backend
 
