@@ -1,63 +1,62 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 14 — add() conditional put and corrected semantics (v5.0.0)
+ * Example 14 — Conditional / first-writer-wins writes (v6)
  *
- * add() stores a value only when the key does not already exist.
- * The return value was inverted in v4.x; v5.0.0 fixes it:
+ * v5's add() — "store only if the key is absent" — is back on the cache in v6,
+ * and it is no longer the racy has()+set() pair you would otherwise write by
+ * hand: when the store can lock, add() serializes the check and the write, so
+ * exactly one caller wins across processes. When it cannot, it degrades to a
+ * single-process check and says so here.
  *
- *   add() returns TRUE  → key was new, value was stored.
- *   add() returns FALSE → key already existed, nothing was written.
+ * For "must happen once" side effects, take a real lock instead — add() protects
+ * the cache entry, a lock protects your work.
  *
- * This matches the behaviour of memcached ADD, Laravel Cache::add(), and
- * every other mainstream caching library.
+ * Run: php Examples/example14-add-conditional.php
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Contracts\LockingStore;
 
-$Cacheer = new Cacheer();
-$Cacheer->setDriver()->useArrayDriver();
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-// ── 1. add() on a fresh key — returns true ─────────────────────────────────────
+// Reset keys this example writes, so repeated runs are deterministic.
+$cache->deleteMany(['config:theme', 'rate_limit:user:99']);
 
-$stored = $Cacheer->add('config:theme', 'dark', ttl: 3600);
+// ── 1. Set-if-absent ─────────────────────────────────────────────────────────
+$stored = $cache->add('config:theme', 'dark', ttl: 3600);
+echo 'stored: ' . var_export($stored, true) . ' → ' . $cache->get('config:theme') . PHP_EOL;
+assert($stored === true);
 
-echo '--- add() on fresh key ---' . PHP_EOL;
-echo 'Stored  : ' . var_export($stored, true) . PHP_EOL;             // true
-echo 'Value   : ' . $Cacheer->getCache('config:theme') . PHP_EOL;    // dark
+// A second attempt does not overwrite it, and says so.
+$stored = $cache->add('config:theme', 'light');
+echo 'stored again: ' . var_export($stored, true) . ' → ' . $cache->get('config:theme') . PHP_EOL;
+assert($stored === false);
+assert($cache->get('config:theme') === 'dark');
 
-// ── 2. add() on an existing key — returns false, value unchanged ───────────────
+echo 'add() is cross-process safe here: '
+    . var_export($cache->supports(LockingStore::class), true) . PHP_EOL;
 
-$overwritten = $Cacheer->add('config:theme', 'light');   // key already exists
-
-echo PHP_EOL . '--- add() on existing key ---' . PHP_EOL;
-echo 'Stored  : ' . var_export($overwritten, true) . PHP_EOL;        // false
-echo 'Value   : ' . $Cacheer->getCache('config:theme') . PHP_EOL;    // still dark
-
-// ── 3. Practical: distributed lock / "first writer wins" ──────────────────────
-
-echo PHP_EOL . '--- First-writer-wins pattern ---' . PHP_EOL;
-
-$lock = 'job:send_invoice:42';
-
-if ($Cacheer->add($lock, getmypid(), ttl: 60)) {
-    echo 'Lock acquired by PID ' . getmypid() . ' — running job.' . PHP_EOL;
-    // ... do the work ...
-    $Cacheer->clearCache($lock);
+// ── 2. First-writer-wins across processes, for side effects ──────────────────
+$lock = $cache->lock('job:send_invoice:42', 60);
+if ($lock->acquire()) {
+    try {
+        echo 'Lock acquired by PID ' . getmypid() . " — running job.\n";
+        // ... do the once-only work ...
+    } finally {
+        $lock->release();
+    }
 } else {
-    $owner = $Cacheer->getCache($lock);
-    echo "Lock already held by PID {$owner} — skipping." . PHP_EOL;
+    echo "Another worker already holds the lock — skipping.\n";
 }
 
-// Simulate a second worker trying to acquire the same lock.
-$Cacheer->add($lock, 9999, ttl: 60);  // will be rejected because the lock was re-acquired
+// ── 3. Rate-limit counter — create-on-miss with a TTL window ─────────────────
+$cache->increment('rate_limit:user:99', 1, initial: 0, ttl: '1 minute');
+echo 'Requests this minute: ' . $cache->get('rate_limit:user:99') . PHP_EOL;
+assert($cache->get('rate_limit:user:99') === 1);
 
-// ── 4. add() with DateInterval TTL ────────────────────────────────────────────
-
-$Cacheer->add('rate_limit:user:99', 0, ttl: new DateInterval('PT1M'));  // 1 minute
-$Cacheer->increment('rate_limit:user:99', 1);  // count the request
-
-echo PHP_EOL . '--- rate-limit counter ---' . PHP_EOL;
-echo 'Requests this minute: ' . $Cacheer->getCache('rate_limit:user:99') . PHP_EOL;  // 1
+echo "OK\n";

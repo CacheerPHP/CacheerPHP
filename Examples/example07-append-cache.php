@@ -1,45 +1,56 @@
 <?php
 
+declare(strict_types=1);
+
+/**
+ * Example 07 — Merging into a cached value (v6)
+ *
+ * v5 had a dedicated appendCache() that merged data into an existing array
+ * entry. v6 deliberately keeps the store contract tiny (get/set/delete/clear),
+ * so there is no appendCache(). The same result is an explicit read-modify-write
+ * you can see and reason about:
+ *
+ *   $current = $cache->get($key, []);
+ *   $cache->set($key, array_merge($current, $extra));
+ *
+ * When several processes may append concurrently, wrap the read-modify-write in
+ * a lock so updates are not lost — $cache->lock() is right there on the cache
+ * (see example 20).
+ *
+ * Run: php Examples/example07-append-cache.php
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
+
 use Silviooosilva\CacheerPhp\Cacheer;
 
-require_once __DIR__ . "/../vendor/autoload.php";
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-$Cacheer = new Cacheer();
-$Cacheer->setDriver()->useRedisDriver();
-
-// Data to be stored in the cache
 $cacheKey = 'user_profile_1';
-$userProfile = [
+
+$cache->set($cacheKey, [
     'id' => 1,
     'name' => 'Sílvio Silva',
     'email' => 'gasparsilvio7@gmail.com',
-];
+]);
 
-$userProfile02 = [
+echo "Before merge:\n";
+print_r($cache->get($cacheKey));
+
+// Merge additional fields into the stored array.
+$extra = [
     'house_number' => 2130,
-    'phone' => "(999)999-9999"
+    'phone' => '(999)999-9999',
 ];
 
+$current = $cache->get($cacheKey, []);
+$cache->set($cacheKey, array_merge($current, $extra));
 
-// Storing data in the cache
-$Cacheer->putCache($cacheKey, $userProfile);
+echo "After merge:\n";
+$merged = $cache->get($cacheKey);
+print_r($merged);
 
-// Retrieving data from the cache
-if($Cacheer->isSuccess()){
-    echo "Cache Found: ";
-    print_r($Cacheer->getCache($cacheKey));
-} else {
-  echo $Cacheer->getMessage();
-}
+assert($merged['phone'] === '(999)999-9999');
+assert($merged['name'] === 'Sílvio Silva');
 
-
-// Merging data into the cache
-$Cacheer->appendCache($cacheKey, $userProfile02);
-
-if($Cacheer->isSuccess()){
-    echo $Cacheer->getMessage() . PHP_EOL;
-    print_r($Cacheer->getCache($cacheKey));
-} else {
-  echo $Cacheer->getMessage();
-}
-
+echo "OK\n";

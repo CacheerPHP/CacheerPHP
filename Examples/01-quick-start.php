@@ -5,10 +5,10 @@ declare(strict_types=1);
 /**
  * v6 quick start: an in-process cache in five lines.
  *
- * Run: php examples/v6/01-quick-start.php
+ * Run: php Examples/01-quick-start.php
  */
 
-require __DIR__ . '/../../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
 

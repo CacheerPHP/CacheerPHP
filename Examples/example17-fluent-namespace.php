@@ -1,66 +1,57 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 17 — Fluent namespace context with PendingCache
+ * Example 17 — Scoped, chainable keyspaces (v6)
  *
- * `in()`, `namespace()`, and `withoutNamespace()` return an immutable
- * `PendingCache` wrapper so the namespace travels with the chain instead of
- * being passed as a positional argument on every call.
+ * v5 → v6 mapping:
+ *   $c->in('users')->put('123', $v)        →  $c->scope('users')->set('123', $v)
+ *   $c->in('users')->in('123')             →  $c->scope('users')->scope('123')
+ *   $c->getNamespace()                     →  $scoped->boundScope()
+ *   $c->withoutNamespace()                 →  use the root $cache instance
  *
- * Dot notation is supported: `in('users.123')` and `in('users')->in('123')`
- * produce the same namespace.
+ * scope() returns a new immutable Cacheer, so chaining never mutates the
+ * parent. remember() honors the bound scope.
+ *
+ * Run: php Examples/example17-fluent-namespace.php
  */
 
-require_once __DIR__ . "/../vendor/autoload.php";
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = OptionBuilder::forFile()
-    ->dir(__DIR__ . "/cache")
-    ->build();
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-$Cacheer = new Cacheer($options);
+// ── A bound scope ────────────────────────────────────────────────────────────
+$cache->scope('users')->set('123', ['name' => 'Alice', 'age' => 30]);
+print_r($cache->scope('users')->get('123'));
 
-// --- A simple bound namespace --------------------------------------------
-$Cacheer->in("users")->put("123", ["name" => "Alice", "age" => 30]);
+// ── Nested scopes ────────────────────────────────────────────────────────────
+$cache->scope('users')->scope('123')->set('profile', ['bio' => 'PHP developer']);
+$nested = $cache->scope('users')->scope('123')->get('profile');
+assert($nested === ['bio' => 'PHP developer']);
 
-print_r($Cacheer->in("users")->get("123"));
-//  → ['name' => 'Alice', 'age' => 30]
+// ── Immutability: chaining does not mutate the parent ────────────────────────
+$users = $cache->scope('users');
+$admins = $users->scope('admins'); // does NOT change $users
 
-// `namespace()` is the long-form alias of `in()`:
-$Cacheer->namespace("users")->put("124", ["name" => "Bob"]);
+echo 'users scope : ' . $users->boundScope() . PHP_EOL;   // users
+echo 'admins scope: ' . $admins->boundScope() . PHP_EOL;  // users.admins
 
-// --- Dot notation: hierarchical namespaces -------------------------------
-$Cacheer->in("users.123")->put("profile", ["bio" => "PHP developer"]);
-$flat   = $Cacheer->in("users.123")->get("profile");
+// ── Escape a scope by using the root instance ────────────────────────────────
+$tenant = $cache->scope('tenant-a');
+$tenant->set('config', ['timezone' => 'UTC']);
+$cache->set('shared-flag', true); // stored at the root, not under tenant-a
 
-// equivalent chained form:
-$nested = $Cacheer->in("users")->in("123")->get("profile");
+assert($tenant->get('shared-flag') === null);
+assert($cache->get('shared-flag') === true);
 
-var_dump($flat === $nested); // true — both point to the same entry
-
-// --- Immutability --------------------------------------------------------
-$users  = $Cacheer->in("users");
-$admins = $users->in("admins"); // does NOT mutate $users
-
-echo $users->getNamespace() . PHP_EOL;  // "users"
-echo $admins->getNamespace() . PHP_EOL; // "users.admins"
-
-// --- withoutNamespace() to escape a chain --------------------------------
-$tenant = $Cacheer->in("tenant-a");
-$tenant->put("config", ["timezone" => "UTC"]);
-
-$tenant->withoutNamespace()->put("shared-flag", true);
-//  → 'shared-flag' is stored at the root, NOT under 'tenant-a'.
-
-var_dump($Cacheer->getCache("shared-flag", "tenant-a")); // null
-var_dump($Cacheer->getCache("shared-flag"));             // true
-
-// --- remember() honours the bound namespace ------------------------------
-$value = $Cacheer->in("reports")->remember("daily-summary", 3600, function () {
-    // Expensive computation; runs once, then cached for an hour.
-    return ["orders" => 1287, "revenue" => 42_850.50];
+// ── remember() honors the bound scope ────────────────────────────────────────
+$value = $cache->scope('reports')->remember('daily-summary', 3600, function (): array {
+    return ['orders' => 1287, 'revenue' => 42850.50];
 });
-
 print_r($value);
+assert($value['orders'] === 1287);
+
+echo "OK\n";

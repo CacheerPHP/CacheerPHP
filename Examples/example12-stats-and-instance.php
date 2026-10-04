@@ -1,74 +1,76 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 12 — stats(), resetInstance(), and setInstance() (v5.0.0)
+ * Example 12 — Inspecting what the cache is doing (v6)
  *
- * Three new methods help you inspect and control the shared static singleton
- * that backs the Cacheer static facade.
+ * v5 exposed stats()/setInstance()/resetInstance()/getCacheStore() to inspect
+ * and swap a global static singleton. v6 is instance-first: there is no global
+ * singleton, so setInstance()/resetInstance() are gone by design — you simply
+ * construct the cache you want and inject it.
  *
- *   stats()         — returns the active driver class name and feature flags.
- *   resetInstance() — clears the singleton so the next static call gets a
- *                     fresh default instance (useful in tests / long-running
- *                     processes that switch configurations).
- *   setInstance()   — injects a pre-configured Cacheer instance as the
- *                     singleton, so all subsequent Cacheer::*() static calls
- *                     go through it.
+ * The useful half of v5's stats() — "what is my cache actually doing?" — comes
+ * in three sizes:
+ *   - $cache->stats()                  → what this cache IS: store, scope,
+ *                                        policy, and which capabilities are real.
+ *   - MetricsCollector on an EventBus  → hits, misses, writes, hit rate.
+ *   - $cache->entries()                → walk the live keyspace, scope applied.
+ *
+ * Run: php Examples/example12-stats-and-instance.php
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\CacheStore\ArrayCacheStore;
+use Silviooosilva\CacheerPhp\Observability\EventBus;
+use Silviooosilva\CacheerPhp\Observability\MetricsCollector;
+use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
-// ── 1. stats() ─────────────────────────────────────────────────────────────────
+$clock = new SystemClock();
+$store = new ArrayStore($clock);
 
-$Cacheer = new Cacheer();
-$Cacheer->setDriver()->useArrayDriver();
-$Cacheer->useCompression(true);
-$Cacheer->useEncryption('demo-key-000000000000000000000000');
+$metrics = new MetricsCollector();
+$events = new EventBus();
+$events->listen($metrics->record(...));
 
-$stats = $Cacheer->stats();
+// Instrumented cache: every operation emits a typed event to the bus.
+$cache = Cacheer::instrumented($store, $events);
 
-echo '--- stats() ---' . PHP_EOL;
-echo 'Driver      : ' . $stats['driver']      . PHP_EOL;
-echo 'Compression : ' . var_export($stats['compression'], true) . PHP_EOL;
-echo 'Encryption  : ' . var_export($stats['encryption'],  true) . PHP_EOL;
-echo PHP_EOL;
+$cache->set('user:1', ['name' => 'Ada']);
+$cache->set('user:2', ['name' => 'Linus']);
+$cache->get('user:1');   // hit
+$cache->get('user:404'); // miss
 
-// ── 2. setInstance() — use a custom instance as the static facade target ───────
+// ── What is this cache? ──────────────────────────────────────────────────────
+echo "--- cache stats ---\n";
+print_r($cache->stats());
 
-$custom = new Cacheer();
-$custom->setDriver()->useArrayDriver();
+// Capabilities are reported honestly, decorators included — ask before calling
+// one if your backend is pluggable.
+assert($cache->stats()['capabilities']['atomic'] === true);
 
-Cacheer::setInstance($custom);
+// ── What has it been doing? ──────────────────────────────────────────────────
+$snapshot = $metrics->snapshot();
+echo "--- metrics snapshot ---\n";
+echo 'Writes   : ' . $snapshot['writes'] . PHP_EOL;
+echo 'Hits     : ' . $snapshot['hits'] . PHP_EOL;
+echo 'Misses   : ' . $snapshot['misses'] . PHP_EOL;
+echo 'Hit rate : ' . $snapshot['hit_rate'] . PHP_EOL;
 
-// All static calls now go through $custom.
+assert($snapshot['writes'] >= 2);
+assert($snapshot['hits'] >= 1);
+assert($snapshot['misses'] >= 1);
 
-Cacheer::/** @scrutinizer ignore-call */ putCache('static_key', 'hello from static facade');
+// ── Walk the live keyspace (InspectableStore) ────────────────────────────────
+echo "--- live entries ---\n";
+$keys = [];
+foreach ($cache->entries() as $entry) {
+    $keys[] = $entry->key()->value();
+}
+sort($keys);
+print_r($keys);
+assert(in_array('user:1', $keys, true));
 
-echo '--- setInstance() ---' . PHP_EOL;
-echo Cacheer::/** @scrutinizer ignore-call */ getCache('static_key') . PHP_EOL;    // hello from static facade
-echo $custom->getCache('static_key') . PHP_EOL;    // same value via instance
-echo PHP_EOL;
-
-// ── 3. resetInstance() — tear down the singleton ──────────────────────────────
-
-Cacheer::resetInstance();
-
-// The next static call creates a brand-new default singleton.
-// The key stored on $custom is gone from the static context.
-$fresh = Cacheer::getCache('static_key');
-
-echo '--- resetInstance() ---' . PHP_EOL;
-echo 'After reset, static key found: ' . var_export($fresh !== null, true) . PHP_EOL; // false
-
-// ── 4. getCacheStore() — inspect the active driver via instance ────────────────
-
-$instance = new Cacheer();
-$instance->setDriver()->useArrayDriver();
-
-echo '--- getCacheStore() ---' . PHP_EOL;
-echo get_class($instance->getCacheStore()) . PHP_EOL;  // ...ArrayCacheStore
-
-// Clean up singleton
-Cacheer::resetInstance();
+echo "OK\n";

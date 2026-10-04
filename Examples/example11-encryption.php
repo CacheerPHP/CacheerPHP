@@ -1,77 +1,69 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 11 — AES-256-CBC encryption with random IV (v5.0.0)
+ * Example 11 — Compression + authenticated encryption (v6)
  *
- * v4.x used a deterministic IV derived from the encryption key itself,
- * which made ciphertexts for identical payloads identical — a serious
- * cryptographic weakness.
+ * v5 → v6 mapping:
+ *   $c->useEncryption($key)      →  Cacheer::build()->encryptWithPassphrases([...], 'current')
+ *   $c->useCompression(true)     →  Cacheer::build()->gzip()
  *
- * v5.0.0 generates a fresh random 16-byte IV for every write.  The IV is
- * prepended to the ciphertext and base64-encoded, so each call to putCache()
- * produces a different ciphertext even for the same data.
+ * v6 encrypts with AES-256-GCM (authenticated) through the storage pipeline, and
+ * supports keyrings with a rotating "active" id so you can re-key without losing
+ * old data. A fresh random nonce per write means identical payloads never
+ * produce identical ciphertext, and tampering is detected on read.
  *
- * The decryption path extracts the IV from the stored blob automatically,
- * so no API change is required on the caller side.
+ * Run: php Examples/example11-encryption.php
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$encryptionKey = 'my-super-secret-32-byte-aes-key!'; // 32 chars → AES-256
+$dir = __DIR__ . '/cache';
 
-$Options = OptionBuilder::forFile()->dir(__DIR__ . '/cache')->build();
-$Cacheer = new Cacheer($Options);
-$Cacheer->useEncryption($encryptionKey);
+$cache = Cacheer::build()
+    ->file($dir)
+    ->gzip()
+    ->encryptWithPassphrases(['current' => 'my-super-secret-passphrase'], 'current')
+    ->create();
 
-// ── 1. Basic store + retrieve ──────────────────────────────────────────────────
-
-$sensitiveData = [
+// ── 1. Store + retrieve sensitive data ───────────────────────────────────────
+$sensitive = [
     'credit_card' => '4111 1111 1111 1111',
-    'cvv'         => '123',
-    'expiry'      => '12/28',
+    'cvv' => '123',
+    'expiry' => '12/28',
 ];
+$cache->set('payment_info', $sensitive);
 
-$Cacheer->putCache('payment_info', $sensitiveData);
+$retrieved = $cache->get('payment_info');
+echo "Decrypted successfully:\n";
+print_r($retrieved);
+assert($retrieved === $sensitive);
 
-$retrieved = $Cacheer->getCache('payment_info');
+// ── 2. Compress-then-encrypt round-trips a large payload ─────────────────────
+$large = str_repeat('compress-then-encrypt ', 500);
+$cache->set('compressed_encrypted', $large);
+echo 'Large payload matches: ' . ($cache->get('compressed_encrypted') === $large ? 'YES' : 'NO') . PHP_EOL;
+assert($cache->get('compressed_encrypted') === $large);
 
-if ($Cacheer->isSuccess()) {
-    echo "Decrypted successfully:" . PHP_EOL;
-    print_r($retrieved);
+// ── 3. A different passphrase cannot read the ciphertext ─────────────────────
+$wrong = Cacheer::build()
+    ->file($dir)
+    ->gzip()
+    ->encryptWithPassphrases(['current' => 'a-totally-different-passphrase'], 'current')
+    ->create();
+
+$leaked = null;
+try {
+    $leaked = $wrong->get('payment_info');
+} catch (\Throwable $e) {
+    echo 'Wrong key rejected: ' . $e::class . PHP_EOL;
 }
+echo 'Recovered original with wrong key: ' . ($leaked === $sensitive ? 'YES (bad!)' : 'NO (good)') . PHP_EOL;
+assert($leaked !== $sensitive);
 
-// ── 2. Random IV — same data produces different on-disk blobs ─────────────────
+$cache->clear();
 
-$Cacheer->putCache('blob_a', 'same payload');
-$Cacheer->putCache('blob_b', 'same payload');
-
-$pathA = __DIR__ . '/cache/' . md5('blob_a') . '.cache';
-$pathB = __DIR__ . '/cache/' . md5('blob_b') . '.cache';
-
-$sameOnDisk = (file_get_contents($pathA) === file_get_contents($pathB));
-echo 'Blobs are identical: ' . ($sameOnDisk ? 'YES (bad!)' : 'NO (good — random IV)') . PHP_EOL;
-
-// ── 3. Combine with compression ────────────────────────────────────────────────
-
-$Cacheer->useCompression(true);
-
-$largePayload = str_repeat('compress-then-encrypt ', 500);
-$Cacheer->putCache('compressed_encrypted', $largePayload);
-
-$result = $Cacheer->getCache('compressed_encrypted');
-echo 'Payload matches: ' . ($result === $largePayload ? 'YES' : 'NO') . PHP_EOL;
-
-// ── 4. Wrong key = failed decryption ──────────────────────────────────────────
-
-$WrongKeyOptions = OptionBuilder::forFile()->dir(__DIR__ . '/cache')->build();
-$WrongKey = new Cacheer($WrongKeyOptions);
-$WrongKey->useEncryption('wrong-key-000000000000000000000');
-
-$bad = $WrongKey->getCache('payment_info');
-echo 'Data with wrong key: ' . var_export($bad, true) . PHP_EOL;  // null or corrupt
-
-// Clean up
-$Cacheer->flushCache();
+echo "OK\n";

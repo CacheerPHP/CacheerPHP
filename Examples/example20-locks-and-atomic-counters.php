@@ -1,76 +1,78 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 20 — Distributed Locks & Atomic Counters
+ * Example 20 — Distributed locks & atomic counters (v6)
  *
- * Two concurrency-safe building blocks (new in v5.2.0):
+ * Two concurrency-safe primitives, both on the cache:
  *
- *   - lock()       a named, driver-backed mutex so only one process runs a
- *                  critical section at a time.
- *   - increment()  / decrement() are now atomic — concurrent counter updates
- *                  no longer lose increments on lockable drivers.
+ *   lock($name, $ttl)   → a named cross-process mutex, namespaced by scope.
+ *       $lock->acquire(): bool          try once, non-blocking
+ *       $lock->block($seconds): bool    wait up to N seconds
+ *       $lock->release(): bool
+ *   increment(...)      → lost-update-free counters.
  *
- * Both work across processes on the File, Database, and Redis drivers.
+ * Both work across processes on the File, Database, and Redis stores. Use a lock
+ * for "must happen once" side effects; use increment() for plain counters and
+ * remember()/flexible() for stampede-safe recomputation (example 21).
  *
- * When is a lock useful? Your app runs as many PHP processes at once (php-fpm
- * workers, queue workers, cron) across one or more servers. A lock makes sure
- * only ONE of them runs a block of code at a time. Real cases:
- *
- *   - a cron on 3 servers that must send the daily email only once;
- *   - not double-charging a payment on a double-click / retry;
- *   - only one worker draining a queue (a "singleton" job);
- *   - serialising calls to a fragile external API.
- *
- * Use it for "must happen once" side-effects. For plain counters use
- * increment() (already atomic), and for cache recomputation use remember() /
- * flexible() — they lock internally to prevent stampedes.
+ * Run: php Examples/example20-locks-and-atomic-counters.php
  */
 
-require_once __DIR__ . "/../vendor/autoload.php";
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
+use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
+use Silviooosilva\CacheerPhp\Contracts\LockingStore;
 
-$options = OptionBuilder::forFile()
-    ->dir(__DIR__ . "/cache")
-    ->build();
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-$Cacheer = new Cacheer($options);
+// Reset the counter so repeated runs are deterministic.
+$cache->delete('views:post:1');
 
-// --- Run a callback under a lock; others get false instead of running it ----
-$result = $Cacheer->lock("rebuild-report", 30)->get(function () {
-    // Only one process at a time reaches this block.
-    return "report rebuilt at " . date("H:i:s");
-});
-echo $result . PHP_EOL;                                   // "report rebuilt at ..."
+// Ask before you call, if your backend is pluggable.
+assert($cache->supports(LockingStore::class));
+assert($cache->supports(AtomicStore::class));
 
-// --- Manual acquire / release ----------------------------------------------
-$lock = $Cacheer->lock("nightly-job", 120);
+// ── Run a critical section under a lock ──────────────────────────────────────
+$lock = $cache->lock('rebuild-report', 30);
 if ($lock->acquire()) {
     try {
-        echo "Running the nightly job exclusively..." . PHP_EOL;
-        // doWork();
+        echo 'report rebuilt at ' . date('H:i:s') . PHP_EOL;
     } finally {
         $lock->release();
     }
-} else {
-    echo "Another process is already running the job." . PHP_EOL;
 }
 
-// --- Wait up to 5s for a contended lock, then run --------------------------
-$charged = $Cacheer->lock("invoice:42", 30)->block(5, function () {
-    return "invoice 42 charged";
-});
-echo ($charged ?: "could not acquire the lock in time") . PHP_EOL;
+// ── Wait up to 5s for a contended lock, then run ─────────────────────────────
+$invoice = $cache->lock('invoice:42', 30);
+if ($invoice->block(5.0)) {
+    try {
+        echo "invoice 42 charged\n";
+    } finally {
+        $invoice->release();
+    }
+} else {
+    echo "could not acquire the lock in time\n";
+}
 
-// --- Atomic counters --------------------------------------------------------
-$Cacheer->putCache("views:post:1", 0);
+// Lock names are namespaced by scope, so two tenants running the same job name
+// do not block each other.
+$a = $cache->in('tenant-a')->lock('nightly-import', 30);
+$b = $cache->in('tenant-b')->lock('nightly-import', 30);
+assert($a->acquire() && $b->acquire());
+$a->release();
+$b->release();
+echo "per-scope locks are independent\n";
 
-$Cacheer->increment("views:post:1");         // +1  → 1
-$Cacheer->increment("views:post:1", 10);     // +10 → 11
-$Cacheer->decrement("views:post:1", 3);      // -3  → 8
+// ── Atomic counters ──────────────────────────────────────────────────────────
+$cache->increment('views:post:1', 1, initial: 0);   // → 1
+$cache->increment('views:post:1', 10);              // → 11
+$cache->decrement('views:post:1', 3);               // → 8
 
-echo "views:post:1 = " . $Cacheer->getCache("views:post:1") . PHP_EOL;   // 8
+echo 'views:post:1 = ' . $cache->get('views:post:1') . PHP_EOL;
+assert($cache->get('views:post:1') === 8);
 
-// Under concurrency (multiple PHP processes hitting these lines at once),
-// every increment is applied exactly once — no lost updates.
+// Under concurrency every increment is applied exactly once — no lost updates.
+echo "OK\n";

@@ -1,38 +1,41 @@
 <?php
 
-require_once __DIR__ . "/../vendor/autoload.php";
+declare(strict_types=1);
+
+/**
+ * Example 05 — Cache an API response (v6)
+ *
+ * v5 used getCache()/isSuccess()/putCache() around the HTTP call. In v6 the
+ * whole "read-through" pattern collapses into a single remember(): the callback
+ * only runs on a miss, and its result is cached for the given TTL.
+ *
+ * Run: php Examples/example05-cache-api-response.php
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-// $options = [
-//     "cacheDir" =>  __DIR__ . "/cache",
-// ];
-
-$options = OptionBuilder::forFile()
-        ->dir( __DIR__ . "/cache")
-        ->build();
-
-$Cacheer = new Cacheer($options);
-
-// API URL and cache key
 $apiUrl = 'https://jsonplaceholder.typicode.com/posts';
 $cacheKey = 'api_response_' . md5($apiUrl);
 
-// Checking if the API response is already cached
-$cachedResponse = $Cacheer->getCache($cacheKey);
+// Fetch once, then serve from cache for 10 minutes. The closure runs only when
+// the key is cold (and only once, even under concurrent requests).
+$response = $cache->remember($cacheKey, '10 minutes', function () use ($apiUrl): string {
+    $body = @file_get_contents($apiUrl);
 
-if ($Cacheer->isSuccess()) {
-    // Use the cached response
-    $response = $cachedResponse;
-} else {
-    // Call the API and store the response in the cache
-    $response = file_get_contents($apiUrl);
-    $Cacheer->putCache($cacheKey, $response);
-}
+    // Fall back to a small fixture when the network is unavailable, so the
+    // example stays runnable offline.
+    return $body !== false
+        ? $body
+        : json_encode([['id' => 1, 'title' => 'offline fixture']], JSON_THROW_ON_ERROR);
+});
 
-// Using the API response (from cache or from the call)
 $data = json_decode($response, true);
-print_r($data);
+echo 'Posts loaded: ' . count($data) . PHP_EOL;
+
+assert(is_array($data) && $data !== []);
+
+echo "OK\n";

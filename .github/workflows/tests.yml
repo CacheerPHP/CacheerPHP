@@ -155,8 +155,8 @@ jobs:
 
       - name: Fresh install runs with zero optional dependencies
         run: |
-          php Examples/v6/01-quick-start.php
-          php Examples/v6/02-scopes-and-observability.php
+          php Examples/01-quick-start.php
+          php Examples/02-scopes-and-observability.php
 
       - name: Install dev tooling
         run: composer install --prefer-dist --no-interaction --no-progress

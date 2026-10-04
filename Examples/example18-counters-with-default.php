@@ -1,60 +1,58 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 18 — Counters with optional default and TTL
+ * Example 18 — Counters with create-on-miss and a TTL (v6)
  *
- * `increment()` and `decrement()` accept two optional parameters that opt
- * into create-on-miss behaviour without breaking legacy callers:
+ * increment() and decrement() sit on the cache and bump a counter atomically:
  *
- *   increment(string $key, int $amount = 1, string $namespace = '',
- *             ?int $default = null,
- *             int|string|\DateInterval|null $ttl = null): bool
+ *   increment(string|Key $key, int $amount = 1, ?int $initial = null, $ttl = null): int
  *
- *   - $default = null  → legacy behaviour (return false if the key is absent).
- *   - $default given   → if the key is absent, store ($default + $amount) and
- *                        apply the optional $ttl.
+ *   - $initial = null → the key must already exist, otherwise nothing happens.
+ *   - $initial given  → on a miss, the entry is created as ($initial + $amount),
+ *                       with the optional $ttl applied.
  *
- * Falsy stored values (notably 0) are real cache hits, so calling
- * `increment('counter')` on a stored 0 still works.
+ * Both return the new value. decrement() is increment() with the sign flipped —
+ * v5 had both names, and so does v6.
+ *
+ * Run: php Examples/example18-counters-with-default.php
  */
 
-require_once __DIR__ . "/../vendor/autoload.php";
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = OptionBuilder::forFile()
-    ->dir(__DIR__ . "/cache")
-    ->build();
+$cache = Cacheer::file(__DIR__ . '/cache');
+$cache->clear();
 
-$Cacheer = new Cacheer($options);
+// ── Create-on-miss with an explicit initial value ────────────────────────────
+$cache->increment('page-views', 1, initial: 0);            // → 1
+$views = $cache->increment('page-views', 1, initial: 0);   // → 2
+echo 'page-views: ' . $views . PHP_EOL;
+assert($views === 2);
 
-// --- Legacy path: missing key + no default → false ----------------------
-$ok = $Cacheer->increment("legacy-counter");
-var_dump($ok);                                          // false
-var_dump($Cacheer->has("legacy-counter"));              // false — nothing was written
+// ── Seed from a non-zero base (initial + amount) ─────────────────────────────
+$budget = $cache->increment('budget', 10, initial: 100);   // 100 + 10
+echo 'budget: ' . $budget . PHP_EOL;
+assert($budget === 110);
 
-// --- Create-on-miss with an explicit default ----------------------------
-$Cacheer->increment("page-views", 1, "", 0);
-echo $Cacheer->getCache("page-views") . PHP_EOL;        // 1
+// ── decrement() reads better than a negative increment ───────────────────────
+$stock = $cache->decrement('stock', 5, initial: 100);      // 100 - 5
+echo 'stock: ' . $stock . PHP_EOL;
+assert($stock === 95);
 
-$Cacheer->increment("page-views", 1, "", 0);
-echo $Cacheer->getCache("page-views") . PHP_EOL;        // 2
+// ── Time-bounded counter (rate-limit window) ─────────────────────────────────
+$cache->increment('rate-window', 1, initial: 0, ttl: '1 minute');
+echo 'rate-window: ' . $cache->get('rate-window') . PHP_EOL;
+assert($cache->get('rate-window') === 1);
 
-// --- Default + amount when seeding from a non-zero base -----------------
-$Cacheer->increment("budget", 10, "", 100);
-echo $Cacheer->getCache("budget") . PHP_EOL;            // 110 (= 100 + 10)
+// ── Counters respect scope, like every other operation ───────────────────────
+$cache->in('tenant-a')->increment('signups', 1, initial: 0);
+$cache->in('tenant-b')->increment('signups', 5, initial: 0);
+echo 'tenant-a signups: ' . $cache->in('tenant-a')->get('signups') . PHP_EOL;
+echo 'tenant-b signups: ' . $cache->in('tenant-b')->get('signups') . PHP_EOL;
+assert($cache->in('tenant-a')->get('signups') === 1);
+assert($cache->in('tenant-b')->get('signups') === 5);
 
-// --- decrement() shares the same signature ------------------------------
-$Cacheer->decrement("stock", 5, "", 100);
-echo $Cacheer->getCache("stock") . PHP_EOL;             // 95 (= 100 - 5)
-
-// --- Time-bounded counter (rate-limit style) ----------------------------
-$Cacheer->increment("rate-window", 1, "", 0, "1 minute");
-//  → 'rate-window' is created with TTL 60s. Subsequent increments within
-//    the window keep ticking; after expiry, the next call seeds a new 0+1=1.
-
-// --- Falsy-value support: incrementing a stored 0 still works -----------
-$Cacheer->putCache("zero", 0);
-$Cacheer->increment("zero");
-echo $Cacheer->getCache("zero") . PHP_EOL;              // 1
+echo "OK\n";

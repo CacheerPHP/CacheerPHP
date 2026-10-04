@@ -6,10 +6,10 @@ declare(strict_types=1);
  * v6 scopes plus observability: isolate keys per feature and watch what the
  * cache is doing through typed events and a metrics collector.
  *
- * Run: php examples/v6/02-scopes-and-observability.php
+ * Run: php Examples/02-scopes-and-observability.php
  */
 
-require __DIR__ . '/../../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Observability\EventBus;

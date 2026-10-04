@@ -1,39 +1,38 @@
 <?php
 
-require_once __DIR__ . "/../vendor/autoload.php";
+declare(strict_types=1);
+
+/**
+ * Example 03 — Delete a key and clear the whole cache (v6)
+ *
+ * v5 → v6 mapping:
+ *   $c->clearCache($key)  →  $c->delete($key)   (remove one entry)
+ *   $c->flushCache()      →  $c->clear()        (empty the current scope)
+ *
+ * Both return plain values (delete(): bool, clear(): void) instead of the old
+ * isSuccess()/getMessage() status pair.
+ *
+ * Run: php Examples/example03-clear-and-flush.php
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-// $options = [
-//     "cacheDir" =>  __DIR__ . "/cache",
-// ];
+$cache->set('user_profile_123', ['id' => 123]);
+$cache->set('user_profile_456', ['id' => 456]);
 
-$options = OptionBuilder::forFile()
-        ->dir( __DIR__ . "/cache")
-        ->build();
+// Remove a single entry.
+$deleted = $cache->delete('user_profile_123');
+echo 'Deleted user_profile_123: ' . var_export($deleted, true) . PHP_EOL;
+assert($cache->has('user_profile_123') === false);
+assert($cache->has('user_profile_456') === true);
 
-$Cacheer = new Cacheer($options);
+// Empty everything in this scope.
+$cache->clear();
+echo "Cache cleared.\n";
+assert($cache->has('user_profile_456') === false);
 
-// Cache key to be cleared
-$cacheKey = 'user_profile_123';
-
-// Clearing a specific cache item
-
-$Cacheer->clearCache($cacheKey);
-
-if ($Cacheer->isSuccess()) {
-    echo $Cacheer->getMessage();
-} else {
-    echo $Cacheer->getMessage();
-}
-
-$Cacheer->flushCache();
-
-if ($Cacheer->isSuccess()) {
-    echo $Cacheer->getMessage();
-} else {
-    echo $Cacheer->getMessage();
-}
+echo "OK\n";

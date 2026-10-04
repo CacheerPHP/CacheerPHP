@@ -1,60 +1,51 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 19 — putMany() accepts a simple associative array
+ * Example 19 — Bulk writes with setMany() (v6)
  *
- * The legacy [['cacheKey' => k, 'cacheData' => v], ...] shape continues to
- * work unchanged. The simple ['k' => $v] form is normalised internally.
+ * v5 → v6 mapping:
+ *   $c->putMany(['k' => $v, ...])                →  $c->setMany(['k' => $v, ...])
+ *   $c->putMany([...], $namespace)               →  $c->scope($namespace)->setMany([...])
  *
- * Both shapes can be mixed in a single call and combined with namespaces.
+ * v6 takes a single, obvious shape: an associative array of key => value. (The
+ * legacy [['cacheKey' => k, 'cacheData' => v], ...] shape from v4/v5 is gone.)
+ * many() reads several keys back in one call.
+ *
+ * Run: php Examples/example19-putmany-simple-form.php
  */
 
-require_once __DIR__ . "/../vendor/autoload.php";
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = OptionBuilder::forFile()
-    ->dir(__DIR__ . "/cache")
-    ->build();
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-$Cacheer = new Cacheer($options);
-
-// --- Simple associative form --------------------------------------------
-$Cacheer->putMany([
-    "user.1" => ["name" => "Alice", "age" => 30],
-    "user.2" => ["name" => "Bob",   "age" => 27],
-    "user.3" => ["name" => "Carol", "age" => 41],
+// ── Associative bulk write ───────────────────────────────────────────────────
+$cache->setMany([
+    'user.1' => ['name' => 'Alice', 'age' => 30],
+    'user.2' => ['name' => 'Bob', 'age' => 27],
+    'user.3' => ['name' => 'Carol', 'age' => 41],
 ]);
 
-print_r($Cacheer->getCache("user.1"));
-//  → ['name' => 'Alice', 'age' => 30]
+print_r($cache->get('user.1'));
+assert($cache->get('user.2') === ['name' => 'Bob', 'age' => 27]);
 
-// --- Legacy explicit form still works -----------------------------------
-$Cacheer->putMany([
-    ["cacheKey" => "feature.search-v2",  "cacheData" => ["enabled" => true]],
-    ["cacheKey" => "feature.dark-theme", "cacheData" => ["enabled" => false]],
+// ── Read several keys back at once ───────────────────────────────────────────
+$found = $cache->many(['user.1', 'user.2', 'user.404'], default: 'MISSING');
+echo 'user.404 => ' . $found['user.404'] . PHP_EOL; // MISSING
+assert($found['user.1']['name'] === 'Alice');
+
+// ── Bulk write into a scope ──────────────────────────────────────────────────
+$cache->scope('metrics')->setMany([
+    'x' => ['count' => 10],
+    'y' => ['count' => 20],
+    'z' => ['count' => 30],
 ]);
 
-print_r($Cacheer->getCache("feature.search-v2"));
-//  → ['enabled' => true]
+print_r($cache->scope('metrics')->get('y')); // ['count' => 20]
+assert($cache->scope('metrics')->get('y') === ['count' => 20]);
+assert($cache->get('y') === null); // scoped writes stay in their scope
 
-// --- Mixed shapes in the same call --------------------------------------
-$Cacheer->putMany([
-    "session.alpha"                                            => ["uid" => 1001],
-    ["cacheKey" => "session.beta",  "cacheData" => ["uid" => 1002]],
-    "session.gamma"                                            => ["uid" => 1003],
-]);
-
-foreach (["session.alpha", "session.beta", "session.gamma"] as $key) {
-    print_r($Cacheer->getCache($key));
-}
-
-// --- Bulk-write into a namespace ----------------------------------------
-$Cacheer->putMany([
-    "x" => ["count" => 10],
-    "y" => ["count" => 20],
-    "z" => ["count" => 30],
-], "metrics");
-
-print_r($Cacheer->in("metrics")->get("y")); // ['count' => 20]
+echo "OK\n";

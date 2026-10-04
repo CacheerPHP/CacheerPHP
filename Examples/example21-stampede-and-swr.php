@@ -1,61 +1,63 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 21 — Stampede Protection & Stale-While-Revalidate
+ * Example 21 — Stampede protection & stale-while-revalidate (v6)
  *
- * (new in v5.2.0)
+ *   remember($key, $ttl, $cb)                 → single-flight: a cold key hit by
+ *                                               a burst runs the callback once.
+ *   flexible($key, $fresh, $stale, $cb)       → serve fresh directly; serve stale
+ *                                               while one worker refreshes; only
+ *                                               recompute once older than $stale.
  *
- *   - remember()  is now stampede-safe: a concurrent miss runs the callback
- *                 once (single-flight), not once per request.
- *   - flexible()  adds stale-while-revalidate: serve fresh values directly,
- *                 serve stale ones while a single worker refreshes, and
- *                 recompute only once the value is older than the stale window.
+ * Run: php Examples/example21-stampede-and-swr.php
  */
 
-require_once __DIR__ . "/../vendor/autoload.php";
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-$options = OptionBuilder::forFile()
-    ->dir(__DIR__ . "/cache")
-    ->build();
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-$Cacheer = new Cacheer($options);
+// Clean slate so the demo is deterministic.
+$cache->delete('dashboard:stats');
+$cache->delete('home');
 
-// Start from a clean slate so the demo is deterministic between runs.
-$Cacheer->clearCache("dashboard:stats");
-$Cacheer->clearCache("home");
-
-// --- Stampede-safe remember() ----------------------------------------------
-// On a cold key, even a burst of concurrent requests runs the callback once.
+// ── Stampede-safe remember() ─────────────────────────────────────────────────
 $calls = 0;
-$build = function () use (&$calls) {
+$build = function () use (&$calls): string {
     $calls++;
+
     return "stats #{$calls}";
 };
 
-echo $Cacheer->remember("dashboard:stats", 300, $build) . PHP_EOL;   // computes → "stats #1"
-echo $Cacheer->remember("dashboard:stats", 300, $build) . PHP_EOL;   // cached   → "stats #1"
-echo "build callback ran {$calls} time(s)" . PHP_EOL;                 // 1
+echo $cache->remember('dashboard:stats', 300, $build) . PHP_EOL; // computes → stats #1
+echo $cache->remember('dashboard:stats', 300, $build) . PHP_EOL; // cached   → stats #1
+echo "build callback ran {$calls} time(s)\n";                     // 1
+assert($calls === 1);
 
 echo PHP_EOL;
 
-// --- Stale-while-revalidate with flexible() --------------------------------
-// fresh for 2s; may be served stale for up to 5s while it refreshes.
+// ── Stale-while-revalidate with flexible() ───────────────────────────────────
+// Fresh for 2s; may be served stale for up to 5s while it refreshes.
 $renders = 0;
-$render = function () use (&$renders) {
+$render = function () use (&$renders): string {
     $renders++;
+
     return "home v{$renders}";
 };
 
-echo $Cacheer->flexible("home", 2, 5, $render) . PHP_EOL;    // cold  → "home v1"
-echo $Cacheer->flexible("home", 2, 5, $render) . PHP_EOL;    // fresh → "home v1"
-echo "renders so far: {$renders}" . PHP_EOL;                  // 1
+echo $cache->flexible('home', 2, 5, $render) . PHP_EOL; // cold  → home v1
+echo $cache->flexible('home', 2, 5, $render) . PHP_EOL; // fresh → home v1
+echo "renders so far: {$renders}\n";                     // 1
+assert($renders === 1);
 
-sleep(3); // now older than the 2s fresh window, still within the 5s stale window
+sleep(3); // now past the 2s fresh window, still within the 5s stale window
 
-// The first caller in the stale window refreshes inline and returns fresh data;
-// concurrent callers would get the cached value instantly.
-echo $Cacheer->flexible("home", 2, 5, $render) . PHP_EOL;    // stale → refresh → "home v2"
-echo "renders after refresh: {$renders}" . PHP_EOL;           // 2
+// The caller in the stale window triggers a refresh and ends up with fresh data.
+echo $cache->flexible('home', 2, 5, $render) . PHP_EOL; // stale → refresh → home v2
+echo "renders after refresh: {$renders}\n";              // 2
+assert($renders === 2);
+
+echo "OK\n";

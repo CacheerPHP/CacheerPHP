@@ -1,63 +1,63 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 10 — DateInterval and null TTL (v5.0.0)
+ * Example 10 — Flexible TTLs: int, string, DateInterval, null (v6)
  *
- * TTLs are no longer limited to integers or human-readable strings.
- * putCache(), add(), remember(), and renewCache() now accept:
+ * Every TTL argument (set(), remember(), and TouchStore::touch()) accepts:
  *   - int           → seconds
  *   - string        → "1 hour", "30 minutes", etc.
  *   - \DateInterval → converted to seconds automatically
- *   - null          → store forever (PHP_INT_MAX)
+ *   - null          → store forever
+ *
+ * Run: php Examples/example10-dateinterval-ttl.php
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
-$Cacheer = new Cacheer();
-$Cacheer->setDriver()->useArrayDriver();
+$clock = new SystemClock();
+$store = new ArrayStore($clock);
+$cache = new Cacheer($store, $clock);
 
-// ── 1. int TTL (unchanged from v4) ────────────────────────────────────────────
+// ── 1. int TTL ───────────────────────────────────────────────────────────────
+$cache->set('key_int', 'integer TTL', ttl: 3600);
+echo $cache->get('key_int') . PHP_EOL;
 
-$Cacheer->putCache('key_int', 'integer TTL', ttl: 3600);
-echo $Cacheer->getCache('key_int') . PHP_EOL;          // integer TTL
+// ── 2. string TTL ────────────────────────────────────────────────────────────
+$cache->set('key_string', 'string TTL', ttl: '2 hours');
+echo $cache->get('key_string') . PHP_EOL;
 
-// ── 2. string TTL (unchanged from v4) ─────────────────────────────────────────
+// ── 3. DateInterval TTL ──────────────────────────────────────────────────────
+$cache->set('key_interval', 'DateInterval TTL', ttl: new DateInterval('PT45M'));
+echo $cache->get('key_interval') . PHP_EOL;
 
-$Cacheer->putCache('key_string', 'string TTL', ttl: '2 hours');
-echo $Cacheer->getCache('key_string') . PHP_EOL;       // string TTL
+// ── 4. null TTL — store forever ──────────────────────────────────────────────
+$cache->set('key_forever', 'lives forever', ttl: null);
+echo $cache->get('key_forever') . PHP_EOL;
 
-// ── 3. DateInterval TTL (new in v5.0.0) ───────────────────────────────────────
+// ── 5. remember() with a DateInterval ────────────────────────────────────────
+$calls = 0;
+$build = function () use (&$calls): string {
+    $calls++;
 
-$Cacheer->putCache('key_interval', 'DateInterval TTL', ttl: new DateInterval('PT45M')); // 45 min
-echo $Cacheer->getCache('key_interval') . PHP_EOL;     // DateInterval TTL
-
-// ── 4. null TTL — store forever (new in v5.0.0) ───────────────────────────────
-
-$Cacheer->putCache('key_forever', 'lives forever', ttl: null);
-echo $Cacheer->getCache('key_forever') . PHP_EOL;      // lives forever
-
-// ── 5. remember() with DateInterval ───────────────────────────────────────────
-
-$result = $Cacheer->remember('computed', new DateInterval('P1D'), function () {
-    // Expensive computation, called only once.
     return 'computed value — ' . date('Y-m-d');
-});
-echo $result . PHP_EOL;
+};
 
-// Second call returns the cached value; the closure is NOT called again.
-$result2 = $Cacheer->remember('computed', new DateInterval('P1D'), function () {
-    return 'this will NOT be returned';
-});
-echo $result2 . PHP_EOL;  // same as $result
+$first = $cache->remember('computed', new DateInterval('P1D'), $build);
+$second = $cache->remember('computed', new DateInterval('P1D'), $build);
+echo $first . PHP_EOL;
+assert($first === $second);
+assert($calls === 1); // the closure ran once
 
-// ── 6. renewCache() with DateInterval ─────────────────────────────────────────
+// ── 6. Renew a TTL with a DateInterval (TouchStore) ──────────────────────────
+$cache->set('renewable', 'data', ttl: 60);
+$touched = $cache->touch('renewable', new DateInterval('PT2H'));
+echo 'Renewed: ' . var_export($touched, true) . PHP_EOL;
+assert($touched === true);
 
-$Cacheer->putCache('renewable', 'data', ttl: 60);
-$Cacheer->renewCache('renewable', new DateInterval('PT2H'));  // extend to 2 hours
-
-echo $Cacheer->isSuccess()
-    ? 'Cache renewed: ' . $Cacheer->getMessage()
-    : 'Renew failed: ' . $Cacheer->getMessage();
-echo PHP_EOL;
+echo "OK\n";

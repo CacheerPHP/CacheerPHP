@@ -1,83 +1,71 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * Example 13 — Caching falsy values correctly (v5.0.0)
+ * Example 13 — Caching falsy values correctly (v6)
  *
- * In v4.x the library used !empty() to detect cache hits, which treated 0,
- * 0.0, '', '0', false, and [] as misses — silently re-executing callbacks
- * and ignoring stored counters.
+ * All PHP values — including 0, 0.0, '', '0', false, and [] — round-trip through
+ * the cache and count as genuine hits. Because get() returns your $default on a
+ * miss, use entry()->isHit() when you must tell a cached false/null apart from a
+ * missing key.
  *
- * v5.0.0 replaces every !empty() check with isSuccess(), so all PHP values
- * (including falsy ones) round-trip correctly through the cache.
+ * Run: php Examples/example13-falsy-values.php
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
+use Silviooosilva\CacheerPhp\Stores\ArrayStore;
+use Silviooosilva\CacheerPhp\Support\SystemClock;
 
-$Cacheer = new Cacheer();
-$Cacheer->setDriver()->useArrayDriver();
+$clock = new SystemClock();
+$store = new ArrayStore($clock);
+$cache = new Cacheer($store, $clock);
 
-// ── 1. Caching integer 0 ──────────────────────────────────────────────────────
+// ── Falsy values are stored and hit exactly ──────────────────────────────────
+$cache->set('page_views', 0);
+$cache->set('feature_enabled', false);
+$cache->set('optional_suffix', '');
+$cache->set('search_results', []);
 
-$Cacheer->putCache('page_views', 0);
-$views = $Cacheer->getCache('page_views');
+echo 'Integer 0  : ' . var_export($cache->get('page_views'), true) . PHP_EOL;      // 0
+echo 'False      : ' . var_export($cache->get('feature_enabled'), true) . PHP_EOL; // false
+echo 'Empty str  : ' . var_export($cache->get('optional_suffix'), true) . PHP_EOL; // ''
+echo 'Empty array: ' . var_export($cache->get('search_results'), true) . PHP_EOL;  // array()
 
-echo '--- Integer 0 ---' . PHP_EOL;
-echo 'Hit     : ' . var_export($Cacheer->isSuccess(), true) . PHP_EOL;  // true
-echo 'Value   : ' . var_export($views, true) . PHP_EOL;                  // 0
+assert($cache->get('page_views') === 0);
+assert($cache->get('feature_enabled') === false);
 
-// ── 2. Caching boolean false ───────────────────────────────────────────────────
+// ── entry() distinguishes a cached false from a miss ─────────────────────────
+$hit = $cache->entry('feature_enabled');
+$miss = $cache->entry('never_stored');
+echo 'feature_enabled is a hit : ' . var_export($hit->isHit(), true) . PHP_EOL;  // true
+echo 'never_stored is a hit    : ' . var_export($miss->isHit(), true) . PHP_EOL; // false
+assert($hit->isHit() === true && $hit->value() === false);
+assert($miss->isMiss() === true);
 
-$Cacheer->putCache('feature_enabled', false);
-$flag = $Cacheer->getCache('feature_enabled');
+// ── increment() from a stored 0 (AtomicStore) ────────────────────────────────
+$cache->increment('counter', 1, initial: 0);
+$cache->increment('counter', 1);
+$cache->increment('counter', 5);
+echo 'Counter : ' . $cache->get('counter') . PHP_EOL; // 7
+assert($cache->get('counter') === 7);
 
-echo PHP_EOL . '--- Boolean false ---' . PHP_EOL;
-echo 'Hit     : ' . var_export($Cacheer->isSuccess(), true) . PHP_EOL;  // true
-echo 'Value   : ' . var_export($flag, true) . PHP_EOL;                   // false
+// ── remember() does NOT re-run for a cached falsy value ──────────────────────
+$calls = 0;
+$cache->remember('zero_result', 300, function () use (&$calls): int {
+    $calls++;
 
-// ── 3. Caching empty string ────────────────────────────────────────────────────
-
-$Cacheer->putCache('optional_suffix', '');
-$suffix = $Cacheer->getCache('optional_suffix');
-
-echo PHP_EOL . '--- Empty string ---' . PHP_EOL;
-echo 'Hit     : ' . var_export($Cacheer->isSuccess(), true) . PHP_EOL;  // true
-echo 'Value   : ' . var_export($suffix, true) . PHP_EOL;                 // ''
-
-// ── 4. Caching empty array ─────────────────────────────────────────────────────
-
-$Cacheer->putCache('search_results', []);
-$results = $Cacheer->getCache('search_results');
-
-echo PHP_EOL . '--- Empty array ---' . PHP_EOL;
-echo 'Hit     : ' . var_export($Cacheer->isSuccess(), true) . PHP_EOL;  // true
-echo 'Value   : ' . var_export($results, true) . PHP_EOL;                // array ()
-
-// ── 5. increment() starting from 0 ────────────────────────────────────────────
-
-$Cacheer->putCache('counter', 0);
-$Cacheer->increment('counter');
-$Cacheer->increment('counter');
-$Cacheer->increment('counter', 5);
-
-echo PHP_EOL . '--- increment() from 0 ---' . PHP_EOL;
-echo 'Counter : ' . $Cacheer->getCache('counter') . PHP_EOL;  // 7
-
-// ── 6. remember() does NOT re-call the closure for a cached falsy value ────────
-
-$callCount = 0;
-
-$Cacheer->remember('zero_result', 300, function () use (&$callCount) {
-    $callCount++;
-    return 0; // a valid "no results" result
+    return 0;
 });
+$cache->remember('zero_result', 300, function () use (&$calls): int {
+    $calls++; // must not run
 
-$Cacheer->remember('zero_result', 300, function () use (&$callCount) {
-    $callCount++;      // must NOT be reached
     return 999;
 });
+echo "Callback called {$calls} time(s)\n"; // 1
+assert($calls === 1);
+assert($cache->get('zero_result') === 0);
 
-echo PHP_EOL . '--- remember() with falsy cached value ---' . PHP_EOL;
-echo 'Callback called : ' . $callCount . ' time(s)' . PHP_EOL;     // 1
-echo 'Cached value    : ' . $Cacheer->getCache('zero_result') . PHP_EOL;  // 0
+echo "OK\n";

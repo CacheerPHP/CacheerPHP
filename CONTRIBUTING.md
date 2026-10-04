@@ -77,12 +77,11 @@ Run it in parallel to verify worker isolation:
 composer test:parallel
 ```
 
-Run the v6 kernel, reusable store contract, and concurrency suites:
+Run the v6 kernel and reusable store contract suites:
 
 ```bash
 composer test:kernel
 composer test:contract
-composer test:concurrency
 ```
 
 Service-backed tests live under `tests/Integration`:
@@ -95,8 +94,17 @@ composer test:integration:database
 
 Unavailable services are reported as skipped during local development. CI sets
 `CACHEER_REQUIRE_REDIS=1` or `CACHEER_REQUIRE_DATABASE=1`, which makes a missing
-service fail instead. MySQL and PostgreSQL jobs provide their connection details
-through `DB_*`; Redis uses `REDIS_*`.
+service fail instead. Connection details come from environment variables (the
+library itself reads none; there is no `.env` file):
+
+- `DB_CONNECTION` — `mysql` or `pgsql` selects which database suite runs; SQLite
+  always runs in memory. `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, and
+  `DB_PASSWORD` locate the server.
+- `REDIS_HOST` and `REDIS_PORT` locate Redis (default `127.0.0.1:6379`).
+
+```bash
+DB_CONNECTION=mysql DB_DATABASE=cacheer_test DB_USERNAME=root composer test:integration:database
+```
 
 To run every available suite:
 
@@ -119,10 +127,9 @@ coverage is added; the command's exit status is the source of truth.
 
 Before opening a PR, make sure you have:
 
-- [ ] Run `npm run lint:fix` and committed the result
+- [ ] Run `composer fix` and committed the result
 - [ ] Run `composer test` and confirmed the service-free suite passes
 - [ ] Run `composer test:contract` and `composer analyse`
-- [ ] Run `composer test:concurrency` for locking or invalidation changes
 - [ ] Run the relevant integration suite for driver changes
 - [ ] Added or updated tests for any changed behavior
 - [ ] Kept changes focused — one concern per PR

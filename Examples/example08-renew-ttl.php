@@ -1,37 +1,47 @@
 <?php
 
+declare(strict_types=1);
+
+/**
+ * Example 08 — Renew a TTL without rewriting the value (v6)
+ *
+ * v5 → v6 mapping:
+ *   $c->renewCache($key, 3600)  →  $cache->touch($key, 3600)
+ *
+ * Extending an entry's lifetime is the TouchStore capability, and like every
+ * capability it is reachable straight off the cache — with this cache's scope
+ * already applied, so it always targets the same entry your reads do.
+ *
+ * Run: php Examples/example08-renew-ttl.php
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
+
 use Silviooosilva\CacheerPhp\Cacheer;
 
-require_once __DIR__ . "/../vendor/autoload.php";
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-$Cacheer = new Cacheer();
-$Cacheer->setDriver()->useRedisDriver();
-
-// Data to be stored in the cache
 $cacheKey = 'user_profile_01';
-$userProfile = [
-    'id' => 1,
-    'name' => 'Sílvio Silva',
-    'email' => 'gasparsilvio7@gmail.com',
-];
 
-// Storing data in the cache
-$Cacheer->putCache($cacheKey, $userProfile, ttl: 300);
+// Store with a 5-minute TTL.
+$cache->set($cacheKey, ['id' => 1, 'name' => 'Sílvio Silva'], ttl: 300);
+echo "Cache Found: ";
+print_r($cache->get($cacheKey));
 
-// Recovering the cache data
-if($Cacheer->isSuccess()){
-    echo "Cache Found: ";
-    print_r($Cacheer->getCache($cacheKey));
-} else {
-  echo $Cacheer->getMessage();
-}
+// Extend the same entry to one hour — the value is untouched.
+$renewed = $cache->touch($cacheKey, '1 hour');
 
-// Renewing the cache data
-$Cacheer->renewCache($cacheKey, 3600);
+echo 'Cache renewed: ' . var_export($renewed, true) . PHP_EOL;
+assert($renewed === true);
+assert($cache->get($cacheKey) === ['id' => 1, 'name' => 'Sílvio Silva']);
 
-if($Cacheer->isSuccess()){
-  echo $Cacheer->getMessage() . PHP_EOL;
-} else {
-  echo $Cacheer->getMessage() . PHP_EOL;
+// A miss cannot be renewed.
+assert($cache->touch('never_written', 60) === false);
 
-}
+// Scoping applies here as it does everywhere else.
+$reports = $cache->in('reports');
+$reports->set($cacheKey, 'a different entry', ttl: 60);
+$reports->touch($cacheKey, 3600);
+assert($cache->get($cacheKey) === ['id' => 1, 'name' => 'Sílvio Silva']); // untouched
+
+echo "OK\n";

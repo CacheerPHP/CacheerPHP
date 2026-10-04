@@ -5,10 +5,10 @@ declare(strict_types=1);
 /**
  * v6 ergonomics: the fluent Cacheer::build() and the CacheDataFormatter.
  *
- * Run: php examples/v6/04-builder-and-formatter.php
+ * Run: php Examples/04-builder-and-formatter.php
  */
 
-require __DIR__ . '/../../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Support\CacheDataFormatter;

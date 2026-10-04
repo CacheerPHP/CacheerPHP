@@ -1,14 +1,14 @@
-# CacheerPHP v6 — Examples
+# CacheerPHP — Examples
 
 Runnable, self-contained examples for the v6 (instance-first) API. Each file
 ends by printing `OK` and can be run repeatedly:
 
 ```bash
-php Examples/v6/example01-simple-put-get.php
+php Examples/example01-simple-put-get.php
 ```
 
-The `exampleNN-*.php` files mirror the 21 v5 examples one-for-one so you can see
-exactly how each v5 idiom maps to v6. The short `01-quick-start.php`,
+The `exampleNN-*.php` files mirror, one-for-one, the 21 examples that shipped with
+v5, so you can see exactly how each v5 idiom maps to v6. The short `01-quick-start.php`,
 `02-scopes-and-observability.php`, and `04-builder-and-formatter.php` are extra
 v6-native intros.
 

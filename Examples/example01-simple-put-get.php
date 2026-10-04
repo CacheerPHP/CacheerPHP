@@ -1,23 +1,25 @@
 <?php
-require_once __DIR__ . "/../vendor/autoload.php";
+
+declare(strict_types=1);
+
+/**
+ * Example 01 — Simple put and get (v6)
+ *
+ * v5 → v6 mapping:
+ *   new Cacheer(OptionBuilder::forFile()->dir(...)->build())  →  Cacheer::file(dir)
+ *   $c->putCache($key, $value)                                →  $c->set($key, $value)
+ *   $c->getCache($key)                                        →  $c->get($key)
+ *   $c->isSuccess()                                           →  $c->has($key) / entry()->isHit()
+ *
+ * Run: php Examples/example01-simple-put-get.php
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\CacheStore\CacheManager\OptionBuilders\FileOptionBuilder;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-// $options = [
-//     "cacheDir" =>  __DIR__ . "/cache",
-// ];
-
-$options = OptionBuilder::forFile()
-            ->dir(__DIR__ . "/cache")
-            ->build();
-
-$Cacheer = new Cacheer($options);
-
-// Data to be stored in the cache
 $cacheKey = 'user_profile_1234';
 $userProfile = [
     'id' => 123,
@@ -25,17 +27,18 @@ $userProfile = [
     'email' => 'john.doe@example.com',
 ];
 
-// Storing data in the cache
-$Cacheer->putCache($cacheKey, $userProfile);
+// Store, then read back.
+$cache->set($cacheKey, $userProfile);
 
-// Retrieving data from the cache
-$cachedProfile = $Cacheer->getCache($cacheKey);
+$cachedProfile = $cache->get($cacheKey);
 
-if ($Cacheer->isSuccess()) {
+if ($cache->has($cacheKey)) {
     echo "Cache Found: ";
     print_r($cachedProfile);
 } else {
-    echo $Cacheer->getMessage();
+    echo "Cache miss for {$cacheKey}\n";
 }
 
+assert($cachedProfile === $userProfile);
 
+echo "OK\n";

@@ -84,64 +84,8 @@ remains available on its own `5.x` line during migration.
 - **Migration.** An optional Rector rename set, a cold-keyspace upgrade path, and
   end-to-end fresh-install / v5-upgrade rehearsals in CI.
 
-### Breaking changes
+### Fixed since RC1
 
-- Instance-first: the static/global facade is gone; construct and inject a
-  `Cacheer`. There is no drop-in v5 shim — migrate with the Rector set + mapping
-  table (MIGRATION.md), or stay on `^5.2`.
-- `get()` no longer accepts a read-time TTL; positional namespaces become
-  `scope()`; success is a return value or `entry()->isHit()`, not mutable state.
-- Minimum PHP is now **8.3**. Driver clients and extensions are optional
-  (`suggest`); the core installs for Array/File users with none of them.
-- See [MIGRATION.md](MIGRATION.md) for the full mapping and rollback steps, and
-  [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for documented edges.
-
-## [Unreleased]
-
-### Added
-
-- Lazy `RuntimeConfig` resolution: autoloading CacheerPHP no longer requires a
-  project `.env` file or creates database resources.
-- Dedicated Redis, MySQL, PostgreSQL, and SQLite integration boundaries.
-- Service-free unit and parallel test commands.
-- Persisted-format documentation.
-- CacheerPHP 6.x execution roadmap.
-- Unit, Contract, Integration, and Concurrency test suites.
-- Reusable store conformance tests shared by Array, File, Redis, and Database.
-- Injectable production/fake clocks for deterministic expiration and lock tests.
-- PHPStan level-5 analysis with a clean, suppression-free starting point.
-- Explicit, instance-first v6 `Cacheer` and immutable `ScopedCacheer` APIs.
-- Typed v6 `Key`, `Scope`, `Ttl`, and `CacheEntry` value objects.
-- Minimal v6 `Store` contract with accepted optional capability interfaces.
-- Service-free v6 `ArrayStore` reference implementation and Kernel test suite.
-- Typed v6 exception hierarchy that retains original backend failures.
-- Accepted RFCs for the PHP baseline, public API, store contracts, TTL, keys,
-  and scopes.
-
-### Changed
-
-- Redis integration tests now skip clearly when Redis is unavailable locally
-  and fail when CI marks Redis as required.
-- Redis `flushCache()` uses `FLUSHDB` instead of clearing the entire server.
-- Parallel workers isolate default file, SQLite, and Redis resources.
-- Development dependencies support both Pest 3 on PHP 8.2 and Pest 4 on newer
-  PHP versions.
-- The Composer `version` field was removed; release tags remain the version
-  source for Packagist.
-- CI now audits dependencies, runs static analysis and contracts, resolves the
-  lowest supported dependency set, and exercises concurrency.
-- Unit expiration tests advance a fake clock instead of sleeping.
-- The v6 PHP baseline is now PHP 8.3, with PHP 8.3–8.5 in the CI matrix.
-
-### Fixed
-
-- PostgreSQL migrations no longer execute the MySQL-only `USE` statement, and
-  TTL renewal now uses PostgreSQL interval syntax.
-- Runtime Redis configuration now includes the selected logical database.
-- Cached `null` and batch scalar values retain their hit semantics in File and
-  Database and Redis stores.
-- Database expiration comparisons use explicit application timestamps
-  consistently across SQLite, MySQL, and PostgreSQL.
 - Scoped `remember()`, `rememberForever()`, `add()`, `pull()`, `flexible()`,
   and serve-stale-on-error reads now apply the scope once. Previously they read
   a doubly-scoped key, so scoped `remember()` recomputed on every call, `add()`
@@ -153,14 +97,6 @@ remains available on its own `5.x` line during migration.
   LIKE let `clearScope()` on `Tenant` delete `tenant/…`, and MySQL's default
   collation also merged case, accents, and Unicode normalization forms for
   `clearScope()`, `entries()`, and `flushTag()` (`Users` flushed `users`).
-- File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
-  their per-key lock times out; they throw `StoreOperationFailedException` and
-  leave the entry unchanged. `add()` likewise throws on a lock timeout instead of
-  falling back to an unlocked check-and-write that could report a false win.
-- `remember()` re-reads the entry after timing out on another worker's lock, so a
-  value that worker stored is used instead of being computed again.
-- A repeated `acquire()` on a held Redis lock no longer drops ownership, which
-  left `release()` a no-op and the lock stuck until its TTL.
 - `DatabaseStore` rejects a scope or tag longer than its 255-character column
   before writing, on every driver. Previously MySQL strict mode and PostgreSQL
   failed with a driver error, and MySQL non-strict mode silently truncated the
@@ -173,6 +109,26 @@ remains available on its own `5.x` line during migration.
   `appX`. A prefix containing a reserved `:e`, `:t`, `:l`, or `:lk` segment —
   which would nest it inside another store's keyspace — is now rejected with an
   `InvalidArgumentException`.
+- File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
+  their per-key lock times out; they throw `StoreOperationFailedException` and
+  leave the entry unchanged. `add()` likewise throws on a lock timeout instead of
+  falling back to an unlocked check-and-write that could report a false win.
+- `remember()` re-reads the entry after timing out on another worker's lock, so a
+  value that worker stored is used instead of being computed again.
+- A repeated `acquire()` on a held Redis lock no longer drops ownership, which
+  left `release()` a no-op and the lock stuck until its TTL.
+
+### Breaking changes
+
+- Instance-first: the static/global facade is gone; construct and inject a
+  `Cacheer`. There is no drop-in v5 shim — migrate with the Rector set + mapping
+  table (MIGRATION.md), or stay on `^5.2`.
+- `get()` no longer accepts a read-time TTL; positional namespaces become
+  `scope()`; success is a return value or `entry()->isHit()`, not mutable state.
+- Minimum PHP is now **8.3**. Driver clients and extensions are optional
+  (`suggest`); the core installs for Array/File users with none of them.
+- See [MIGRATION.md](MIGRATION.md) for the full mapping and rollback steps, and
+  [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for documented edges.
 
 ## [5.2.0] - 2026-06-27
 

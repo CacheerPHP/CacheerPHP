@@ -1,34 +1,20 @@
 /vendor
+/composer.lock
 
 .phpunit.result.cache
 .php-cs-fixer.cache
 .env
-/composer.lock
-/database
-/CacheerPHP
 /var/phpstan/
-cacheer.log
-/tests/Unit/cache
-/tests/Feature/cache/last_flush_time
-/Examples/InternalTests/
+
+# Local working notes and scratch scripts
 /docs/
 /adr/
- 
+/Examples/InternalTests/
+
+# Transient cache written by the runnable examples
+/Examples/cache/
+
 # OS/editor
 .DS_Store
 .idea/
 .vscode/
-
-# Node (site)
-node_modules/
-cacheerphp.github.io/node_modules/
-cacheerphp.github.io/.cache/
-cacheerphp.github.io/dist/
-cacheerphp.github.io/build/
-cacheerphp.github.io/coverage/
-cacheerphp.github.io/npm-debug.log*
-cacheerphp.github.io/yarn-*.log*
-cacheerphp.github.io/pnpm-debug.log*
-
-# Transient cache written by the runnable examples
-/Examples/v6/cache/

@@ -1,38 +1,42 @@
 <?php
-require_once __DIR__ . "/../vendor/autoload.php";
+
+declare(strict_types=1);
+
+/**
+ * Example 04 — Namespaces are now scopes (v6)
+ *
+ * v5 → v6 mapping:
+ *   $c->putCache($key, $value, $namespace)  →  $c->scope($namespace)->set($key, $value)
+ *   $c->getCache($key, $namespace)          →  $c->scope($namespace)->get($key)
+ *
+ * scope() returns a new immutable Cacheer that shares the same store but a
+ * separate keyspace, so identical key names never collide across scopes.
+ *
+ * Run: php Examples/example04-namespace.php
+ */
+
+require __DIR__ . '/../vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
-use Silviooosilva\CacheerPhp\Config\Option\Builder\OptionBuilder;
 
-// Old way to set options (v4 and earlier) — now replaced by OptionBuilder
+$cache = Cacheer::file(__DIR__ . '/cache');
 
-// $options = [
-//     "cacheDir" =>  __DIR__ . "/cache",
-// ];
-
-$options = OptionBuilder::forFile()
-        ->dir( __DIR__ . "/cache")
-        ->build();
-
-$Cacheer = new Cacheer($options);
-
-// Data to be stored in the cache with a namespace
-$namespace = 'session_data_01';
-$cacheKey = 'session_456';
 $sessionData = [
     'user_id' => 456,
     'login_time' => time(),
 ];
 
-// Storing data in the cache with a namespace
-$Cacheer->putCache($cacheKey, $sessionData, $namespace);
+$sessions = $cache->scope('session_data_01');
+$sessions->set('session_456', $sessionData);
 
-// Retrieving data from the cache
-$cachedSessionData = $Cacheer->getCache($cacheKey, $namespace);
+$cachedSessionData = $sessions->get('session_456');
 
-if ($Cacheer->isSuccess()) {
-    echo "Cache Found: ";
-    print_r($cachedSessionData);
-} else {
-    echo $Cacheer->getMessage();
-}
+echo "Cache Found (scope 'session_data_01'): ";
+print_r($cachedSessionData);
+
+assert($cachedSessionData === $sessionData);
+
+// The same key in the root keyspace is a different entry.
+assert($cache->get('session_456') === null);
+
+echo "OK\n";
