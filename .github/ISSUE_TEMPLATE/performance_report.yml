@@ -1,13 +1,12 @@
 name: Performance report
-description: Report a regression or share benchmark results.
+description: Report a performance problem.
 labels: ["performance"]
 body:
   - type: markdown
     attributes:
       value: |
-        Benchmark results are only actionable with the environment and
-        methodology included. Numbers without a reproducible setup can't be
-        accepted.
+        Describe the slowdown and include a reproducible example and your
+        environment so others can investigate.
   - type: textarea
     id: environment
     attributes:
@@ -20,21 +19,21 @@ body:
     attributes:
       label: Methodology
       description: >
-        Exact commands (e.g. composer benchmark:compare), iteration counts,
-        warmup, and how you isolated the measurement.
+        Which operation is slow, how often it runs, and the relevant cache
+        configuration.
     validations:
       required: true
   - type: textarea
     id: results
     attributes:
       label: Results
-      description: Before/after numbers. Include variance, not just a single run.
+      description: Expected and observed behavior, including any measurements you already have.
     validations:
       required: true
   - type: textarea
     id: repro
     attributes:
       label: Reproduction
-      description: A script or branch others can run to reproduce the numbers.
+      description: A script or branch others can run to reproduce the problem.
     validations:
       required: true

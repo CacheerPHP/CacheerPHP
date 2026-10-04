@@ -104,11 +104,10 @@ To run every available suite:
 composer test:all
 ```
 
-Run static analysis and the benchmark payload schema:
+Run static analysis:
 
 ```bash
 composer analyse
-composer test:benchmark
 ```
 
 Do not document a fixed test count here. The passing count changes whenever

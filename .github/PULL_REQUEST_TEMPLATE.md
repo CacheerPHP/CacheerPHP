@@ -28,4 +28,3 @@ Closes #
 - [ ] `composer analyse` (PHPStan) passes.
 - [ ] `composer lint` (php-cs-fixer) passes.
 - [ ] Relevant examples and migration notes are updated.
-- [ ] Performance-sensitive changes include before/after benchmark evidence.

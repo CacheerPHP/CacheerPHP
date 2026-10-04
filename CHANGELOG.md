@@ -98,13 +98,12 @@ remains available on its own `5.x` line during migration.
   project `.env` file or creates database resources.
 - Dedicated Redis, MySQL, PostgreSQL, and SQLite integration boundaries.
 - Service-free unit and parallel test commands.
-- Repeatable v5 performance baseline runner and persisted-format documentation.
+- Persisted-format documentation.
 - CacheerPHP 6.x execution roadmap.
-- Unit, Contract, Integration, Concurrency, and Benchmark test suites.
+- Unit, Contract, Integration, and Concurrency test suites.
 - Reusable store conformance tests shared by Array, File, Redis, and Database.
 - Injectable production/fake clocks for deterministic expiration and lock tests.
 - PHPStan level-5 analysis with a clean, suppression-free starting point.
-- Six-class benchmark payload matrix and regression comparison command.
 - Explicit, instance-first v6 `Cacheer` and immutable `ScopedCacheer` APIs.
 - Typed v6 `Key`, `Scope`, `Ttl`, and `CacheEntry` value objects.
 - Minimal v6 `Store` contract with accepted optional capability interfaces.
@@ -124,8 +123,7 @@ remains available on its own `5.x` line during migration.
 - The Composer `version` field was removed; release tags remain the version
   source for Packagist.
 - CI now audits dependencies, runs static analysis and contracts, resolves the
-  lowest supported dependency set, exercises concurrency, and uploads benchmark
-  artifacts.
+  lowest supported dependency set, and exercises concurrency.
 - Unit expiration tests advance a fake clock instead of sleeping.
 - The v6 PHP baseline is now PHP 8.3, with PHP 8.3–8.5 in the CI matrix.
 

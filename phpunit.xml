@@ -15,9 +15,6 @@
         <testsuite name="Integration">
             <directory>tests/Integration</directory>
         </testsuite>
-        <testsuite name="Benchmark">
-            <directory>tests/Benchmark</directory>
-        </testsuite>
         <testsuite name="Kernel">
             <directory>tests/Kernel</directory>
         </testsuite>
