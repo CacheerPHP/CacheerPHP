@@ -28,6 +28,7 @@ use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Storage\EnvelopeCodec;
 use Silviooosilva\CacheerPhp\Storage\KeyEncoder\HashingKeyEncoder;
+use Silviooosilva\CacheerPhp\Stores\Support\CounterArithmetic;
 use Silviooosilva\CacheerPhp\Stores\Support\FileLock;
 use Silviooosilva\CacheerPhp\Stores\Support\StoredRecord;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
@@ -336,10 +337,10 @@ final class FileStore implements
                         new UnexpectedValueException('Cannot increment a non-integer cache value.'),
                     );
                 }
-                $next = $current + $amount;
+                $next = CounterArithmetic::add($key, $current, $amount);
                 $expiresAt = $ttl?->expiresAt($this->clock) ?? $entry->expiresAt();
             } else {
-                $next = ($initial ?? 0) + $amount;
+                $next = CounterArithmetic::add($key, $initial ?? 0, $amount);
                 $expiresAt = $ttl?->expiresAt($this->clock);
             }
 

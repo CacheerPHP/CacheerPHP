@@ -27,6 +27,7 @@ use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Storage\EnvelopeCodec;
 use Silviooosilva\CacheerPhp\Storage\KeyEncoder\HashingKeyEncoder;
+use Silviooosilva\CacheerPhp\Stores\Support\CounterArithmetic;
 use Silviooosilva\CacheerPhp\Stores\Support\DatabaseLock;
 use Silviooosilva\CacheerPhp\Stores\Support\DatabaseStoreSchema;
 use UnexpectedValueException;
@@ -207,11 +208,13 @@ final class DatabaseStore implements
     public function touch(Key $key, Ttl $ttl): bool
     {
         $statement = $this->pdo->prepare(
-            "UPDATE {$this->table} SET expires_at = :expires WHERE cache_key = :key",
+            "UPDATE {$this->table} SET expires_at = :expires
+                WHERE cache_key = :key AND (expires_at IS NULL OR expires_at > :now)",
         );
         $statement->execute([
             ':expires' => $ttl->expiresAt($this->clock),
             ':key'     => $this->keyEncoder->encode($key),
+            ':now'     => $this->clock->now(),
         ]);
 
         return $statement->rowCount() > 0 && $this->get($key)->isHit();
@@ -344,10 +347,10 @@ final class DatabaseStore implements
                         new UnexpectedValueException('Cannot increment a non-integer cache value.'),
                     );
                 }
-                $next = $current + $amount;
+                $next = CounterArithmetic::add($key, $current, $amount);
                 $expiresAt = $ttl?->expiresAt($this->clock) ?? $this->nullableInt($row['expires_at']);
             } else {
-                $next = ($initial ?? 0) + $amount;
+                $next = CounterArithmetic::add($key, $initial ?? 0, $amount);
                 $expiresAt = $ttl?->expiresAt($this->clock);
             }
 

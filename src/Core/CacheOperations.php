@@ -23,6 +23,7 @@ use Silviooosilva\CacheerPhp\Contracts\TaggableStore;
 use Silviooosilva\CacheerPhp\Contracts\TouchStore;
 use Silviooosilva\CacheerPhp\Exceptions\CacheException;
 use Silviooosilva\CacheerPhp\Exceptions\InvalidKeyException;
+use Silviooosilva\CacheerPhp\Exceptions\InvalidTtlException;
 use Silviooosilva\CacheerPhp\Exceptions\StoreOperationFailedException;
 use Silviooosilva\CacheerPhp\Exceptions\UnsupportedCapabilityException;
 use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
@@ -691,7 +692,15 @@ final readonly class CacheOperations
         $base = $this->ttl($ttl, $value);
         $seconds = $base->inSeconds();
 
-        return $seconds === null ? $base : Ttl::seconds($seconds + $grace);
+        if ($seconds === null) {
+            return $base;
+        }
+
+        if ($seconds > PHP_INT_MAX - $grace) {
+            throw new InvalidTtlException('The TTL plus the serve-stale grace exceeds the largest supported duration.');
+        }
+
+        return Ttl::seconds($seconds + $grace);
     }
 
     /**

@@ -196,6 +196,21 @@ abstract class StoreConformance extends TestCase
         self::assertTrue($this->store->get($key)->isHit());
     }
 
+    public function testTouchDoesNotReviveAnExpiredEntry(): void
+    {
+        $store = $this->requireCapability(TouchStore::class);
+        $key = Key::named('expired');
+
+        $this->store->set($key, 'value', Ttl::seconds(5));
+        $this->clock->advance(6);
+
+        self::assertFalse($store->touch($key, Ttl::seconds(60)), 'touch() on an expired entry is a miss.');
+        self::assertTrue($this->store->get($key)->isMiss());
+
+        $this->clock->advance(30);
+        self::assertTrue($this->store->get($key)->isMiss(), 'An expired entry must stay expired.');
+    }
+
     public function testPruneRemovesExpiredEntries(): void
     {
         $store = $this->requireCapability(PrunableStore::class);
@@ -398,6 +413,34 @@ abstract class StoreConformance extends TestCase
         self::assertFalse($store->compareAndSwap($counter, 999, 0));
         self::assertTrue($store->compareAndSwap($counter, 6, 42));
         self::assertSame(42, $this->store->get($counter)->value());
+    }
+
+    public function testCounterOverflowFailsAndKeepsThePreviousValue(): void
+    {
+        $store = $this->requireCapability(AtomicStore::class);
+        $max = Key::named('at-max');
+        $min = Key::named('at-min');
+
+        $this->store->set($max, PHP_INT_MAX, Ttl::forever());
+        $this->store->set($min, PHP_INT_MIN, Ttl::forever());
+
+        foreach ([
+            'past PHP_INT_MAX'    => static fn (): int => $store->increment($max),
+            'past PHP_INT_MIN'    => static fn (): int => $store->increment($min, -1),
+            'initial plus amount' => static fn (): int => $store->increment(Key::named('fresh'), 1, PHP_INT_MAX),
+        ] as $case => $attempt) {
+            try {
+                $attempt();
+                self::fail(sprintf('Overflowing a counter (%s) must fail.', $case));
+            } catch (StoreOperationFailedException $exception) {
+                self::assertSame('increment', $exception->operation);
+            }
+        }
+
+        self::assertSame(PHP_INT_MAX, $this->store->get($max)->value());
+        self::assertSame(PHP_INT_MIN, $this->store->get($min)->value());
+        self::assertTrue($this->store->get(Key::named('fresh'))->isMiss());
+        self::assertSame(PHP_INT_MAX - 1, $store->increment($max, -1), 'The counter still works afterwards.');
     }
 
     public function testLockingIsMutuallyExclusiveAndReleasable(): void

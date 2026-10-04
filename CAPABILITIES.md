@@ -44,7 +44,8 @@ and falls back to a plain compute when it is not.
 
 **Core.** `clear()` only affects this store's configured keyspace (directory,
 table, or key prefix) — never anything else in the same backend. `get()` on an
-expired entry is a miss and lazily removes the entry. Scope, tag, and prefix
+expired entry is a miss and lazily removes the entry; `touch()` on one is also a
+miss and never revives it. Scope, tag, and prefix
 names are matched literally and exactly: SQL `%`/`_` and Redis glob characters
 carry no special meaning, and names differing only by case, accent, or Unicode
 normalization stay distinct on every SQL engine. A Redis prefix cannot contain the segments `:e`, `:t`, `:l`, or `:lk`
@@ -57,8 +58,10 @@ normalization stay distinct on every SQL engine. A Redis prefix cannot contain t
 - *Database*: row-locked read-modify-write (`FOR UPDATE` where supported;
   serialized transactions on SQLite).
 - *Redis*: a read-modify-write guarded by a per-key Redis lock.
-- *Failure*: incrementing a non-integer value throws
-  [`StoreOperationFailedException`](src/Exceptions/StoreOperationFailedException.php).
+- *Failure*: incrementing a non-integer value, or past the platform integer
+  range, throws
+  [`StoreOperationFailedException`](src/Exceptions/StoreOperationFailedException.php)
+  and leaves the stored value unchanged.
   On File and Redis, if the per-key lock cannot be acquired within 5 seconds,
   the operation throws the same exception without touching the entry — it never
   reports a success it did not make atomically.

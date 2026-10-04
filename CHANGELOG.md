@@ -119,6 +119,19 @@ remains available on its own `5.x` line during migration.
 - An envelope cut off right after its magic bytes is reported as
   `CorruptedPayloadException` instead of raising a PHP warning and a misleading
   "version 0" error.
+- `DatabaseStore::touch()` no longer revives an expired entry; like every other
+  store it now reports a miss and leaves the entry expired.
+- Negative caching only ever shortens a lifetime. An explicit forever
+  (`forever()`, `rememberForever()`, `'forever'`) of an empty value stays forever,
+  and an explicit TTL shorter than the negative TTL is no longer lengthened.
+- `TieredStore` keeps a promoted value's original creation time and absolute
+  expiry in L1. A promoted stale value used to look newly written, restarting its
+  `flexible()` freshness, and a capped L1 copy reported the cap as its expiry.
+- `increment()` past `PHP_INT_MAX`/`PHP_INT_MIN` throws
+  `StoreOperationFailedException` on every store and keeps the previous value;
+  PHP used to turn the counter into a float, breaking every later increment.
+- A serve-stale grace that would overflow the TTL raises `InvalidTtlException`
+  instead of a `TypeError`.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of

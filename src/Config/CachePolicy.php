@@ -96,7 +96,7 @@ final readonly class CachePolicy
         $ttl = $requested === null ? ($this->defaultTtl ?? Ttl::forever()) : Ttl::from($requested);
 
         if ($this->negativeTtl !== null && $this->isEmpty($value)) {
-            $ttl = $this->negativeTtl;
+            $ttl = $this->negativeFor($ttl, $this->negativeTtl, $requested === null);
         }
 
         return $this->jitter($ttl);
@@ -133,6 +133,27 @@ final readonly class CachePolicy
         $factor = 1.0 - $this->jitterFraction + (2.0 * $this->jitterFraction * $random);
 
         return Ttl::seconds(max(1, (int) round($seconds * $factor)));
+    }
+
+    /**
+     * Negative caching only ever shortens: an explicit forever stays forever,
+     * and a finite TTL already shorter than the negative TTL is kept.
+     *
+     * @param Ttl $ttl
+     * @param Ttl $negative
+     * @param bool $implicit
+     * @return Ttl
+     */
+    private function negativeFor(Ttl $ttl, Ttl $negative, bool $implicit): Ttl
+    {
+        $seconds = $ttl->inSeconds();
+        if ($seconds === null) {
+            return $implicit ? $negative : $ttl;
+        }
+
+        $limit = $negative->inSeconds();
+
+        return $limit !== null && $limit < $seconds ? $negative : $ttl;
     }
 
     /**

@@ -49,6 +49,11 @@ final class TieredStore implements
     LockingStore,
     CapabilityAware
 {
+    /**
+     * Marks an L1 value as a record written by this store; see putLocal().
+     */
+    private const L1_RECORD = 'cacheer.tiered';
+
     private const GENERATION_KEY = '__cacheer_tier_generation__';
 
     /**
@@ -109,7 +114,7 @@ final class TieredStore implements
     {
         $this->syncGeneration();
 
-        $local = $this->l1->get($key);
+        $local = $this->readLocal($key);
         if ($local->isHit()) {
             return $local;
         }
@@ -130,7 +135,7 @@ final class TieredStore implements
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
         $this->l2->set($key, $value, $ttl);
-        $this->l1->set($key, $value, $this->capForL1($ttl));
+        $this->putLocal($key, $value, $this->clock->now(), $ttl->expiresAt($this->clock), $this->capForL1($ttl));
     }
 
     /**
@@ -165,7 +170,7 @@ final class TieredStore implements
         $entries = [];
 
         foreach ($keys as $key) {
-            $local = $this->l1->get($key);
+            $local = $this->readLocal($key);
             if ($local->isHit()) {
                 $entries[] = $local;
 
@@ -188,9 +193,12 @@ final class TieredStore implements
      */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
+        $createdAt = $this->clock->now();
+        $expiresAt = $ttl->expiresAt($this->clock);
+
         foreach ($entries as $entry) {
             $this->l2->set($entry['key'], $entry['value'], $ttl);
-            $this->l1->set($entry['key'], $entry['value'], $this->capForL1($ttl));
+            $this->putLocal($entry['key'], $entry['value'], $createdAt, $expiresAt, $this->capForL1($ttl));
         }
     }
 
@@ -336,8 +344,54 @@ final class TieredStore implements
      */
     private function promote(Key $key, CacheEntry $entry): void
     {
-        $this->l1->set($key, $entry->value(), $this->promotionTtl($entry));
+        $this->putLocal(
+            $key,
+            $entry->value(),
+            $entry->createdAt() ?? $this->clock->now(),
+            $entry->expiresAt(),
+            $this->promotionTtl($entry),
+        );
         $this->events->dispatch(CacheEvent::promoted('TieredStore', (string) $key));
+    }
+
+    /**
+     * Writes an L1 copy that remembers the value's own creation time and
+     * absolute expiry. A plain set() would stamp L1's write time and capped
+     * TTL instead, so a promoted value would look newer than it is — restarting
+     * its freshness for flexible() — and report the L1 cap as its expiry.
+     *
+     * @param Key $key
+     * @param mixed $value
+     * @param int $createdAt
+     * @param ?int $expiresAt
+     * @param Ttl $l1Ttl
+     */
+    private function putLocal(Key $key, mixed $value, int $createdAt, ?int $expiresAt, Ttl $l1Ttl): void
+    {
+        $this->l1->set($key, [
+            self::L1_RECORD => true,
+            'createdAt'     => $createdAt,
+            'expiresAt'     => $expiresAt,
+            'value'         => $value,
+        ], $l1Ttl);
+    }
+
+    /**
+     * @param Key $key
+     * @return CacheEntry
+     */
+    private function readLocal(Key $key): CacheEntry
+    {
+        $local = $this->l1->get($key);
+        $record = $local->isHit() ? $local->value() : null;
+
+        if (!is_array($record) || ($record[self::L1_RECORD] ?? false) !== true) {
+            // A miss, or a value something else put in L1: report it as is.
+            return $local;
+        }
+
+        /** @var array{createdAt: int, expiresAt: ?int, value: mixed} $record */
+        return CacheEntry::hit($key, $record['value'], $record['createdAt'], $record['expiresAt']);
     }
 
     /**

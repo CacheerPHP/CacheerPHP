@@ -20,6 +20,7 @@ use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Stores\Support\CounterArithmetic;
 use Silviooosilva\CacheerPhp\Stores\Support\InProcessLock;
 use Silviooosilva\CacheerPhp\Stores\Support\InProcessLockRegistry;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
@@ -305,10 +306,10 @@ final class ArrayStore implements
                     new UnexpectedValueException('Cannot increment a non-integer cache value.'),
                 );
             }
-            $next = $current + $amount;
+            $next = CounterArithmetic::add($key, $current, $amount);
             $expiresAt = $ttl?->expiresAt($this->clock) ?? $entry->expiresAt();
         } else {
-            $next = ($initial ?? 0) + $amount;
+            $next = CounterArithmetic::add($key, $initial ?? 0, $amount);
             $expiresAt = $ttl?->expiresAt($this->clock);
         }
 
