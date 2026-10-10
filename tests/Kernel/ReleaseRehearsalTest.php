@@ -19,8 +19,8 @@ use Tests\Support\FakeClock;
  * what a default PHP build ships.
  *
  * A green run here is the "fresh-install and v5-upgrade rehearsals pass in CI"
- * exit-gate for the 6.0 release candidate. The v5-upgrade path is the data
- * bridge (rewrite-on-read), not an API shim.
+ * check for the 6.0 stable release. The v5-upgrade path starts with a cold
+ * cache in a separate keyspace, as documented in MIGRATION.md.
  */
 final class ReleaseRehearsalTest extends TestCase
 {

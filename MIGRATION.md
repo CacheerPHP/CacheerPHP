@@ -14,12 +14,11 @@ fixes (see §6).
 ## 1. Installation
 
 ```bash
-composer require silviooosilva/cacheer-php:"^6.0@RC"
+composer require silviooosilva/cacheer-php:"^6.0"
 ```
 
-Until 6.0.0 is tagged stable, the `@RC` flag lets Composer pick the release
-candidate; the same constraint moves to stable 6.0 once it ships. Without it,
-Composer installs the stable v5 line.
+The `^6.0` constraint selects stable 6.x releases and keeps updates within the
+same major version.
 
 v6 requires PHP 8.3+. The core installs with no backend clients: `ArrayStore`
 and `FileStore` work out of the box. Redis (`predis/predis` or `ext-redis`) and a
@@ -160,7 +159,7 @@ Then drop the v6 keyspace (`vendor/bin/cacheer clear --force`, or
 
 ## 7. Support window
 
-- **v6** is the actively developed line and receives features and fixes.
+- **v6** is the current stable line and receives features and fixes.
 - **v5** receives **security and correctness fixes only** for 12 months after the
-  v6.0 stable release. No new features are backported.
+  v6.0.0 release. No new features are backported.
 - Report vulnerabilities privately per [`SECURITY.md`](SECURITY.md).

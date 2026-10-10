@@ -5,11 +5,7 @@ All notable changes to CacheerPHP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [6.0.0] — Instance-first rewrite (release candidate)
-
-Published so far as `v6.0.0-RC1`. Everything under "Fixed since RC1" and the
-removal of the v5 compatibility reader are on the `6.x` branch and ship with the
-next tag.
+## [6.0.0] - 2026-10-08
 
 CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cacheer` kernel
 runs over a minimal four-method `Store` contract; everything else is an optional
@@ -18,7 +14,7 @@ package itself runs nothing at autoload time; the one process-global is the
 opt-in `Observability\Telemetry` tap, dormant until a listener is registered. v5
 remains available on its own `5.x` line during migration.
 
-### Architecture changes since the first 6.0 preview
+### Architecture changes
 
 - **One cache type instead of four.** `ScopedCacheer` and `PolicyCacheer` are
   gone; `scope()`, `in()`, and `withPolicy()` all return a `Cacheer`. The
@@ -52,7 +48,7 @@ remains available on its own `5.x` line during migration.
 - **Removed.** `Cacheer::array()` (a verbatim alias of `inMemory()`) and the
   unused v5 exception island (`BaseException`, `CacheFileException`,
   `CacheDatabaseException`, `CacheRedisException`, `ConnectionException`).
-- **v5 compatibility reader removed (since RC1).** `V5PayloadReader`,
+- **v5 compatibility reader removed.** `V5PayloadReader`,
   `PipelineConfig::withV5Reader()`, `EnvelopeCodec::isLegacyBlob()`, and the
   `migrateLegacyOnRead` option on `FileStore`/`DatabaseStore` are gone. They only
   ran on records already in v6 layout, so real v5 files, tables, and Redis keys
@@ -88,7 +84,7 @@ remains available on its own `5.x` line during migration.
 - **Migration.** An optional Rector rename set, a cold-keyspace upgrade path, and
   end-to-end fresh-install / v5-upgrade rehearsals in CI.
 
-### Fixed since RC1
+### Fixed
 
 - Scoped `remember()`, `rememberForever()`, `add()`, `pull()`, `flexible()`,
   and serve-stale-on-error reads now apply the scope once. Previously they read

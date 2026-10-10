@@ -4,8 +4,8 @@
 
 | Version | Status | Fixes |
 |---|---|---|
-| 6.x | Active | Features, correctness, and security |
-| 5.x | Maintenance | Security and correctness only, for 12 months after 6.0 stable |
+| 6.x | Stable, active | Features, correctness, and security |
+| 5.x | Maintenance | Security and correctness only, for 12 months from the 6.0.0 release |
 | ≤ 4.x | End of life | None |
 
 ## Reporting a vulnerability

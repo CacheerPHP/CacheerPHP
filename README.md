@@ -23,7 +23,7 @@
 
 ---
 
-> **CacheerPHP 6.x** provides instance-first caching over a four-method `Store`
+> **CacheerPHP 6.x stable** provides instance-first caching over a four-method `Store`
 > contract. Optional interfaces add batching, tags, locks, and counters; decorators
 > add tiering, resilience, and instrumentation. Configure serialization,
 > compression, and encryption through the storage pipeline. Construct the cache
@@ -33,13 +33,11 @@
 ## Five-minute quick start
 
 ```sh
-composer require silviooosilva/cacheer-php:"^6.0@RC"
+composer require silviooosilva/cacheer-php:"^6.0"
 ```
 
-The 6.x line is a release candidate; `v6.0.0-RC1` is available on
-[Packagist](https://packagist.org/packages/silviooosilva/cacheer-php).
-The `@RC` flag allows release candidates, and the same constraint accepts stable
-6.0 once published. An unversioned install currently selects the stable 5.x line.
+The `^6.0` constraint installs stable releases from the 6.x line and keeps updates
+within the same major version. PHP 8.3 or newer is required.
 
 The core installs with **no backend clients and no required extensions** —
 `ArrayStore` and `FileStore` work out of the box.
@@ -423,7 +421,7 @@ v6 is a new major with an instance-first API. Migrating is mostly mechanical:
   Use a separate cache directory, Redis prefix, or SQL table, and recompute values
   on first use. Keep the v5 keyspace through the rollback window.
 - Keep services that have not migrated on `^5.2`. The v5 line receives security
-  and correctness fixes for 12 months after the 6.0 stable release.
+  and correctness fixes for 12 months from the 6.0.0 release.
 
 The method-by-method mapping and database migration/rollback steps are in
 **[MIGRATION.md](MIGRATION.md)**.
