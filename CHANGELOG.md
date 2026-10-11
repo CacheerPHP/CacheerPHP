@@ -5,7 +5,7 @@ All notable changes to CacheerPHP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [6.0.0] - 2026-10-08
+## [6.0.0] - 2026-10-12
 
 CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cacheer` kernel
 runs over a minimal four-method `Store` contract; everything else is an optional
