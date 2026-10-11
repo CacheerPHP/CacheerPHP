@@ -79,6 +79,7 @@
     "psr/event-dispatcher": "^1.0"
   },
   "require-dev": {
+    "brianium/paratest": "^7.11.2 <7.26.1",
     "friendsofphp/php-cs-fixer": "^3.94",
     "pestphp/pest": "^4.0 || ^5.0",
     "phpstan/phpstan": "^2.1",
