@@ -104,7 +104,9 @@ different scopes yields independent entries.
   worker's L1 through a shared generation token; a single-key change by another
   worker is seen once the local copy lapses, at most `l1MaxTtl` (60 seconds by
   default; `Ttl::forever()` opts out). L2 is written first, so a failed write
-  never leaves a value only in L1.
+  never leaves a value only in L1. Expired L1 copies are pruned on reads and
+  writes at most once per generation-check interval (5 seconds by default), so a
+  long-running worker does not accumulate them.
 - `ResilientStore` serves from a fallback when the primary's circuit breaker is
   open; it fails closed (miss), never returning stale or wrong data. Only backend
   outages fail over — programming errors and bad data are rethrown. The primary's

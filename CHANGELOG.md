@@ -172,6 +172,10 @@ remains available on its own `5.x` line during migration.
   two workers "the same" lock. Writes made on the fallback alone during an
   outage are invalidated on the primary when it recovers, so deleted or changed
   values no longer reappear.
+- `TieredStore` no longer accumulates expired L1 copies in long-running
+  workers. A worker that wrote 50,000 expiring keys kept 39.8 MB in L1 after
+  they all expired; it now keeps about 2 MB, independent of how many keys it
+  wrote. `ArrayStore::prune()` also releases the array capacity it frees.
 - Monitoring no longer serializes every value just to report its size. An
   instrumented hit on a 500-row array cost 36.9 µs against 0.70 µs unmonitored;
   it now costs 1.39 µs. String and scalar sizes are unchanged; arrays and objects

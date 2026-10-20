@@ -135,6 +135,26 @@ try {
     $tiered->get('product:42'); // promote
     $add('tiered', 'TieredStore L1 hit via Cacheer::get', measure(static fn () => $tiered->get('product:42'), $iterations));
 
+    // L1 memory in a long-running worker: 50,000 expiring writes, then an hour
+    // later (fake clock) the worker keeps writing. L2 is Redis, so the PHP memory
+    // retained is L1's alone.
+    require_once __DIR__ . '/../../tests/Support/FakeClock.php';
+    $fakeClock = new \Tests\Support\FakeClock();
+    gc_collect_cycles();
+    $memoryBefore = memory_get_usage();
+    $worker = new Cacheer(new TieredStore(new ArrayStore($fakeClock), new RedisStore(new PredisConnection($client), 'memory', clock: $fakeClock), $fakeClock), $fakeClock);
+    for ($i = 0; $i < 50_000; $i++) {
+        $worker->set('job:' . $i, $small, 30);
+    }
+    $fakeClock->advance(3_600);
+    for ($i = 0; $i < 100; $i++) {
+        $worker->set('live:' . $i, $small, 30);
+    }
+    gc_collect_cycles();
+    $add('memory', 'tiered worker: KiB retained after 50k writes expired', (memory_get_usage() - $memoryBefore) / 1024, 'KiB, not ns');
+    unset($worker);
+    $client->flushdb();
+
     // --- File store ----------------------------------------------------------------
     $file = Cacheer::file($tmp);
     $file->set('product:42', $small);

@@ -76,6 +76,11 @@ final class TieredStore implements
     private float $generationCheckedAt = 0.0;
 
     /**
+     * When expired L1 copies were last pruned; see maintainL1().
+     */
+    private float $l1PrunedAt;
+
+    /**
      * @var bool
      */
     private bool $generationInitialized = false;
@@ -96,6 +101,7 @@ final class TieredStore implements
         private readonly float $generationCheckSeconds = 5.0,
         private readonly EventDispatcher $events = new NullEventDispatcher(),
     ) {
+        $this->l1PrunedAt = $this->clock->nowFloat();
     }
 
     /**
@@ -122,6 +128,7 @@ final class TieredStore implements
     public function get(Key $key): CacheEntry
     {
         $this->syncGeneration();
+        $this->maintainL1();
 
         $local = $this->readLocal($key);
         if ($local->isHit()) {
@@ -143,6 +150,7 @@ final class TieredStore implements
      */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
+        $this->maintainL1();
         $this->l2->set($key, $value, $ttl);
         $this->putLocal($key, $value, $this->clock->now(), $ttl->expiresAt($this->clock), $this->capForL1($ttl));
     }
@@ -176,6 +184,7 @@ final class TieredStore implements
     public function getMany(iterable $keys): array
     {
         $this->syncGeneration();
+        $this->maintainL1();
         $entries = [];
 
         foreach ($keys as $key) {
@@ -202,6 +211,7 @@ final class TieredStore implements
      */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
+        $this->maintainL1();
         $createdAt = $this->clock->now();
         $expiresAt = $ttl->expiresAt($this->clock);
 
@@ -433,6 +443,26 @@ final class TieredStore implements
         $seconds = $ttl->inSeconds();
 
         return $seconds === null ? $cap : Ttl::seconds(min($seconds, $max));
+    }
+
+    /**
+     * Drops expired L1 copies, at most once per generation-check interval.
+     *
+     * An expired L1 copy otherwise leaves memory only when its own key is read
+     * again, so a long-running worker that touches many distinct keys grows
+     * without bound. Pruning is local to L1 (no L2 call) and runs on writes as
+     * well as reads, so a write-only worker is bounded too.
+     */
+    private function maintainL1(): void
+    {
+        $now = $this->clock->nowFloat();
+
+        if (($now - $this->l1PrunedAt) < $this->generationCheckSeconds) {
+            return;
+        }
+
+        $this->l1PrunedAt = $now;
+        Capabilities::as($this->l1, PrunableStore::class)?->prune();
     }
 
     private function syncGeneration(): void

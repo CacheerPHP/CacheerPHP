@@ -21,6 +21,14 @@ trade-offs so you can design around them. Failure *modes* per capability are in
   for tags. A scoped tag includes its scope, so it counts toward the limit. The
   limit applies on every driver, including SQLite. Lock names have no limit.
 
+## In-process memory is bounded by age, not size
+
+- `TieredStore` prunes expired L1 copies periodically, but live copies are kept
+  for up to `l1MaxTtl` (60 seconds by default) with no entry or byte limit. A
+  worker writing many distinct large values within that window holds them all;
+  lower `l1MaxTtl` for such workloads. `ArrayStore` used on its own frees expired
+  entries only when they are read or `prune()` is called.
+
 ## Resilience is per process
 
 - `ResilientStore` keeps its circuit breaker and its record of outage writes in
