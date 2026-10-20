@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <strong>An explicit, instance-first PHP cache with a tiny core, optional capabilities, and zero framework lock-in.</strong>
+  <strong>One cache API for any PHP application.</strong>
 </p>
 
 <p align="center">
@@ -23,98 +23,64 @@
 
 ---
 
-> **CacheerPHP 6.x stable** provides instance-first caching over a four-method `Store`
-> contract. Optional interfaces add batching, tags, locks, and counters; decorators
-> add tiering, resilience, and instrumentation. Configure serialization,
-> compression, and encryption through the storage pipeline. Construct the cache
-> you need and inject it; the core package runs no code at autoload time.
-> Upgrading from v5? See [Migrating from v5](#migrating-from-v5).
+**Framework-independent PHP caching with scoped invalidation, composable stores, and optional monitoring.** Use the same cache interface in vanilla PHP, Laravel, or a worker. Start with persistent file storage; add Redis, tiered caching, or fallback stores when your application needs them.
 
-## Five-minute quick start
+PHP **8.3+** is required. File and array stores need no backend clients or optional extensions. Redis and database connections are supplied by your application.
+
+## Run your first cache
+
+Install the stable 6.x line:
 
 ```sh
 composer require silviooosilva/cacheer-php:"^6.0"
 ```
 
-The `^6.0` constraint installs stable releases from the 6.x line and keeps updates
-within the same major version. PHP 8.3 or newer is required.
-
-The core installs with **no backend clients and no required extensions** —
-`ArrayStore` and `FileStore` work out of the box.
+Save this as `cache-demo.php` in your project root:
 
 ```php
 <?php
-require_once __DIR__ . '/vendor/autoload.php';
+
+declare(strict_types=1);
+
+require __DIR__ . '/vendor/autoload.php';
 
 use Silviooosilva\CacheerPhp\Cacheer;
 
-// Dependency-free, in-process. Great for tests and short CLI runs.
-$cache = Cacheer::inMemory();
+$catalog = Cacheer::file(__DIR__ . '/var/cache')->scope('catalog');
 
-// Write with a TTL (seconds, "10 minutes", a DateInterval, or null = forever).
-$cache->set('user:42', ['name' => 'Ada'], ttl: '10 minutes');
+$products = $catalog->remember('products', 300, static function (): array {
+    echo "Loading products from source...\n";
 
-// Read (returns your default on a miss).
-$user = $cache->get('user:42', default: null);
-
-// On a miss, run the callback, store the result, and return it.
-$report = $cache->remember('report:daily', ttl: 3600, callback: function () {
-    return expensive_report();
+    return [
+        ['id' => 1, 'name' => 'Desk lamp'],
+        ['id' => 2, 'name' => 'Notebook'],
+    ];
 });
 
-// Existence and deletion.
-$cache->has('user:42');     // true
-$cache->delete('user:42');
+echo 'Products: ' . count($products) . PHP_EOL;
 ```
 
-Swap the store, keep the API:
+Run `php cache-demo.php` twice. The first run prints the loading message and `Products: 2`. The second prints only `Products: 2`: the callback is skipped because the result is cached for five minutes. The file store persists between processes; `inMemory()` does not.
 
-```php
-$cache = Cacheer::file('/var/cache/app');      // persistent, dependency-free
-$cache = Cacheer::database($pdo, 'cacheer');   // inject your own PDO
-$cache = Cacheer::redis($connection);          // predis or phpredis adapter
-```
+Keep the cache directory outside the public web root and writable by the PHP process. The [getting-started guide](https://cacheerphp.com/docs/v6/en/getting-started/) continues with a JSON-backed catalog, explicit invalidation, and an application integration path.
 
-PDO stores need a driver and an explicitly created schema:
+## Why choose CacheerPHP?
 
-```php
-use Silviooosilva\CacheerPhp\Stores\Support\DatabaseStoreSchema;
+- **Keep your cache code portable.** Construct a cache in your application bootstrap or Laravel service provider. Inject `Contracts\Cache` into services and keep the same calls across projects.
+- **Give invalidation a boundary.** `scope('catalog')->clear()` clears that keyspace. Scopes also qualify tags, counters, and lock names. All four built-in stores support tags and scoped clearing.
+- **Compose the storage you need.** Combine L1/L2 stores, circuit-breaker fallback, and TTL policies. Add gzip or authenticated AES-256-GCM encryption through an explicit storage pipeline.
+- **See what your cache is doing.** The optional [Cacheer Monitor](https://cacheerphp.com/docs/v6/en/cacheer-monitor/quick-start/) dashboard shows hits, misses, timings, and key activity. Value previews are opt-in.
+- **Integrate through familiar contracts.** PSR-16 and PSR-6 adapters are included. The core does not load `.env`, migrate a database, or change the timezone at autoload time.
 
-$pdo = new PDO('sqlite:' . __DIR__ . '/cache.sqlite');
-DatabaseStoreSchema::migrate($pdo, 'cacheer');
-$cache = Cacheer::database($pdo, 'cacheer');
-```
+Using Laravel? Read [CacheerPHP vs Laravel Cache](https://cacheerphp.com/docs/v6/en/guides/cacheerphp-vs-laravel-cache/) to choose the right fit, or [bind CacheerPHP in Laravel](https://cacheerphp.com/docs/v6/en/guides/laravel/). Laravel Cache already provides read-through caching, stale-while-revalidate, locks, and failover; choose CacheerPHP for the boundaries and composition your application needs.
 
-Schema creation is an explicit setup step. Constructing the store does not run it.
-
-## Why v6
-
-- **Tiny core, honest capabilities.** A store implements four methods; extra
-  behavior is declared by interface, and `$cache->supports(...)` answers
-  truthfully even through decorators — a backend never pretends to guarantee
-  something it can't. See [CAPABILITIES.md](CAPABILITIES.md).
-- **One cache type.** Scope, policy, and capabilities are state on one object, so
-  every combination composes — a scoped cache still has a policy, a policy-bound
-  cache still scopes, and both still increment, tag, and lock. Type-hint the
-  `Cache` interface and any of them is substitutable.
-- **Instance-first.** Construct several caches side by side and inject them where
-  needed. The core does not load `.env`, create database schemas, or change the
-  global timezone at autoload time. [`Telemetry`](#observability-and-the-one-global)
-  provides an optional process-global observability tap.
-- **Scopes instead of stringly namespaces.** `->scope('billing')` (or `->in()`)
-  is an isolated keyspace you can clear on its own — and it applies to counters,
-  tags, and locks too, not just to get/set.
-- **Composable decorators.** Tiered (L1/L2), resilient (circuit-breaker
-  fallback), and instrumented (typed events + metrics) all wrap any store.
-- **Stampede protection.** `remember()` coordinates misses when locking is
-  available; `flexible()` serves a bounded stale value through the chosen executor.
-- **Configurable storage.** Values are serialized → optionally compressed →
-  optionally AES-256-GCM encrypted into a versioned envelope. Encryption
-  authenticates the payload; an unencrypted envelope is not authenticated.
-- **Standards-first.** PSR-16 and PSR-6 adapters, a PSR-3 logging subscriber, and
-  a PSR-14 event bridge ship in the box.
-- **Deterministic tests.** Time is an injected `Clock`; the suite uses a
-  `FakeClock` and needs no `sleep()`.
+| Your next step | Guide |
+| --- | --- |
+| Install, run twice, and invalidate a cached result | [Getting started](https://cacheerphp.com/docs/v6/en/getting-started/) |
+| Integrate with Laravel's service container | [Laravel integration](https://cacheerphp.com/docs/v6/en/guides/laravel/) |
+| Choose file, database, Redis, or in-memory storage | [Stores and capabilities](https://cacheerphp.com/docs/v6/en/api/drivers/) |
+| Inspect a real request | [Monitor quick start](https://cacheerphp.com/docs/v6/en/cacheer-monitor/quick-start/) |
+| Upgrade an existing v5 application | [Migrating from v5](MIGRATION.md) |
 
 ## Core recipes
 
