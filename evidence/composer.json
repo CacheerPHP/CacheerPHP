@@ -1,0 +1,21 @@
+{
+  "name": "silviooosilva/cacheer-php-evidence",
+  "description": "Reproducible benchmark and demonstrations for CacheerPHP. Not part of the package.",
+  "type": "project",
+  "license": "MIT",
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "repositories": [
+    {"type": "path", "url": ".."}
+  ],
+  "require": {
+    "php": ">=8.3",
+    "silviooosilva/cacheer-php": "6.x-dev@dev",
+    "predis/predis": "^2.3",
+    "cacheerphp/monitor": "^2.0"
+  },
+  "autoload": {
+    "psr-4": {"Evidence\\": "support/"}
+  },
+  "config": {"sort-packages": true}
+}
