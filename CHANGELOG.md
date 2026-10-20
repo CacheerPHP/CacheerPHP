@@ -172,6 +172,11 @@ remains available on its own `5.x` line during migration.
   two workers "the same" lock. Writes made on the fallback alone during an
   outage are invalidated on the primary when it recovers, so deleted or changed
   values no longer reappear.
+- Redis `setMany()` and `deleteMany()` take one round trip per 500 entries
+  instead of one per entry. For 100 keys on loopback, `setMany()` dropped from
+  8.9 ms to 0.88 ms and `deleteMany()` from about 9.5 ms to about 0.39 ms; on a
+  real network each avoided round trip saves more. Tag membership still ends
+  with each deleted entry.
 - `TieredStore` no longer accumulates expired L1 copies in long-running
   workers. A worker that wrote 50,000 expiring keys kept 39.8 MB in L1 after
   they all expired; it now keeps about 2 MB, independent of how many keys it

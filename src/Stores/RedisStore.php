@@ -79,6 +79,47 @@ final class RedisStore implements
         LUA;
 
     /**
+     * Writes a batch in one round trip. KEYS are entry keys; ARGV[1] is the
+     * TTL in milliseconds (0 = none) and ARGV[i + 1] the record for KEYS[i].
+     */
+    private const SET_MANY = <<<'LUA'
+        local ttl = tonumber(ARGV[1])
+        for i, key in ipairs(KEYS) do
+            if ttl > 0 then
+                redis.call('SET', key, ARGV[i + 1], 'PX', ttl)
+            else
+                redis.call('SET', key, ARGV[i + 1])
+            end
+        end
+        return #KEYS
+        LUA;
+
+    /**
+     * Ends a batch of entries in one round trip, as END_ENTRY does for one:
+     * KEYS[1..n] are entry keys and KEYS[n+1..2n] their membership sets;
+     * ARGV[1] is the tag key prefix and ARGV[2] is n.
+     */
+    private const END_ENTRIES = <<<'LUA'
+        local count = tonumber(ARGV[2])
+        local removed = 0
+        for i = 1, count do
+            local entry = KEYS[i]
+            local membership = KEYS[count + i]
+            for _, tag in ipairs(redis.call('SMEMBERS', membership)) do
+                redis.call('SREM', ARGV[1] .. tag, entry)
+            end
+            removed = removed + redis.call('DEL', entry)
+            redis.call('DEL', membership)
+        end
+        return removed
+        LUA;
+
+    /**
+     * Entries per batch script, so one script never blocks Redis for long.
+     */
+    private const BATCH_CHUNK = 500;
+
+    /**
      * @var EnvelopeCodec
      */
     private readonly EnvelopeCodec $codec;
@@ -187,11 +228,25 @@ final class RedisStore implements
      */
     public function setMany(iterable $entries, Ttl $ttl): void
     {
+        $now = $this->clock->now();
         $expiresAt = $ttl->expiresAt($this->clock);
         $seconds = $ttl->inSeconds();
 
+        // Encode every value before sending anything, then write each chunk in
+        // one round trip instead of one per entry.
+        $keys = [];
+        $records = [];
         foreach ($entries as $entry) {
-            $this->write($entry['key'], $entry['value'], $expiresAt, $seconds);
+            $keys[] = $this->entryKey($entry['key']);
+            $records[] = StoredRecord::forKey($entry['key'], $now, $expiresAt, $this->codec->encode($entry['value']))->toString();
+        }
+
+        foreach (array_chunk(array_keys($keys), self::BATCH_CHUNK) as $chunk) {
+            $this->redis->eval(
+                self::SET_MANY,
+                array_map(static fn (int $i): string => $keys[$i], $chunk),
+                [(string) ($seconds === null ? 0 : $seconds * 1000), ...array_map(static fn (int $i): string => $records[$i], $chunk)],
+            );
         }
     }
 
@@ -201,13 +256,19 @@ final class RedisStore implements
      */
     public function deleteMany(iterable $keys): bool
     {
-        $deleted = true;
+        $entryKeys = array_map(fn (Key $key): string => $this->entryKey($key), $this->keyList($keys));
+        $removed = 0;
 
-        foreach ($keys as $key) {
-            $deleted = $this->delete($key) && $deleted;
+        foreach (array_chunk($entryKeys, self::BATCH_CHUNK) as $chunk) {
+            $removed += (int) $this->redis->eval(
+                self::END_ENTRIES,
+                [...$chunk, ...array_map($this->membershipKey(...), $chunk)],
+                [$this->prefix . ':t:', (string) count($chunk)],
+            );
         }
 
-        return $deleted;
+        // True only if every key had an entry, as deleting one by one reports.
+        return $removed === count($entryKeys);
     }
 
     /**
@@ -432,7 +493,11 @@ final class RedisStore implements
      */
     private function write(Key $key, mixed $value, ?int $expiresAt, ?int $ttlSeconds): void
     {
-        $this->persist(StoredRecord::forKey($key, $this->clock->now(), $expiresAt, $this->codec->encode($value)), $ttlSeconds);
+        $this->redis->set(
+            $this->entryKey($key),
+            StoredRecord::forKey($key, $this->clock->now(), $expiresAt, $this->codec->encode($value))->toString(),
+            $ttlSeconds === null ? null : $ttlSeconds * 1000,
+        );
     }
 
     /**

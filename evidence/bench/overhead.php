@@ -123,6 +123,18 @@ try {
     $add('redis', 'RedisStore::get(Key)', measure(static fn () => $redisStore->get($prebuilt), $redisIterations));
     $add('redis', 'Cacheer(redis)::get(string)', measure(static fn () => $redisCache->get('product:42'), $redisIterations));
 
+    // Batches of 100: one round trip each when batched natively.
+    $batch = [];
+    for ($i = 0; $i < 100; $i++) {
+        $batch['batch:' . $i] = $small;
+    }
+    $add('redis', 'setMany(100)', measure(static fn () => $redisCache->setMany($batch, 60), 200));
+    $add('redis', 'many(100)', measure(static fn () => $redisCache->many(array_keys($batch)), 200));
+    $add('redis', 'setMany(100) + deleteMany(100)', measure(static function () use ($redisCache, $batch): void {
+        $redisCache->setMany($batch, 60);
+        $redisCache->deleteMany(array_keys($batch));
+    }, 200));
+
     // Round trips for one cold remember(): count backend calls and Redis commands.
     $counting = new CountingStore($redisStore);
     $before = (int) $client->info('stats')['Stats']['total_commands_processed'];
