@@ -53,6 +53,12 @@ final class RedisServer
 
         $this->waitUntil(fn (): bool => $this->isAnswering(), 'Redis did not start');
         $this->pid = (int) trim((string) @file_get_contents($pidFile));
+
+        // A fatal error (e.g. memory exhaustion) skips `finally` blocks; this
+        // still stops the server, so a crashed run never leaves Redis behind.
+        register_shutdown_function(function (): void {
+            $this->stop();
+        });
     }
 
     public function freeze(): void
