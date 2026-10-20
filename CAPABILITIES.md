@@ -39,7 +39,9 @@ fallback) except for atomic counters and locks, which run on the primary alone,
 `InstrumentedStore` defers to the store it wraps, and nesting works.
 The kernel uses this internally, so an optional optimization degrades instead of
 failing: `remember()` single-flights through a lock when one is really available
-and falls back to a plain compute when it is not.
+and falls back to a plain compute when it is not. A miss that takes the lock at
+once computes without reading again; a caller that had to wait re-reads first and
+uses the other worker's value. On Redis a cold `remember()` is 4 round trips.
 
 ## Guarantees and failure modes
 

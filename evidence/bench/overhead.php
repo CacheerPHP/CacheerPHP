@@ -140,7 +140,7 @@ try {
     $before = (int) $client->info('stats')['Stats']['total_commands_processed'];
     (new Cacheer($redisStore, $clock))->remember('cold:' . bin2hex(random_bytes(4)), 60, static fn () => 'v');
     $commands = (int) $client->info('stats')['Stats']['total_commands_processed'] - $before - 1;
-    $add('redis', 'cold remember(): Redis commands', (float) $commands, 'count, not ns — GET, lock SET NX, GET, SET, lock release');
+    $add('redis', 'cold remember(): Redis commands', (float) $commands, 'count, not ns; the lock-release script counts as 2');
 
     // --- Tiered L1 hit -----------------------------------------------------------
     $tiered = new Cacheer(new TieredStore(new ArrayStore($clock), $redisStore, $clock), $clock);

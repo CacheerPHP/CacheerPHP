@@ -172,6 +172,9 @@ remains available on its own `5.x` line during migration.
   two workers "the same" lock. Writes made on the fallback alone during an
   outage are invalidated on the primary when it recovers, so deleted or changed
   values no longer reappear.
+- A cold `remember()` that takes the single-flight lock at once no longer
+  reads the store a second time: on Redis it is 4 round trips instead of 5. A
+  caller that had to wait still re-reads and uses the other worker's value.
 - Faster in-process hot path: keys and scopes build their identity once
   (immutable), qualifying a key with the root scope no longer rebuilds it, the
   root scope is a shared instance, envelopes copy their payload once, and a Redis
