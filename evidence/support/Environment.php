@@ -27,7 +27,7 @@ final class Environment
                 ini_get('opcache.enable_cli') ? 'on' : 'off',
                 ini_get('opcache.jit') ?: 'off',
             ),
-            'cacheer-php'  => self::package('silviooosilva/cacheer-php'),
+            'cacheer-php'  => self::library(),
             'predis'       => self::package('predis/predis'),
         ];
 
@@ -75,6 +75,26 @@ final class Environment
         }
 
         return $bytes > 0 ? round($bytes / 1024 ** 3) . ' GB' : 'unknown';
+    }
+
+    /**
+     * The library is installed from this checkout through a symlinked path
+     * repository, so Composer's recorded reference is only the commit at
+     * install time. Report the commit actually checked out, and say when
+     * src/ has uncommitted changes.
+     */
+    private static function library(): string
+    {
+        $root = dirname(__DIR__, 2);
+        $commit = trim((string) @shell_exec('git -C ' . escapeshellarg($root) . ' rev-parse --short HEAD 2>/dev/null'));
+        if ($commit === '') {
+            return self::package('silviooosilva/cacheer-php');
+        }
+
+        $branch = trim((string) @shell_exec('git -C ' . escapeshellarg($root) . ' rev-parse --abbrev-ref HEAD 2>/dev/null'));
+        $dirty = trim((string) @shell_exec('git -C ' . escapeshellarg($root) . ' status --porcelain -- src 2>/dev/null')) !== '';
+
+        return sprintf('%s @ %s%s (this checkout)', $branch, $commit, $dirty ? ', src/ modified' : '');
     }
 
     private static function package(string $name): string
