@@ -6,7 +6,6 @@ namespace Silviooosilva\CacheerPhp\Stores;
 
 use InvalidArgumentException;
 use PDO;
-use PDOStatement;
 use Silviooosilva\CacheerPhp\Config\PipelineConfig;
 use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
@@ -62,6 +61,11 @@ final class DatabaseStore implements
      * Keys per batch query, well under every driver's bound-parameter limit.
      */
     private const BATCH_CHUNK = 500;
+
+    /**
+     * Rows per batch upsert: 6 parameters each, under SQLite's oldest limit (999).
+     */
+    private const WRITE_CHUNK = 100;
 
     private const MAX_NAME_CHARACTERS = 255;
 
@@ -219,11 +223,21 @@ final class DatabaseStore implements
             $this->assertStorableScope($entry['key']);
         }
 
-        $this->transaction(function () use ($entries, $expiresAt): void {
-            $statement = $this->pdo->prepare($this->upsertSql());
+        // Encode everything before writing, collapsing a key repeated in the batch
+        // to its last value — as writing one by one would — because one
+        // PostgreSQL upsert statement may not touch the same row twice.
+        $now = $this->clock->now();
+        $rows = [];
+        foreach ($entries as $entry) {
+            $encoded = $this->keyEncoder->encode($entry['key']);
+            unset($rows[$encoded]);
+            $rows[$encoded] = [$encoded, (string) $entry['key']->scope(), $entry['key']->value(), $this->encode($entry['value']), $now, $expiresAt];
+        }
 
-            foreach ($entries as $entry) {
-                $this->upsert($entry['key'], $entry['value'], $expiresAt, $statement);
+        // One multi-row upsert per chunk instead of one statement per entry.
+        $this->transaction(function () use ($rows): void {
+            foreach (array_chunk(array_values($rows), self::WRITE_CHUNK) as $chunk) {
+                $this->pdo->prepare($this->upsertSql(count($chunk)))->execute(array_merge(...$chunk));
             }
         });
     }
@@ -477,9 +491,8 @@ final class DatabaseStore implements
      * @param Key $key
      * @param mixed $value
      * @param ?int $expiresAt
-     * @param ?PDOStatement $statement a prepared upsert to reuse across a batch
      */
-    private function upsert(Key $key, mixed $value, ?int $expiresAt, ?PDOStatement $statement = null): void
+    private function upsert(Key $key, mixed $value, ?int $expiresAt): void
     {
         $this->assertStorableScope($key);
 
@@ -492,16 +505,23 @@ final class DatabaseStore implements
             ':expires' => $expiresAt,
         ];
 
-        ($statement ?? $this->pdo->prepare($this->upsertSql()))->execute($params);
+        $this->pdo->prepare($this->upsertSql())->execute($params);
     }
 
     /**
      * @return string
      */
-    private function upsertSql(): string
+    /**
+     * @param int $rows 0 for the single-row form with named parameters, or the
+     *                  number of rows for a positional multi-row upsert
+     * @return string
+     */
+    private function upsertSql(int $rows = 0): string
     {
         $columns = '(cache_key, scope, key_value, value, created_at, expires_at)';
-        $values = '(:key, :scope, :kv, :value, :created, :expires)';
+        $values = $rows === 0
+            ? '(:key, :scope, :kv, :value, :created, :expires)'
+            : implode(', ', array_fill(0, $rows, '(?, ?, ?, ?, ?, ?)'));
 
         if ($this->driver === 'mysql') {
             return "INSERT INTO {$this->table} {$columns} VALUES {$values}

@@ -127,4 +127,46 @@ final class DatabaseStoreConformanceTest extends StoreConformance
         self::assertSame(['item:3', 'missing', 'item:1', 'expiring', 'item:3'], array_map(static fn ($entry): string => $entry->key()->value(), $entries));
         self::assertSame(100, (int) $pdo->query('SELECT COUNT(*) FROM cacheer_store')->fetchColumn(), 'Only the expired entry was removed.');
     }
+
+    public function testBatchWritesRunOneStatementPerChunk(): void
+    {
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        DatabaseStoreSchema::migrate($pdo, 'cacheer_store');
+        $pdo->setAttribute(PDO::ATTR_STATEMENT_CLASS, [CountingStatement::class]);
+        CountingStatement::$executed = [];
+        $store = new DatabaseStore($pdo, 'cacheer_store', clock: $this->clock);
+
+        $entries = array_map(static fn (int $i): array => ['key' => Key::named('item:' . $i), 'value' => 'v' . $i], range(1, 250));
+        $entries[] = ['key' => Key::named('item:1'), 'value' => 'last write wins'];
+        $store->setMany($entries, Ttl::forever());
+
+        $inserts = array_values(array_filter(CountingStatement::$executed, static fn (string $verb): bool => $verb === 'INSERT'));
+        self::assertCount(3, $inserts, '250 distinct entries are three statements of up to 100 rows.');
+        self::assertSame('last write wins', $store->get(Key::named('item:1'))->value());
+        self::assertSame('v250', $store->get(Key::named('item:250'))->value());
+        self::assertSame(250, (int) $pdo->query('SELECT COUNT(*) FROM cacheer_store')->fetchColumn());
+    }
+}
+
+/**
+ * Records the verb of every executed statement.
+ */
+final class CountingStatement extends \PDOStatement
+{
+    /**
+     * @var list<string>
+     */
+    public static array $executed = [];
+
+    protected function __construct()
+    {
+    }
+
+    public function execute(?array $params = null): bool
+    {
+        self::$executed[] = (string) strtok(ltrim($this->queryString), ' ');
+
+        return parent::execute($params);
+    }
 }
