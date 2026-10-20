@@ -19,10 +19,21 @@ final readonly class Scope implements \Stringable
     private const MAX_SEGMENT_BYTES = 255;
 
     /**
+     * Built once; scopes are immutable.
+     */
+    private string $identity;
+
+    /**
      * @param list<string> $segments
      */
     private function __construct(private array $segments)
     {
+        $identity = '';
+        foreach ($segments as $segment) {
+            $identity .= strlen($segment) . ':' . $segment;
+        }
+
+        $this->identity = $identity;
     }
 
     /**
@@ -30,7 +41,10 @@ final readonly class Scope implements \Stringable
      */
     public static function root(): self
     {
-        return new self([]);
+        // The root scope is immutable, so one instance serves every caller.
+        static $root = null;
+
+        return $root ??= new self([]);
     }
 
     /**
@@ -79,6 +93,15 @@ final readonly class Scope implements \Stringable
      */
     public function append(self $scope): self
     {
+        // Both scopes are already validated; appending the root changes nothing.
+        if ($scope->segments === []) {
+            return $this;
+        }
+
+        if ($this->segments === []) {
+            return $scope;
+        }
+
         return self::fromSegments([...$this->segments, ...$scope->segments]);
     }
 
@@ -119,10 +142,7 @@ final readonly class Scope implements \Stringable
      */
     public function identity(): string
     {
-        return implode('', array_map(
-            static fn (string $segment): string => strlen($segment) . ':' . $segment,
-            $this->segments,
-        ));
+        return $this->identity;
     }
 
     /**

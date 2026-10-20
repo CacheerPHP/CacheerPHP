@@ -172,6 +172,12 @@ remains available on its own `5.x` line during migration.
   two workers "the same" lock. Writes made on the fallback alone during an
   outage are invalidated on the primary when it recovers, so deleted or changed
   values no longer reappear.
+- Faster in-process hot path: keys and scopes build their identity once
+  (immutable), qualifying a key with the root scope no longer rebuilds it, the
+  root scope is a shared instance, envelopes copy their payload once, and a Redis
+  read encodes its key once. `Cacheer::get()` on `ArrayStore` dropped from 677 to
+  494 ns, a `remember()` hit from 713 to 534 ns, a tiered L1 hit from 1,022 to
+  875 ns, and decoding a 64 KiB value from 4.7 to 2.7 µs.
 - `DatabaseStore::getMany()` reads with one query per 500 keys instead of one
   per key: 100 keys on MySQL over TCP dropped from 4.14 ms to 0.61 ms (SQLite:
   0.74 to 0.24 ms). `setMany()` prepares its upsert once.

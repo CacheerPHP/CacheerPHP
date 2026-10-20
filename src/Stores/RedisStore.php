@@ -160,14 +160,15 @@ final class RedisStore implements
      */
     public function get(Key $key): CacheEntry
     {
-        $record = $this->readEntry($this->entryKey($key));
+        $entryKey = $this->entryKey($key);
+        $record = $this->readEntry($entryKey);
 
         if ($record === null) {
             return CacheEntry::miss($key);
         }
 
         if ($this->isExpired($record->expiresAt)) {
-            $this->redis->delete([$this->entryKey($key)]);
+            $this->redis->delete([$entryKey]);
 
             return CacheEntry::miss($key);
         }
