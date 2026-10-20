@@ -8,6 +8,7 @@ package (`evidence/` is export-ignored), and none of it runs in CI.
 | Evidence | Script | Result |
 |---|---|---|
 | Tiered caching benchmark | [`bench/tiered.php`](bench/tiered.php) | [mixed workload](results/tiered-benchmark.md), [read-only](results/tiered-benchmark-read-only.md) |
+| Library overhead, layer by layer | [`bench/overhead.php`](bench/overhead.php) | [results](results/overhead.md) |
 | Redis outage demonstration | [`outage/redis-outage.php`](outage/redis-outage.php) | [timeline](results/redis-outage.md) |
 | Cacheer Monitor walkthrough | [`monitor/record.sh`](monitor/record.sh) | [screenshots](monitor/media/) and a silent video |
 
@@ -22,6 +23,7 @@ composer install                      # the library from this checkout, plus Pre
 
 php bench/tiered.php                  # ~1 minute; writes results/tiered-benchmark.{json,md}
 php bench/tiered.php --write-ratio=0 --out=tiered-benchmark-read-only
+php bench/overhead.php                # ~2 minutes; writes results/overhead.{json,md}
 php outage/redis-outage.php           # ~3 seconds; writes results/redis-outage.md
 monitor/record.sh                     # ~80 seconds; writes monitor/media/
 ```
@@ -42,7 +44,7 @@ The committed results were produced on:
 | Machine | Apple M4, 10 cores, 16 GB |
 | OS | macOS 27.0 (Darwin 27.0.0, arm64) |
 | PHP | 8.5.11 CLI, OPcache and JIT off (the CLI defaults) |
-| Library | `silviooosilva/cacheer-php` 6.x-dev @ 966e5ae |
+| Library | this checkout — each result file records the branch and commit measured |
 | Redis | 8.2.0, loopback (`127.0.0.1`), client Predis 2.4.1 |
 | Monitor | `cacheerphp/monitor` 2.0.0 (Packagist), dashboard on PHP's built-in server |
 | Browser | Playwright Chromium, headless, 1440 × 900 |
@@ -70,23 +72,24 @@ of a shared store) save on a read-heavy workload?
   wrapper around L2). For Redis it is cross-checked against the server's own
   `total_commands_processed`; the two agree exactly.
 
-**Results — mixed workload (95% reads, 5% writes).**
+**Results — mixed workload (95% reads, 5% writes).** Current code; the pre-RFC-005
+figure for each tiered row is in brackets ([baseline](results/tiered-benchmark-baseline.md)).
 
 | Backend | Shape | ops/s (min–max) | p50 µs | p95 µs | p99 µs | L2 calls | vs. alone |
 |---|---|---|---|---|---|---|---|
-| Redis | alone | 10,594 (9,952–11,250) | 89.0 | 111.9 | 228.1 | 50,000 | 1.00× |
-| Redis | tiered (Array L1) | 126,085 (116,549–133,757) | 1.2 | 89.4 | 98.1 | 3,436 | 11.90× |
-| SQLite file | alone | 16,624 (14,622–28,481) | 9.0 | 56.8 | 381.4 | 50,000 | 1.00× |
-| SQLite file | tiered (Array L1) | 21,064 (20,523–52,329) | 1.1 | 35.3 | 361.9 | 3,436 | 1.27× |
+| Redis | alone | 11,315 (11,102–11,349) | 87.5 | 95.5 | 102.7 | 50,000 | 1.00× |
+| Redis | tiered (Array L1) | 139,646 (138,811–140,939) [126,085] | 0.9 | 87.8 | 94.0 | 3,436 | 12.34× |
+| SQLite file | alone | 45,503 (28,806–48,033) | 8.7 | 117.5 | 296.0 | 50,000 | 1.00× |
+| SQLite file | tiered (Array L1) | 70,428 (66,814–73,971) | 1.0 | 30.2 | 276.1 | 3,436 | 1.55× |
 
-**Results — read-only.**
+**Results — read-only.** ([baseline](results/tiered-benchmark-read-only-baseline.md))
 
 | Backend | Shape | ops/s (min–max) | p50 µs | p95 µs | p99 µs | L2 calls | vs. alone |
 |---|---|---|---|---|---|---|---|
-| Redis | alone | 11,171 (10,520–11,221) | 88.0 | 98.4 | 126.9 | 50,000 | 1.00× |
-| Redis | tiered (Array L1) | 336,997 (333,952–339,979) | 1.0 | 1.5 | 91.5 | 1,001 | 30.17× |
-| SQLite file | alone | 113,560 (112,813–113,794) | 8.6 | 9.4 | 11.0 | 50,000 | 1.00× |
-| SQLite file | tiered (Array L1) | 763,910 (752,436–769,373) | 1.0 | 1.3 | 11.1 | 1,001 | 6.73× |
+| Redis | alone | 11,262 (11,044–11,344) | 87.3 | 95.9 | 104.8 | 50,000 | 1.00× |
+| Redis | tiered (Array L1) | 359,287 (356,790–361,452) [336,997] | 0.9 | 1.2 | 91.5 | 1,001 | 31.90× |
+| SQLite file | alone | 117,816 (113,681–118,745) | 8.3 | 9.1 | 10.5 | 50,000 | 1.00× |
+| SQLite file | tiered (Array L1) | 899,244 (888,988–909,510) [763,910] | 0.8 | 1.1 | 10.8 | 1,001 | 7.63× |
 
 **Reading the results.**
 
@@ -98,10 +101,37 @@ of a shared store) save on a read-heavy workload?
   mixed workload's 3,436 calls come from — about 2,500 writes, about 900 first
   reads, and generation checks). An L1 helps reads, not writes.
 - The SQLite mixed workload is dominated by the disk sync behind each write,
-  which an L1 cannot avoid; its wide ranges come from that I/O, so treat its
-  1.27× as "write-bound", not as a stable figure.
+  which an L1 cannot avoid. It swings between runs (SQLite alone measured both
+  16.6k and 45.5k ops/s on the same machine), so do not quote it as a stable
+  figure.
 - Tail latency (p99) stays close to the L2's, because the slowest operations
   are the cold reads and writes that go to L2 in both shapes.
+
+## Library overhead
+
+**Question:** what does CacheerPHP itself add on each call, and where?
+[`bench/overhead.php`](bench/overhead.php) times every layer of the hot path
+(median ns per operation over 7 batches) and counts round trips. It was the
+baseline for a round of performance fixes; the table compares that baseline
+([before](results/overhead-baseline.md)) with the current code
+([after](results/overhead.md)).
+
+| Measurement | Before | After |
+|---|---|---|
+| Redis `GET` through `Cacheer` vs. raw Predis | 88.3 vs. 86.0 µs | 88.0 vs. 85.2 µs |
+| Redis `setMany(100)` | 8.9 ms | 0.91 ms |
+| Redis `setMany(100)` + `deleteMany(100)` | 18.4 ms | 1.28 ms |
+| Cold `remember()` on Redis | 5 round trips | 4 round trips |
+| Monitored hit, 500-row array (plain: ~0.5–0.7 µs) | 36.9 µs | 1.15 µs |
+| Tiered L1 memory left after 50k writes expired | 39.8 MB | 1.1 MB |
+| `Cacheer::get()` on `ArrayStore` | 677 ns | 510 ns |
+| `remember()` hit | 713 ns | 545 ns |
+| Tiered L1 hit | 1,022 ns | 853 ns |
+| Decode a 64 KiB value | 4.7 µs | 2.7 µs |
+| `DatabaseStore` `getMany(100)` / `setMany(100)`, MySQL over TCP (separate probe) | 4.1 / 4.6 ms | 0.6 / 1.4–3.0 ms |
+
+On a network store the library's own CPU cost was already small; the gains are
+in round trips, the monitoring and memory leaks, and in-process hits.
 
 ## 2. Redis outage demonstration
 
