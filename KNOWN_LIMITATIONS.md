@@ -80,6 +80,9 @@ trade-offs so you can design around them. Failure *modes* per capability are in
   explicitly enabled with a redactor — intended for debugging, not production.
 - Telemetry is best-effort: a failing listener or dispatcher is ignored rather
   than reported, so it never changes a cache operation's outcome.
+- Event sizes (`bytes`) are reported for strings and scalars only. Arrays and
+  objects report `null` unless value capture is on, because sizing them would
+  mean serializing every value on every call.
 - An instrumented native `deleteMany()` reports one result for the whole batch,
   so each per-key delete event carries that shared result.
 

@@ -314,4 +314,73 @@ final class ObservabilityTest extends TestCase
 
         self::assertSame($written, $this->metrics->snapshot()['bytes_written']);
     }
+
+    public function testObservingAStructuredValueDoesNotSerializeIt(): void
+    {
+        // ArrayStore keeps objects as they are, so any serialization here would
+        // be work the instrumentation added to every read and write.
+        $value = new SerializationCounter();
+        SerializationCounter::$calls = 0;
+
+        $captured = [];
+        $this->bus->listen(function (CacheEvent $event) use (&$captured): void {
+            $captured[] = $event;
+        });
+
+        $store = $this->store();
+        $store->set(Key::named('object'), $value, Ttl::forever());
+        $store->get(Key::named('object'));
+        $store->setMany([['key' => Key::named('batch'), 'value' => $value]], Ttl::forever());
+        $store->getMany([Key::named('batch')]);
+
+        self::assertSame(0, SerializationCounter::$calls, 'Telemetry must not serialize values to size them.');
+        foreach ($captured as $event) {
+            self::assertNull($event->bytes, 'The size of a structured value is not computed.');
+        }
+    }
+
+    public function testScalarSizesStayExact(): void
+    {
+        $captured = [];
+        $this->bus->listen(function (CacheEvent $event) use (&$captured): void {
+            $captured[] = $event;
+        });
+
+        // `bytes` is the serialized size; scalars keep it exactly.
+        $values = ['text' => str_repeat('x', 300), 'empty' => '', 'int' => -42, 'float' => 1.5, 'bool' => false, 'null' => null];
+        $store = $this->store();
+        foreach ($values as $key => $value) {
+            $store->set(Key::named($key), $value, Ttl::forever());
+        }
+
+        self::assertSame(
+            array_map(static fn (mixed $value): int => strlen(serialize($value)), array_values($values)),
+            array_map(static fn (CacheEvent $e): ?int => $e->bytes, $captured),
+        );
+    }
+}
+
+/**
+ * Counts serializations, so a test can prove a value was never serialized.
+ */
+final class SerializationCounter
+{
+    public static int $calls = 0;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __serialize(): array
+    {
+        self::$calls++;
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function __unserialize(array $data): void
+    {
+    }
 }

@@ -172,6 +172,10 @@ remains available on its own `5.x` line during migration.
   two workers "the same" lock. Writes made on the fallback alone during an
   outage are invalidated on the primary when it recovers, so deleted or changed
   values no longer reappear.
+- Monitoring no longer serializes every value just to report its size. An
+  instrumented hit on a 500-row array cost 36.9 µs against 0.70 µs unmonitored;
+  it now costs 1.39 µs. String and scalar sizes are unchanged; arrays and objects
+  report an unknown size (`null`) unless value capture is on.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of

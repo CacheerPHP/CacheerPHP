@@ -143,11 +143,20 @@ try {
     // --- Monitoring --------------------------------------------------------------
     $bus = new EventBus();
     $bus->listen((new MetricsCollector())->record(...));
-    foreach (['1 KiB' => $small, '64 KiB' => $large] as $size => $value) {
+    $rowsValue = [];
+    for ($i = 0; $i < 500; $i++) {
+        $rowsValue['field' . $i] = ['id' => $i, 'name' => 'item ' . $i, 'tags' => ['a', 'b']];
+    }
+    $plainRows = new ArrayStore($clock);
+    $plainRows->set($prebuilt, $rowsValue, Ttl::forever());
+    $plainRowsCache = new Cacheer($plainRows, $clock);
+    $add('monitoring', 'plain get() hit 500-row array', measure(static fn () => $plainRowsCache->get('product:42'), $iterations));
+
+    foreach (['1 KiB' => $small, '64 KiB' => $large, '500-row array' => $rowsValue] as $size => $value) {
         $plain = new ArrayStore($clock);
         $plain->set($prebuilt, $value, Ttl::forever());
         $instrumented = new Cacheer(new InstrumentedStore($plain, $bus), $clock);
-        $add('monitoring', "instrumented get() hit {$size}", measure(static fn () => $instrumented->get('product:42'), $iterations), 'serialize() of every value to size it');
+        $add('monitoring', "instrumented get() hit {$size}", measure(static fn () => $instrumented->get('product:42'), $iterations), '');
     }
 
     $report = ['environment' => $environment, 'iterations' => $iterations, 'results' => $rows];
