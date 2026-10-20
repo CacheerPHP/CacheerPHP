@@ -172,6 +172,9 @@ remains available on its own `5.x` line during migration.
   two workers "the same" lock. Writes made on the fallback alone during an
   outage are invalidated on the primary when it recovers, so deleted or changed
   values no longer reappear.
+- `DatabaseStore::getMany()` reads with one query per 500 keys instead of one
+  per key: 100 keys on MySQL over TCP dropped from 4.14 ms to 0.61 ms (SQLite:
+  0.74 to 0.24 ms). `setMany()` prepares its upsert once.
 - Redis `setMany()` and `deleteMany()` take one round trip per 500 entries
   instead of one per entry. For 100 keys on loopback, `setMany()` dropped from
   8.9 ms to 0.88 ms and `deleteMany()` from about 9.5 ms to about 0.39 ms; on a

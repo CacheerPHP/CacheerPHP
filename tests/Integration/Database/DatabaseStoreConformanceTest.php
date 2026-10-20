@@ -91,4 +91,40 @@ final class DatabaseStoreConformanceTest extends StoreConformance
     {
         return (int) $this->pdo->query('SELECT COUNT(*) FROM cacheer_store')->fetchColumn();
     }
+
+    public function testBatchReadsAndWritesPrepareOneStatement(): void
+    {
+        $pdo = new class ('sqlite::memory:') extends PDO {
+            /**
+             * @var list<string>
+             */
+            public array $prepared = [];
+
+            public function prepare(string $query, array $options = []): \PDOStatement|false
+            {
+                $this->prepared[] = strtok(ltrim($query), ' ');
+
+                return parent::prepare($query, $options);
+            }
+        };
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        DatabaseStoreSchema::migrate($pdo, 'cacheer_store');
+        $store = new DatabaseStore($pdo, 'cacheer_store', clock: $this->clock);
+
+        $keys = array_map(static fn (int $i): Key => Key::named('item:' . $i), range(1, 100));
+        $store->setMany(array_map(static fn (Key $key): array => ['key' => $key, 'value' => $key->value()], $keys), Ttl::forever());
+        self::assertSame(['INSERT'], $pdo->prepared, 'setMany() prepares its upsert once.');
+
+        $store->set(Key::named('expiring'), 'v', Ttl::seconds(1));
+        $this->clock->advance(2);
+        $pdo->prepared = [];
+
+        $requested = [$keys[2], Key::named('missing'), $keys[0], Key::named('expiring'), $keys[2]];
+        $entries = $store->getMany($requested);
+
+        self::assertSame(['SELECT'], array_values(array_filter($pdo->prepared, static fn (string $verb): bool => $verb === 'SELECT')), 'getMany() reads with one query.');
+        self::assertSame(['item:3', null, 'item:1', null, 'item:3'], array_map(static fn ($entry): mixed => $entry->valueOr(null), $entries));
+        self::assertSame(['item:3', 'missing', 'item:1', 'expiring', 'item:3'], array_map(static fn ($entry): string => $entry->key()->value(), $entries));
+        self::assertSame(100, (int) $pdo->query('SELECT COUNT(*) FROM cacheer_store')->fetchColumn(), 'Only the expired entry was removed.');
+    }
 }
