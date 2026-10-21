@@ -1,0 +1,196 @@
+{
+    "environment": {
+        "date": "2026-10-20T23:42:17Z",
+        "os": "Darwin 27.0.0 (arm64)",
+        "cpu": "Apple M4, 10 cores",
+        "memory": "16 GB",
+        "php": "8.5.11 (cli)",
+        "opcache/jit": "opcache off, jit disable",
+        "cacheer-php": "perf/pr-7-rebaseline @ 4141762 (this checkout)",
+        "predis": "v2.4.1",
+        "redis": "8.2.0 on 127.0.0.1:6391 (loopback)"
+    },
+    "iterations": 20000,
+    "results": [
+        {
+            "group": "keys",
+            "measurement": "Key::named()",
+            "ns_per_op": 168,
+            "note": ""
+        },
+        {
+            "group": "keys",
+            "measurement": "Key::within(scope)",
+            "ns_per_op": 193,
+            "note": ""
+        },
+        {
+            "group": "keys",
+            "measurement": "Key::identity()",
+            "ns_per_op": 22,
+            "note": ""
+        },
+        {
+            "group": "keys",
+            "measurement": "HashingKeyEncoder::encode()",
+            "ns_per_op": 511,
+            "note": "sha256 + readable slug, every backend call"
+        },
+        {
+            "group": "call path",
+            "measurement": "ArrayStore::get(Key) \u2014 raw store",
+            "ns_per_op": 78,
+            "note": ""
+        },
+        {
+            "group": "call path",
+            "measurement": "Cacheer::get(string)",
+            "ns_per_op": 510,
+            "note": "Key::named + run() wrapper"
+        },
+        {
+            "group": "call path",
+            "measurement": "Cacheer::in(tenant)->get(string)",
+            "ns_per_op": 1249,
+            "note": "builds a scoped view per call"
+        },
+        {
+            "group": "call path",
+            "measurement": "scoped view reused ->get(string)",
+            "ns_per_op": 666,
+            "note": ""
+        },
+        {
+            "group": "call path",
+            "measurement": "Cacheer::remember() hit",
+            "ns_per_op": 545,
+            "note": ""
+        },
+        {
+            "group": "call path",
+            "measurement": "Cacheer::set(string)",
+            "ns_per_op": 709,
+            "note": ""
+        },
+        {
+            "group": "pipeline",
+            "measurement": "EnvelopeCodec::encode() 1 KiB",
+            "ns_per_op": 312,
+            "note": ""
+        },
+        {
+            "group": "pipeline",
+            "measurement": "EnvelopeCodec::decode() 1 KiB",
+            "ns_per_op": 532,
+            "note": ""
+        },
+        {
+            "group": "pipeline",
+            "measurement": "StoredRecord::fromString() 1 KiB",
+            "ns_per_op": 588,
+            "note": "JSON header + value copy"
+        },
+        {
+            "group": "pipeline",
+            "measurement": "EnvelopeCodec::encode() 64 KiB",
+            "ns_per_op": 2087,
+            "note": ""
+        },
+        {
+            "group": "pipeline",
+            "measurement": "EnvelopeCodec::decode() 64 KiB",
+            "ns_per_op": 2685,
+            "note": ""
+        },
+        {
+            "group": "pipeline",
+            "measurement": "StoredRecord::fromString() 64 KiB",
+            "ns_per_op": 1192,
+            "note": "JSON header + value copy"
+        },
+        {
+            "group": "redis",
+            "measurement": "Predis GET \u2014 network floor",
+            "ns_per_op": 85236,
+            "note": ""
+        },
+        {
+            "group": "redis",
+            "measurement": "RedisStore::get(Key)",
+            "ns_per_op": 88546,
+            "note": ""
+        },
+        {
+            "group": "redis",
+            "measurement": "Cacheer(redis)::get(string)",
+            "ns_per_op": 87974,
+            "note": ""
+        },
+        {
+            "group": "redis",
+            "measurement": "setMany(100)",
+            "ns_per_op": 911545,
+            "note": ""
+        },
+        {
+            "group": "redis",
+            "measurement": "many(100)",
+            "ns_per_op": 449952,
+            "note": ""
+        },
+        {
+            "group": "redis",
+            "measurement": "setMany(100) + deleteMany(100)",
+            "ns_per_op": 1279675,
+            "note": ""
+        },
+        {
+            "group": "redis",
+            "measurement": "cold remember(): Redis commands",
+            "ns_per_op": 6,
+            "note": "count, not ns; the lock-release script counts as 2"
+        },
+        {
+            "group": "tiered",
+            "measurement": "TieredStore L1 hit via Cacheer::get",
+            "ns_per_op": 853,
+            "note": ""
+        },
+        {
+            "group": "memory",
+            "measurement": "tiered worker: KiB retained after 50k writes expired",
+            "ns_per_op": 1091,
+            "note": "KiB, not ns"
+        },
+        {
+            "group": "file",
+            "measurement": "Cacheer::file()->get() 1 KiB",
+            "ns_per_op": 21804,
+            "note": ""
+        },
+        {
+            "group": "monitoring",
+            "measurement": "plain get() hit 500-row array",
+            "ns_per_op": 523,
+            "note": ""
+        },
+        {
+            "group": "monitoring",
+            "measurement": "instrumented get() hit 1 KiB",
+            "ns_per_op": 1226,
+            "note": ""
+        },
+        {
+            "group": "monitoring",
+            "measurement": "instrumented get() hit 64 KiB",
+            "ns_per_op": 1157,
+            "note": ""
+        },
+        {
+            "group": "monitoring",
+            "measurement": "instrumented get() hit 500-row array",
+            "ns_per_op": 1147,
+            "note": ""
+        }
+    ]
+}

@@ -1,0 +1,469 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "f88cc34c2af92dc569a4662b0225d795",
+    "packages": [
+        {
+            "name": "cacheerphp/monitor",
+            "version": "v2.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/CacheerPHP/monitor.git",
+                "reference": "f273ae121638375c7992e6d2c3b380ce1bc84724"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/CacheerPHP/monitor/zipball/f273ae121638375c7992e6d2c3b380ce1bc84724",
+                "reference": "f273ae121638375c7992e6d2c3b380ce1bc84724",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.3",
+                "silviooosilva/cacheer-php": "^6.0@RC"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.0 || ^11.0 || ^12.0"
+            },
+            "bin": [
+                "bin/cacheer-monitor"
+            ],
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/Boot/bootstrap.php"
+                ],
+                "psr-4": {
+                    "Cacheer\\Monitor\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "Dashboard and telemetry reporter for CacheerPHP.",
+            "support": {
+                "issues": "https://github.com/CacheerPHP/monitor/issues",
+                "source": "https://github.com/CacheerPHP/monitor/tree/v2.0.0"
+            },
+            "time": "2026-10-11T19:59:00+00:00"
+        },
+        {
+            "name": "predis/predis",
+            "version": "v2.4.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/predis/predis.git",
+                "reference": "07105e050622ed80bd60808367ced9e379f31530"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/predis/predis/zipball/07105e050622ed80bd60808367ced9e379f31530",
+                "reference": "07105e050622ed80bd60808367ced9e379f31530",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.2 || ^8.0"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.3",
+                "phpstan/phpstan": "^1.9",
+                "phpunit/phpcov": "^6.0 || ^8.0",
+                "phpunit/phpunit": "^8.0 || ^9.4"
+            },
+            "suggest": {
+                "ext-relay": "Faster connection with in-memory caching (>=0.6.2)"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Predis\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Till Krüss",
+                    "homepage": "https://till.im",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "A flexible and feature-complete Redis/Valkey client for PHP.",
+            "homepage": "http://github.com/predis/predis",
+            "keywords": [
+                "nosql",
+                "predis",
+                "redis"
+            ],
+            "support": {
+                "issues": "https://github.com/predis/predis/issues",
+                "source": "https://github.com/predis/predis/tree/v2.4.1"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/sponsors/tillkruss",
+                    "type": "github"
+                }
+            ],
+            "time": "2025-11-12T18:00:11+00:00"
+        },
+        {
+            "name": "psr/cache",
+            "version": "3.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/cache.git",
+                "reference": "aa5030cfa5405eccfdcb1083ce040c2cb8d253bf"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/cache/zipball/aa5030cfa5405eccfdcb1083ce040c2cb8d253bf",
+                "reference": "aa5030cfa5405eccfdcb1083ce040c2cb8d253bf",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.0.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\Cache\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "https://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interface for caching libraries",
+            "keywords": [
+                "cache",
+                "psr",
+                "psr-6"
+            ],
+            "support": {
+                "source": "https://github.com/php-fig/cache/tree/3.0.0"
+            },
+            "time": "2021-02-03T23:26:27+00:00"
+        },
+        {
+            "name": "psr/event-dispatcher",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/event-dispatcher.git",
+                "reference": "dbefd12671e8a14ec7f180cab83036ed26714bb0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/event-dispatcher/zipball/dbefd12671e8a14ec7f180cab83036ed26714bb0",
+                "reference": "dbefd12671e8a14ec7f180cab83036ed26714bb0",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.2.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "1.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\EventDispatcher\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "http://www.php-fig.org/"
+                }
+            ],
+            "description": "Standard interfaces for event handling.",
+            "keywords": [
+                "events",
+                "psr",
+                "psr-14"
+            ],
+            "support": {
+                "issues": "https://github.com/php-fig/event-dispatcher/issues",
+                "source": "https://github.com/php-fig/event-dispatcher/tree/1.0.0"
+            },
+            "time": "2019-01-08T18:20:26+00:00"
+        },
+        {
+            "name": "psr/log",
+            "version": "3.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/log.git",
+                "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+                "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.0.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "3.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\Log\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "https://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interface for logging libraries",
+            "homepage": "https://github.com/php-fig/log",
+            "keywords": [
+                "log",
+                "psr",
+                "psr-3"
+            ],
+            "support": {
+                "source": "https://github.com/php-fig/log/tree/3.0.2"
+            },
+            "time": "2024-09-11T13:17:53+00:00"
+        },
+        {
+            "name": "psr/simple-cache",
+            "version": "3.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/simple-cache.git",
+                "reference": "764e0b3939f5ca87cb904f570ef9be2d78a07865"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/simple-cache/zipball/764e0b3939f5ca87cb904f570ef9be2d78a07865",
+                "reference": "764e0b3939f5ca87cb904f570ef9be2d78a07865",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.0.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "3.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\SimpleCache\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "https://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interfaces for simple caching",
+            "keywords": [
+                "cache",
+                "caching",
+                "psr",
+                "psr-16",
+                "simple-cache"
+            ],
+            "support": {
+                "source": "https://github.com/php-fig/simple-cache/tree/3.0.0"
+            },
+            "time": "2021-10-29T13:26:27+00:00"
+        },
+        {
+            "name": "silviooosilva/cacheer-php",
+            "version": "6.x-dev",
+            "dist": {
+                "type": "path",
+                "url": "..",
+                "reference": "966e5ae5d05090a4fd295f9740703f9e97bcdeda"
+            },
+            "require": {
+                "php": ">=8.3",
+                "psr/cache": "^3.0",
+                "psr/event-dispatcher": "^1.0",
+                "psr/log": "^3.0",
+                "psr/simple-cache": "^3.0"
+            },
+            "require-dev": {
+                "brianium/paratest": "^7.11.2 <7.26.1",
+                "ext-openssl": "*",
+                "ext-pdo": "*",
+                "ext-zlib": "*",
+                "friendsofphp/php-cs-fixer": "^3.94",
+                "pestphp/pest": "^4.0 || ^5.0",
+                "phpstan/phpstan": "^2.1",
+                "predis/predis": "^2.3"
+            },
+            "suggest": {
+                "ext-openssl": "Enable authenticated AES-256-GCM encryption of cached values.",
+                "ext-pdo": "Use the database cache driver (SQLite, MySQL, MariaDB, or PostgreSQL).",
+                "ext-redis": "Use the Redis cache driver via the native phpredis extension.",
+                "ext-zlib": "Enable gzip compression of cached values.",
+                "predis/predis": "Use the Redis cache driver over TCP (or install the phpredis extension)."
+            },
+            "bin": [
+                "bin/cacheer"
+            ],
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-6.x": "6.0.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Silviooosilva\\CacheerPhp\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "@test:unit"
+                ],
+                "test:unit": [
+                    "@php vendor/bin/pest --testsuite=Unit --colors=always"
+                ],
+                "test:contract": [
+                    "@php vendor/bin/pest --testsuite=Contract --colors=always"
+                ],
+                "test:kernel": [
+                    "@php vendor/bin/pest --testsuite=Kernel --colors=always"
+                ],
+                "test:storage": [
+                    "@php vendor/bin/pest --testsuite=Storage --colors=always"
+                ],
+                "test:conformance": [
+                    "@test:contract",
+                    "@test:integration"
+                ],
+                "test:parallel": [
+                    "@php vendor/bin/pest --testsuite=Unit --parallel --colors=always"
+                ],
+                "test:integration": [
+                    "@php vendor/bin/pest --testsuite=Integration --colors=always"
+                ],
+                "test:integration:redis": [
+                    "@php vendor/bin/pest tests/Integration/Redis --colors=always"
+                ],
+                "test:integration:database": [
+                    "@php vendor/bin/pest tests/Integration/Database --colors=always"
+                ],
+                "test:all": [
+                    "@php vendor/bin/pest --colors=always"
+                ],
+                "analyse": [
+                    "@php vendor/bin/phpstan analyse --configuration=phpstan.neon --no-progress"
+                ],
+                "lint": [
+                    "@php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --allow-risky=yes --dry-run --diff"
+                ],
+                "fix": [
+                    "@php vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.php --allow-risky=yes"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Sílvio Silva",
+                    "email": "gasparsilvio7@gmail.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "CacheerPHP is a minimalist package for caching in PHP, offering a simple interface for storing and retrieving cached data using multiple backends.",
+            "homepage": "https://cacheerphp.com",
+            "keywords": [
+                "PHP",
+                "Silviooosilva",
+                "cache",
+                "cache-manager",
+                "caching",
+                "database",
+                "database-cache",
+                "file-cache",
+                "mysql",
+                "nosql",
+                "optimization",
+                "optimizer",
+                "performance",
+                "pgsql",
+                "predis",
+                "psr-16",
+                "psr-3",
+                "redis",
+                "speed",
+                "sqlite"
+            ],
+            "support": {
+                "issues": "https://github.com/silviooosilva/CacheerPHP/issues",
+                "source": "https://github.com/silviooosilva/CacheerPHP",
+                "docs": "https://cacheerphp.com/docs/v6/en/getting-started/",
+                "security": "https://github.com/silviooosilva/CacheerPHP/security/policy"
+            },
+            "transport-options": {
+                "relative": true
+            }
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "dev",
+    "stability-flags": {
+        "silviooosilva/cacheer-php": 20
+    },
+    "prefer-stable": true,
+    "prefer-lowest": false,
+    "platform": {
+        "php": ">=8.3"
+    },
+    "platform-dev": {},
+    "plugin-api-version": "2.9.0"
+}
