@@ -1,9 +1,0 @@
-{
-  "name": "cacheer-monitor-walkthrough",
-  "private": true,
-  "description": "Records the Cacheer Monitor walkthrough. Not part of the package.",
-  "type": "module",
-  "devDependencies": {
-    "playwright": "^1.56.0"
-  }
-}
