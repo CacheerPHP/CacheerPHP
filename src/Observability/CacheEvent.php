@@ -12,7 +12,8 @@ use Throwable;
  * A cached value is never carried here unless value capture is explicitly
  * enabled ($hasValue), so telemetry is safe by default. `bytes` is the
  * serialized size and is safe to record regardless — it exposes the size, not
- * the contents.
+ * the contents. It is null for arrays and objects unless value capture is on:
+ * sizing them would mean serializing every value on every call.
  */
 final readonly class CacheEvent
 {

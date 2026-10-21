@@ -88,14 +88,22 @@ final readonly class Envelope
             throw UnsupportedEnvelopeException::version($version);
         }
 
-        $header = substr($blob, strlen(self::MAGIC) + 1);
-        $fields = explode(self::SEP, $header, 5);
-        if (count($fields) !== 5) {
-            throw CorruptedPayloadException::truncatedHeader();
+        // Walk the four header separators by offset, so the payload — which can
+        // be large and may itself contain the separator byte — is copied once.
+        $fields = [];
+        $offset = strlen(self::MAGIC) + 1;
+        for ($i = 0; $i < 4; $i++) {
+            $end = strpos($blob, self::SEP, $offset);
+            if ($end === false) {
+                throw CorruptedPayloadException::truncatedHeader();
+            }
+
+            $fields[] = substr($blob, $offset, $end - $offset);
+            $offset = $end + 1;
         }
 
-        [$serializerId, $compressorId, $encrypterId, $keyId, $payload] = $fields;
+        [$serializerId, $compressorId, $encrypterId, $keyId] = $fields;
 
-        return new self($serializerId, $compressorId, $encrypterId, $keyId, $payload);
+        return new self($serializerId, $compressorId, $encrypterId, $keyId, substr($blob, $offset));
     }
 }

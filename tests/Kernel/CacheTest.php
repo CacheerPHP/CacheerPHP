@@ -22,6 +22,7 @@ use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Support\AfterResponseDeferredExecutor;
 use Tests\Support\FakeClock;
 use Tests\Support\MinimalStore;
+use Tests\Support\ToggleableStore;
 
 final class CacheTest extends TestCase
 {
@@ -254,6 +255,39 @@ final class CacheTest extends TestCase
 
         self::assertSame('from-other-worker', $value);
         self::assertSame(0, $calls, 'A value stored during the wait must not be recomputed.');
+    }
+
+    public function testAnUncontendedColdRememberReadsTheStoreOnce(): void
+    {
+        $store = new ToggleableStore(new ArrayStore($this->clock));
+        $cache = new Cacheer($store, $this->clock);
+
+        self::assertSame('computed', $cache->remember('cold', 60, static fn (): string => 'computed'));
+        self::assertSame(1, $store->reads, 'With the lock taken at once, the miss needs no second read.');
+    }
+
+    public function testAColdRememberThatWaitedUsesTheOtherWorkersResult(): void
+    {
+        $key = Key::named('report');
+        $rival = $this->store->lock('cacheer:sf:' . hash('sha256', $key->identity()), Ttl::seconds(30));
+        self::assertTrue($rival->acquire());
+
+        // The other worker finishes while this one waits, then releases.
+        $this->clock->onSleep = function () use ($key, $rival): void {
+            $this->store->set($key, 'from-other-worker', Ttl::seconds(60));
+            $rival->release();
+            $this->clock->onSleep = null;
+        };
+
+        $calls = 0;
+        $value = $this->cache->remember('report', 60, function () use (&$calls): string {
+            $calls++;
+
+            return 'recomputed';
+        });
+
+        self::assertSame('from-other-worker', $value);
+        self::assertSame(0, $calls, 'After waiting for the lock, the winner\'s value is used.');
     }
 
     public function testCoreHasNoMagicDelegationOrStaticState(): void

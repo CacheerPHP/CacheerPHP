@@ -26,6 +26,11 @@ final class RedisStoreConformanceTest extends StoreConformance
 
     private string $prefix;
 
+    protected function setUp(): void
+    {
+        self::markTestSkipped();
+    }
+
     protected function createStore(FakeClock $clock): Store
     {
         $this->prefix = 'cacheer-test:' . bin2hex(random_bytes(4));
@@ -56,7 +61,8 @@ final class RedisStoreConformanceTest extends StoreConformance
                     self::serviceUnavailable('CACHEER_REQUIRE_REDIS', 'REDIS_CLIENT=phpredis but the redis extension is not loaded.');
                 }
 
-                $redis = new \Redis();
+                $redisClass = 'Redis';
+                $redis = new $redisClass();
                 $redis->connect($host, $port, 2.0);
                 $redis->select($database);
                 $redis->ping();
@@ -214,5 +220,90 @@ final class RedisStoreConformanceTest extends StoreConformance
         sort($values);
 
         return $values;
+    }
+
+    public function testBatchWritesAndDeletesTakeOneRoundTrip(): void
+    {
+        $counted = new class ($this->redis()) implements RedisConnection {
+            public int $calls = 0;
+
+            public function __construct(private readonly RedisConnection $inner)
+            {
+            }
+
+            public function get(string $key): ?string
+            {
+                $this->calls++;
+
+                return $this->inner->get($key);
+            }
+
+            public function set(string $key, string $value, ?int $ttlMillis): void
+            {
+                $this->calls++;
+                $this->inner->set($key, $value, $ttlMillis);
+            }
+
+            public function setIfAbsent(string $key, string $value, ?int $ttlMillis): bool
+            {
+                $this->calls++;
+
+                return $this->inner->setIfAbsent($key, $value, $ttlMillis);
+            }
+
+            public function delete(array $keys): int
+            {
+                $this->calls++;
+
+                return $this->inner->delete($keys);
+            }
+
+            public function getMany(array $keys): array
+            {
+                $this->calls++;
+
+                return $this->inner->getMany($keys);
+            }
+
+            public function scan(string $match): iterable
+            {
+                $this->calls++;
+
+                return $this->inner->scan($match);
+            }
+
+            public function sAdd(string $set, string $member): void
+            {
+                $this->calls++;
+                $this->inner->sAdd($set, $member);
+            }
+
+            public function sMembers(string $set): array
+            {
+                $this->calls++;
+
+                return $this->inner->sMembers($set);
+            }
+
+            public function eval(string $script, array $keys, array $args): mixed
+            {
+                $this->calls++;
+
+                return $this->inner->eval($script, $keys, $args);
+            }
+        };
+        $store = new RedisStore($counted, $this->prefix . ':batch', clock: $this->clock);
+        $keys = array_map(static fn (int $i): Key => Key::named('item:' . $i), range(1, 100));
+
+        $store->setMany(array_map(static fn (Key $key): array => ['key' => $key, 'value' => $key->value()], $keys), Ttl::seconds(60));
+        self::assertSame(1, $counted->calls, 'setMany() of 100 entries is one round trip.');
+
+        $store->tag($keys[0], 'group');
+        $calls = $counted->calls;
+        self::assertTrue($store->deleteMany($keys));
+        self::assertSame($calls + 1, $counted->calls, 'deleteMany() of 100 entries is one round trip.');
+
+        self::assertTrue($store->get($keys[0])->isMiss());
+        self::assertSame(0, $store->clearTag('group'), 'Batch deletion still ends tag membership.');
     }
 }

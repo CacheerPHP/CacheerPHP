@@ -407,11 +407,7 @@ final class InstrumentedStore implements
      */
     private function capture(mixed $value): array
     {
-        try {
-            $bytes = strlen(serialize($value));
-        } catch (Throwable) {
-            $bytes = null;
-        }
+        $bytes = self::serializedSize($value, $this->captureValues);
 
         if (!$this->captureValues) {
             return [$bytes, false, null];
@@ -427,6 +423,43 @@ final class InstrumentedStore implements
      * @param float $start
      * @return float
      */
+    /**
+     * The serialized size of a value, without serializing anything costly.
+     *
+     * Events are emitted on every read and write, and with Monitor installed
+     * every cache is instrumented, so sizing must stay cheap: a string's
+     * serialized size is computed arithmetically, other scalars are trivial to
+     * serialize, and arrays/objects are reported as unknown (null) — sizing them
+     * would mean serializing the whole value on every hit. Value capture is an
+     * explicit debugging mode, so it pays that cost to report the size.
+     *
+     * @param mixed $value
+     * @param bool $sizeStructured
+     * @return ?int
+     */
+    private static function serializedSize(mixed $value, bool $sizeStructured): ?int
+    {
+        if (is_string($value)) {
+            $length = strlen($value);
+
+            return $length + strlen((string) $length) + 6; // s:<length>:"<value>";
+        }
+
+        if (is_scalar($value) || $value === null) {
+            return strlen(serialize($value));
+        }
+
+        if (!$sizeStructured) {
+            return null;
+        }
+
+        try {
+            return strlen(serialize($value));
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     private function elapsed(float $start): float
     {
         return (microtime(true) - $start) * 1_000_000;

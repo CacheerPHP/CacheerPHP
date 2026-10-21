@@ -57,6 +57,16 @@ final class DatabaseStore implements
      * Characters the scope and tag columns hold (VARCHAR(255) on MySQL and
      * PostgreSQL). Enforced on every driver so behavior does not change with it.
      */
+    /**
+     * Keys per batch query, well under every driver's bound-parameter limit.
+     */
+    private const BATCH_CHUNK = 500;
+
+    /**
+     * Rows per batch upsert: 6 parameters each, under SQLite's oldest limit (999).
+     */
+    private const WRITE_CHUNK = 100;
+
     private const MAX_NAME_CHARACTERS = 255;
 
     /**
@@ -163,10 +173,39 @@ final class DatabaseStore implements
      */
     public function getMany(iterable $keys): array
     {
-        $entries = [];
+        $keys = [...$keys];
+        $encoded = array_map(fn (Key $key): string => $this->keyEncoder->encode($key), $keys);
 
-        foreach ($keys as $key) {
-            $entries[] = $this->get($key);
+        // One query per chunk instead of one per key; chunks stay well under
+        // every driver's bound-parameter limit (SQLite's is the lowest).
+        $rows = [];
+        foreach (array_chunk(array_values(array_unique($encoded)), self::BATCH_CHUNK) as $chunk) {
+            $statement = $this->pdo->prepare(sprintf(
+                'SELECT cache_key, value, created_at, expires_at FROM %s WHERE cache_key IN (%s)',
+                $this->table,
+                implode(', ', array_fill(0, count($chunk), '?')),
+            ));
+            $statement->execute($chunk);
+
+            while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+                /** @var array{cache_key: string, value: string, created_at: int|string, expires_at: int|string|null} $row */
+                $rows[$row['cache_key']] = $row;
+            }
+        }
+
+        $entries = [];
+        foreach ($keys as $index => $key) {
+            $row = $rows[$encoded[$index]] ?? null;
+
+            if ($row === null) {
+                $entries[] = CacheEntry::miss($key);
+            } elseif ($this->isExpired($row['expires_at'])) {
+                $this->delete($key);
+                unset($rows[$encoded[$index]]);
+                $entries[] = CacheEntry::miss($key);
+            } else {
+                $entries[] = CacheEntry::hit($key, $this->decode($row['value']), (int) $row['created_at'], $this->nullableInt($row['expires_at']));
+            }
         }
 
         return $entries;
@@ -184,9 +223,21 @@ final class DatabaseStore implements
             $this->assertStorableScope($entry['key']);
         }
 
-        $this->transaction(function () use ($entries, $expiresAt): void {
-            foreach ($entries as $entry) {
-                $this->upsert($entry['key'], $entry['value'], $expiresAt);
+        // Encode everything before writing, collapsing a key repeated in the batch
+        // to its last value — as writing one by one would — because one
+        // PostgreSQL upsert statement may not touch the same row twice.
+        $now = $this->clock->now();
+        $rows = [];
+        foreach ($entries as $entry) {
+            $encoded = $this->keyEncoder->encode($entry['key']);
+            unset($rows[$encoded]);
+            $rows[$encoded] = [$encoded, (string) $entry['key']->scope(), $entry['key']->value(), $this->encode($entry['value']), $now, $expiresAt];
+        }
+
+        // One multi-row upsert per chunk instead of one statement per entry.
+        $this->transaction(function () use ($rows): void {
+            foreach (array_chunk(array_values($rows), self::WRITE_CHUNK) as $chunk) {
+                $this->pdo->prepare($this->upsertSql(count($chunk)))->execute(array_merge(...$chunk));
             }
         });
     }
@@ -460,10 +511,17 @@ final class DatabaseStore implements
     /**
      * @return string
      */
-    private function upsertSql(): string
+    /**
+     * @param int $rows 0 for the single-row form with named parameters, or the
+     *                  number of rows for a positional multi-row upsert
+     * @return string
+     */
+    private function upsertSql(int $rows = 0): string
     {
         $columns = '(cache_key, scope, key_value, value, created_at, expires_at)';
-        $values = '(:key, :scope, :kv, :value, :created, :expires)';
+        $values = $rows === 0
+            ? '(:key, :scope, :kv, :value, :created, :expires)'
+            : implode(', ', array_fill(0, $rows, '(?, ?, ?, ?, ?, ?)'));
 
         if ($this->driver === 'mysql') {
             return "INSERT INTO {$this->table} {$columns} VALUES {$values}

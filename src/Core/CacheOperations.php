@@ -738,7 +738,13 @@ final readonly class CacheOperations
             return $this->compute($key, $ttl, $callback, $applyPolicy);
         }
 
-        if (!$lock->block(5.0)) {
+        // Every caller has just read the key and found nothing usable. Taking the
+        // lock at once means no other worker was computing it, so reading again
+        // would only cost a round trip. Waiting means one was: its result is read
+        // after the wait instead of computing a second time.
+        $waited = !$lock->acquire();
+
+        if ($waited && !$lock->block(5.0)) {
             // Single-flight is a stampede optimization, not a guarantee: after a
             // timeout, use the holder's result if it landed, else compute anyway.
             SafeDispatch::to($this->events, CacheEvent::lockContended($this->storeName(), (string) $key));
@@ -749,9 +755,11 @@ final readonly class CacheOperations
         }
 
         try {
-            $entry = $this->read($key);
-            if ($accept($entry)) {
-                return $entry->value();
+            if ($waited) {
+                $entry = $this->read($key);
+                if ($accept($entry)) {
+                    return $entry->value();
+                }
             }
 
             return $this->compute($key, $ttl, $callback, $applyPolicy);

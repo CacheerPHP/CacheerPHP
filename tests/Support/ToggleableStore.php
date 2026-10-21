@@ -34,6 +34,11 @@ final class ToggleableStore implements Store, AtomicStore, LockingStore, Capabil
 
     public int $attempts = 0;
 
+    /**
+     * Reads that reached the delegate.
+     */
+    public int $reads = 0;
+
     public function __construct(private readonly Store $delegate)
     {
     }
@@ -46,6 +51,7 @@ final class ToggleableStore implements Store, AtomicStore, LockingStore, Capabil
     public function get(Key $key): CacheEntry
     {
         $this->guard();
+        $this->reads++;
 
         return $this->delegate->get($key);
     }

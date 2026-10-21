@@ -172,6 +172,34 @@ remains available on its own `5.x` line during migration.
   two workers "the same" lock. Writes made on the fallback alone during an
   outage are invalidated on the primary when it recovers, so deleted or changed
   values no longer reappear.
+- A cold `remember()` that takes the single-flight lock at once no longer
+  reads the store a second time: on Redis it is 4 round trips instead of 5. A
+  caller that had to wait still re-reads and uses the other worker's value.
+- Faster in-process hot path: keys and scopes build their identity once
+  (immutable), qualifying a key with the root scope no longer rebuilds it, the
+  root scope is a shared instance, envelopes copy their payload once, and a Redis
+  read encodes its key once. `Cacheer::get()` on `ArrayStore` dropped from 677 to
+  494 ns, a `remember()` hit from 713 to 534 ns, a tiered L1 hit from 1,022 to
+  875 ns, and decoding a 64 KiB value from 4.7 to 2.7 µs.
+- `DatabaseStore::getMany()` reads with one query per 500 keys instead of one
+  per key: 100 keys on MySQL over TCP dropped from 4.14 ms to 0.61 ms (SQLite:
+  0.74 to 0.24 ms). `setMany()` writes each chunk of 100 entries with one
+  multi-row upsert instead of one statement per entry: 100 keys on MySQL over
+  TCP dropped from 4.6 ms to 1.4–3.0 ms. A key repeated in a batch keeps its
+  last value, as before.
+- Redis `setMany()` and `deleteMany()` take one round trip per 500 entries
+  instead of one per entry. For 100 keys on loopback, `setMany()` dropped from
+  8.9 ms to 0.88 ms and `deleteMany()` from about 9.5 ms to about 0.39 ms; on a
+  real network each avoided round trip saves more. Tag membership still ends
+  with each deleted entry.
+- `TieredStore` no longer accumulates expired L1 copies in long-running
+  workers. A worker that wrote 50,000 expiring keys kept 39.8 MB in L1 after
+  they all expired; it now keeps about 2 MB, independent of how many keys it
+  wrote. `ArrayStore::prune()` also releases the array capacity it frees.
+- Monitoring no longer serializes every value just to report its size. An
+  instrumented hit on a 500-row array cost 36.9 µs against 0.70 µs unmonitored;
+  it now costs 1.39 µs. String and scalar sizes are unchanged; arrays and objects
+  report an unknown size (`null`) unless value capture is on.
 - File and Redis `increment()`/`compareAndSwap()` no longer run unprotected when
   their per-key lock times out; they throw `StoreOperationFailedException` and
   leave the entry unchanged. `add()` likewise throws on a lock timeout instead of

@@ -211,4 +211,43 @@ final class TieredStoreBehaviorTest extends TestCase
 
         self::assertTrue($this->l1->get(Key::named('k'))->isMiss(), 'L2 is written first, so a failed write never lands only in L1.');
     }
+
+    public function testExpiredL1CopiesDoNotAccumulateInAWriteOnlyWorker(): void
+    {
+        for ($i = 0; $i < 1_000; $i++) {
+            $this->tiered->set(Key::named('job:' . $i), 'payload', Ttl::seconds(30));
+        }
+
+        // Long after every copy expired, the worker keeps writing new keys.
+        $this->clock->advance(3_600);
+        $this->tiered->set(Key::named('job:new'), 'payload', Ttl::seconds(30));
+
+        self::assertSame(0, $this->l1->prune(), 'Expired L1 copies must not pile up in a long-running worker.');
+        self::assertSame('payload', $this->tiered->get(Key::named('job:new'))->value());
+    }
+
+    public function testExpiredL1CopiesAreAlsoPrunedByReads(): void
+    {
+        for ($i = 0; $i < 100; $i++) {
+            $this->tiered->set(Key::named('page:' . $i), 'html', Ttl::seconds(30));
+        }
+
+        $this->clock->advance(3_600);
+        $this->tiered->get(Key::named('anything'));
+
+        self::assertSame(0, $this->l1->prune());
+    }
+
+    public function testL1PruningRunsAtMostOncePerCheckInterval(): void
+    {
+        $this->tiered->set(Key::named('a'), 'v', Ttl::seconds(1));
+        $this->clock->advance(6);
+        $this->tiered->set(Key::named('b'), 'v', Ttl::forever()); // 6s on: prunes 'a'
+
+        $this->tiered->set(Key::named('c'), 'v', Ttl::seconds(1));
+        $this->clock->advance(2);
+        $this->tiered->set(Key::named('d'), 'v', Ttl::forever()); // only 2s later: no prune
+
+        self::assertSame(1, $this->l1->prune(), "'c' is pruned on the next interval, not on every write.");
+    }
 }

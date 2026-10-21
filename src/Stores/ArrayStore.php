@@ -234,6 +234,13 @@ final class ArrayStore implements
             $removed++;
         }
 
+        // PHP arrays keep their peak capacity after unset(), so a store that
+        // shed most of its entries would still hold their memory. Rebuilding
+        // the array once at least half of it is gone releases that space.
+        if ($removed > 0 && $removed >= count($this->items)) {
+            $this->items = array_slice($this->items, 0, null, true);
+        }
+
         return $removed;
     }
 

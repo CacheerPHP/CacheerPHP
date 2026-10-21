@@ -91,4 +91,82 @@ final class DatabaseStoreConformanceTest extends StoreConformance
     {
         return (int) $this->pdo->query('SELECT COUNT(*) FROM cacheer_store')->fetchColumn();
     }
+
+    public function testBatchReadsAndWritesPrepareOneStatement(): void
+    {
+        $pdo = new class ('sqlite::memory:') extends PDO {
+            /**
+             * @var list<string>
+             */
+            public array $prepared = [];
+
+            public function prepare(string $query, array $options = []): \PDOStatement|false
+            {
+                $this->prepared[] = strtok(ltrim($query), ' ');
+
+                return parent::prepare($query, $options);
+            }
+        };
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        DatabaseStoreSchema::migrate($pdo, 'cacheer_store');
+        $store = new DatabaseStore($pdo, 'cacheer_store', clock: $this->clock);
+
+        $keys = array_map(static fn (int $i): Key => Key::named('item:' . $i), range(1, 100));
+        $store->setMany(array_map(static fn (Key $key): array => ['key' => $key, 'value' => $key->value()], $keys), Ttl::forever());
+        self::assertSame(['INSERT'], $pdo->prepared, 'setMany() prepares its upsert once.');
+
+        $store->set(Key::named('expiring'), 'v', Ttl::seconds(1));
+        $this->clock->advance(2);
+        $pdo->prepared = [];
+
+        $requested = [$keys[2], Key::named('missing'), $keys[0], Key::named('expiring'), $keys[2]];
+        $entries = $store->getMany($requested);
+
+        self::assertSame(['SELECT'], array_values(array_filter($pdo->prepared, static fn (string $verb): bool => $verb === 'SELECT')), 'getMany() reads with one query.');
+        self::assertSame(['item:3', null, 'item:1', null, 'item:3'], array_map(static fn ($entry): mixed => $entry->valueOr(null), $entries));
+        self::assertSame(['item:3', 'missing', 'item:1', 'expiring', 'item:3'], array_map(static fn ($entry): string => $entry->key()->value(), $entries));
+        self::assertSame(100, (int) $pdo->query('SELECT COUNT(*) FROM cacheer_store')->fetchColumn(), 'Only the expired entry was removed.');
+    }
+
+    public function testBatchWritesRunOneStatementPerChunk(): void
+    {
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        DatabaseStoreSchema::migrate($pdo, 'cacheer_store');
+        $pdo->setAttribute(PDO::ATTR_STATEMENT_CLASS, [CountingStatement::class]);
+        CountingStatement::$executed = [];
+        $store = new DatabaseStore($pdo, 'cacheer_store', clock: $this->clock);
+
+        $entries = array_map(static fn (int $i): array => ['key' => Key::named('item:' . $i), 'value' => 'v' . $i], range(1, 250));
+        $entries[] = ['key' => Key::named('item:1'), 'value' => 'last write wins'];
+        $store->setMany($entries, Ttl::forever());
+
+        $inserts = array_values(array_filter(CountingStatement::$executed, static fn (string $verb): bool => $verb === 'INSERT'));
+        self::assertCount(3, $inserts, '250 distinct entries are three statements of up to 100 rows.');
+        self::assertSame('last write wins', $store->get(Key::named('item:1'))->value());
+        self::assertSame('v250', $store->get(Key::named('item:250'))->value());
+        self::assertSame(250, (int) $pdo->query('SELECT COUNT(*) FROM cacheer_store')->fetchColumn());
+    }
+}
+
+/**
+ * Records the verb of every executed statement.
+ */
+final class CountingStatement extends \PDOStatement
+{
+    /**
+     * @var list<string>
+     */
+    public static array $executed = [];
+
+    protected function __construct()
+    {
+    }
+
+    public function execute(?array $params = null): bool
+    {
+        self::$executed[] = (string) strtok(ltrim($this->queryString), ' ');
+
+        return parent::execute($params);
+    }
 }

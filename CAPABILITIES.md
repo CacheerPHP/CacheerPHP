@@ -39,7 +39,9 @@ fallback) except for atomic counters and locks, which run on the primary alone,
 `InstrumentedStore` defers to the store it wraps, and nesting works.
 The kernel uses this internally, so an optional optimization degrades instead of
 failing: `remember()` single-flights through a lock when one is really available
-and falls back to a plain compute when it is not.
+and falls back to a plain compute when it is not. A miss that takes the lock at
+once computes without reading again; a caller that had to wait re-reads first and
+uses the other worker's value. On Redis a cold `remember()` is 4 round trips.
 
 ## Guarantees and failure modes
 
@@ -104,7 +106,9 @@ different scopes yields independent entries.
   worker's L1 through a shared generation token; a single-key change by another
   worker is seen once the local copy lapses, at most `l1MaxTtl` (60 seconds by
   default; `Ttl::forever()` opts out). L2 is written first, so a failed write
-  never leaves a value only in L1.
+  never leaves a value only in L1. Expired L1 copies are pruned on reads and
+  writes at most once per generation-check interval (5 seconds by default), so a
+  long-running worker does not accumulate them.
 - `ResilientStore` serves from a fallback when the primary's circuit breaker is
   open; it fails closed (miss), never returning stale or wrong data. Only backend
   outages fail over — programming errors and bad data are rethrown. The primary's

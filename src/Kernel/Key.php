@@ -20,10 +20,16 @@ final readonly class Key implements \Stringable
      * @param string $value
      * @param Scope $scope
      */
+    /**
+     * Built once: keys are immutable, and every store call needs the identity.
+     */
+    private string $identity;
+
     private function __construct(
         private string $value,
         private Scope $scope,
     ) {
+        $this->identity = $scope->identity() . '|' . strlen($value) . ':' . $value;
     }
 
     /**
@@ -72,6 +78,11 @@ final readonly class Key implements \Stringable
      */
     public function within(Scope $scope): self
     {
+        // Keys are immutable, so qualifying with the root scope can return this key.
+        if ($scope->isRoot()) {
+            return $this;
+        }
+
         return new self($this->value, $scope->append($this->scope));
     }
 
@@ -80,7 +91,7 @@ final readonly class Key implements \Stringable
      */
     public function identity(): string
     {
-        return $this->scope->identity() . '|' . strlen($this->value) . ':' . $this->value;
+        return $this->identity;
     }
 
     /**
