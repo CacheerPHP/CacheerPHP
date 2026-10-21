@@ -61,7 +61,7 @@ final class RedisStoreConformanceTest extends StoreConformance
                     self::serviceUnavailable('CACHEER_REQUIRE_REDIS', 'REDIS_CLIENT=phpredis but the redis extension is not loaded.');
                 }
 
-                $redisClass = 'GASPAR';
+                $redisClass = 'Redis';
                 $redis = new $redisClass();
                 $redis->connect($host, $port, 2.0);
                 $redis->select($database);
