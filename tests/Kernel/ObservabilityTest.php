@@ -358,6 +358,139 @@ final class ObservabilityTest extends TestCase
             array_map(static fn (CacheEvent $e): ?int => $e->bytes, $captured),
         );
     }
+
+    public function testEventsReportTheirScopeTtlAndOperation(): void
+    {
+        $events = [];
+        $this->bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $cache = new Cacheer($this->store(), $this->clock, events: $this->bus);
+        $shop = $cache->in('shop');
+
+        $shop->set('product', 'boots', 60);
+        $shop->get('product');
+        $shop->touch('product', 120);
+        $shop->forever('banner', 'sale');
+        $shop->increment('views');
+        $shop->tag('product', 'catalog');
+        $shop->flushTag('catalog');
+        $shop->clear();
+        $cache->get('root-key');
+
+        $describe = static fn (CacheEvent $e): array => [
+            $e->type,
+            $e->operation,
+            $e->scope,
+            $e->ttl === null ? 'unknown' : ($e->ttl->isForever() ? 'forever' : $e->ttl->inSeconds()),
+        ];
+
+        self::assertSame([
+            [CacheEventType::Write, 'set', 'shop', 60],
+            [CacheEventType::Hit, 'get', 'shop', 'unknown'],
+            [CacheEventType::Write, 'touch', 'shop', 120],
+            [CacheEventType::Write, 'set', 'shop', 'forever'],
+            [CacheEventType::Write, 'increment', 'shop', 'unknown'],
+            [CacheEventType::Write, 'tag', 'shop', 'unknown'],
+            [CacheEventType::Prune, 'clearTag', null, 'unknown'],
+            [CacheEventType::Clear, 'clearScope', 'shop', 'unknown'],
+            [CacheEventType::Miss, 'get', '', 'unknown'],
+        ], array_map($describe, $events));
+    }
+
+    public function testAFailureReportsTheOperationThatFailed(): void
+    {
+        $events = [];
+        $this->bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $failing = new InstrumentedStore(new class () implements Store {
+            public function get(Key $key): CacheEntry
+            {
+                throw new RuntimeException('backend down');
+            }
+
+            public function set(Key $key, mixed $value, Ttl $ttl): void
+            {
+            }
+
+            public function delete(Key $key): bool
+            {
+                return false;
+            }
+
+            public function clear(): void
+            {
+            }
+        }, $this->bus);
+
+        try {
+            $failing->get(Key::named('k'));
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame(CacheEventType::Failure, $events[0]->type);
+        self::assertSame('get', $events[0]->operation);
+        self::assertSame('', $events[0]->scope);
+    }
+
+    public function testRememberReportsHowLongTheLoaderRanUnderTheSameStoreNameAsItsHits(): void
+    {
+        $events = [];
+        $this->bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $cache = new Cacheer($this->store(), $this->clock, events: $this->bus);
+
+        $cache->in('catalog')->remember('products', 60, static function (): array {
+            usleep(2000);
+
+            return ['boots'];
+        });
+        $cache->in('catalog')->remember('products', 60, static fn (): array => ['never']);
+
+        $computed = array_values(array_filter($events, static fn (CacheEvent $e): bool => $e->type === CacheEventType::Computed));
+        $hits = array_values(array_filter($events, static fn (CacheEvent $e): bool => $e->type === CacheEventType::Hit));
+
+        self::assertCount(1, $computed, 'Only the miss runs the loader.');
+        self::assertSame('catalog/products', $computed[0]->key);
+        self::assertSame('catalog', $computed[0]->scope);
+        self::assertSame('remember', $computed[0]->operation);
+        self::assertGreaterThanOrEqual(2000.0, $computed[0]->durationMicros);
+        self::assertSame($hits[0]->store, $computed[0]->store, 'Lifecycle events must name the store their hits name.');
+        self::assertSame('ArrayStore', $computed[0]->store);
+    }
+
+    public function testAFlexibleRecomputationIsReportedAsFlexible(): void
+    {
+        $events = [];
+        $this->bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $cache = new Cacheer($this->store(), $this->clock, events: $this->bus);
+
+        $cache->flexible('prices', 10, 60, static fn (): array => [9.99]);
+
+        $computed = array_values(array_filter($events, static fn (CacheEvent $e): bool => $e->type === CacheEventType::Computed));
+        self::assertCount(1, $computed);
+        self::assertSame('flexible', $computed[0]->operation);
+    }
+
+    public function testALoaderThatThrowsReportsNoComputation(): void
+    {
+        $events = [];
+        $this->bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $cache = new Cacheer($this->store(), $this->clock, events: $this->bus);
+
+        try {
+            $cache->remember('k', 60, static fn () => throw new RuntimeException('loader failed'));
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], array_filter($events, static fn (CacheEvent $e): bool => $e->type === CacheEventType::Computed));
+    }
 }
 
 /**

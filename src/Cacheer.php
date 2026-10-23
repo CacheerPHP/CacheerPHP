@@ -261,6 +261,7 @@ final readonly class Cacheer implements Cache
      * @param ?CircuitBreaker $breaker
      * @param ?Clock $clock
      * @param ?DeferredExecutor $executor
+     * @param ?EventDispatcher $events
      * @return Cacheer
      */
     public static function resilient(
@@ -269,10 +270,22 @@ final readonly class Cacheer implements Cache
         ?CircuitBreaker $breaker = null,
         ?Clock $clock = null,
         ?DeferredExecutor $executor = null,
+        ?EventDispatcher $events = null,
     ): self {
         $clock ??= new SystemClock();
 
-        return new self(new ResilientStore($primary, $fallback, $breaker, $clock), $clock, $executor);
+        // Like tiered(): the store reports outages and fallback service itself,
+        // so it needs a dispatcher up front — the telemetry tap when it is live.
+        $storeEvents = $events ?? (Telemetry::hasListeners()
+            ? Telemetry::dispatcher()
+            : new NullEventDispatcher());
+
+        return new self(
+            new ResilientStore($primary, $fallback, $breaker, $clock, $storeEvents),
+            $clock,
+            $executor,
+            $events,
+        );
     }
 
     /**

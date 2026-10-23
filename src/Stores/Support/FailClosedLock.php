@@ -21,10 +21,12 @@ final class FailClosedLock implements Lock
     /**
      * @param ?Lock $inner the primary's lock, or null when it is unavailable
      * @param CircuitBreaker $breaker
+     * @param (\Closure(Throwable): void)|null $afterFailure told about each outage the lock records
      */
     public function __construct(
         private readonly ?Lock $inner,
         private readonly CircuitBreaker $breaker,
+        private readonly ?\Closure $afterFailure = null,
     ) {
     }
 
@@ -61,6 +63,10 @@ final class FailClosedLock implements Lock
             }
 
             $this->breaker->recordFailure();
+
+            if ($this->afterFailure !== null) {
+                ($this->afterFailure)($error);
+            }
 
             return false;
         }
