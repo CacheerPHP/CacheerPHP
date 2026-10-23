@@ -11,6 +11,9 @@ use Silviooosilva\CacheerPhp\Exceptions\InvalidKeyException;
 use Silviooosilva\CacheerPhp\Exceptions\StoreOperationFailedException;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Observability\CacheEvent;
+use Silviooosilva\CacheerPhp\Observability\CacheEventType;
+use Silviooosilva\CacheerPhp\Observability\EventBus;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Stores\ResilientStore;
 use Silviooosilva\CacheerPhp\Support\CircuitBreaker;
@@ -240,5 +243,85 @@ final class ResilientStoreBehaviorTest extends TestCase
         $this->clock->advance(30);
 
         self::assertTrue($store->get(Key::named('untouched'))->isMiss(), 'Past the tracking limit the primary is cleared.');
+    }
+
+    public function testAnOutageIsReportedFromStartThroughFallbackToReconciliation(): void
+    {
+        $events = [];
+        $bus = new EventBus();
+        $bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $breaker = new CircuitBreaker($this->clock, failureThreshold: 2, recoverySeconds: 30.0);
+        $store = new ResilientStore($this->primary, $this->fallback, $breaker, $this->clock, $bus);
+        $key = Key::named('user:1')->within(\Silviooosilva\CacheerPhp\Kernel\Scope::named('accounts'));
+        $store->set($key, 'Ada', Ttl::forever());
+
+        $this->primary->failing = true;
+        $store->get($key);                              // failure 1: served by the fallback
+        $store->get($key);                              // failure 2: circuit opens
+        $store->delete($key);                           // short-circuited to the fallback
+        $this->clock->advance(31);
+        $store->get(Key::named('other'));               // half-open retry fails: still the same outage
+        $this->primary->failing = false;
+        $this->clock->advance(31);
+        $store->get($key);                              // recovered: reconcile, then close
+
+        $types = array_map(static fn (CacheEvent $e): CacheEventType => $e->type, $events);
+        self::assertSame([
+            CacheEventType::FallbackServed,
+            CacheEventType::CircuitOpened,
+            CacheEventType::FallbackServed,
+            CacheEventType::FallbackServed,
+            CacheEventType::FallbackServed,
+            CacheEventType::Reconciled,
+            CacheEventType::CircuitClosed,
+        ], $types);
+
+        self::assertSame('primary store is unavailable', $events[1]->error?->getMessage());
+        self::assertSame('accounts/user:1', $events[0]->key);
+        self::assertSame('accounts', $events[0]->scope);
+        self::assertSame('get', $events[0]->operation);
+        self::assertSame('delete', $events[3]->operation);
+        self::assertSame(1, $events[5]->count, 'One key changed during the outage is invalidated on the primary.');
+        self::assertSame('invalidate', $events[5]->operation);
+        self::assertTrue($store->get($key)->isMiss(), 'The key deleted during the outage stays deleted.');
+    }
+
+    public function testAnOutageOpenedByALockIsReported(): void
+    {
+        $events = [];
+        $bus = new EventBus();
+        $bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $breaker = new CircuitBreaker($this->clock, failureThreshold: 1, recoverySeconds: 30.0);
+        $store = new ResilientStore($this->primary, $this->fallback, $breaker, $this->clock, $bus);
+
+        $lock = $store->lock('job', Ttl::seconds(10));
+        $this->primary->failing = true;
+
+        self::assertFalse($lock->acquire());
+        self::assertSame([CacheEventType::CircuitOpened], array_map(static fn (CacheEvent $e): CacheEventType => $e->type, $events));
+    }
+
+    public function testAClearDuringAnOutageReconcilesByClearingThePrimary(): void
+    {
+        $events = [];
+        $bus = new EventBus();
+        $bus->listen(function (CacheEvent $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $store = new ResilientStore($this->primary, $this->fallback, clock: $this->clock, events: $bus);
+
+        $this->primary->failing = true;
+        $store->clear();
+        $this->primary->failing = false;
+        $store->get(Key::named('k'));
+
+        $reconciled = array_values(array_filter($events, static fn (CacheEvent $e): bool => $e->type === CacheEventType::Reconciled));
+        self::assertCount(1, $reconciled);
+        self::assertNull($reconciled[0]->count, 'A cleared primary has no count of replayed invalidations.');
+        self::assertSame('clear', $reconciled[0]->operation);
     }
 }

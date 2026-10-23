@@ -11,11 +11,13 @@ use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Config\CachePolicy;
 use Silviooosilva\CacheerPhp\Contracts\Store;
 use Silviooosilva\CacheerPhp\Observability\CacheEvent;
+use Silviooosilva\CacheerPhp\Observability\CacheEventType;
 use Silviooosilva\CacheerPhp\Observability\EventBus;
 use Silviooosilva\CacheerPhp\Observability\Telemetry;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Stores\InstrumentedStore;
 use Tests\Support\FakeClock;
+use Tests\Support\ToggleableStore;
 
 /**
  * The global telemetry tap is how a telemetry package (cacheerphp/monitor)
@@ -200,5 +202,22 @@ final class TelemetryTapTest extends TestCase
         $cache = Cacheer::inMemory(new FakeClock());
         $cache->set('k', 'v');
         self::assertSame([true], $captured);
+    }
+
+    public function testAResilientCacheReportsItsOutageThroughTheTap(): void
+    {
+        $types = [];
+        Telemetry::listen(function (CacheEvent $event) use (&$types): void {
+            $types[] = $event->type;
+        });
+        $clock = new FakeClock();
+        $primary = new ToggleableStore(new ArrayStore($clock));
+
+        $cache = Cacheer::resilient($primary, new ArrayStore($clock), clock: $clock);
+        $primary->failing = true;
+        $cache->get('k');
+
+        self::assertContains(CacheEventType::FallbackServed, $types, 'Failover must be visible without wiring a dispatcher.');
+        self::assertContains(CacheEventType::Miss, $types);
     }
 }

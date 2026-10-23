@@ -9,6 +9,7 @@ use Silviooosilva\CacheerPhp\Contracts\AtomicStore;
 use Silviooosilva\CacheerPhp\Contracts\BatchStore;
 use Silviooosilva\CacheerPhp\Contracts\CapabilityAware;
 use Silviooosilva\CacheerPhp\Contracts\Clock;
+use Silviooosilva\CacheerPhp\Contracts\EventDispatcher;
 use Silviooosilva\CacheerPhp\Contracts\FlushableScopeStore;
 use Silviooosilva\CacheerPhp\Contracts\InspectableStore;
 use Silviooosilva\CacheerPhp\Contracts\Lock;
@@ -23,6 +24,9 @@ use Silviooosilva\CacheerPhp\Kernel\Capabilities;
 use Silviooosilva\CacheerPhp\Kernel\Key;
 use Silviooosilva\CacheerPhp\Kernel\Scope;
 use Silviooosilva\CacheerPhp\Kernel\Ttl;
+use Silviooosilva\CacheerPhp\Observability\CacheEvent;
+use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
+use Silviooosilva\CacheerPhp\Observability\SafeDispatch;
 use Silviooosilva\CacheerPhp\Stores\Support\BackendFailure;
 use Silviooosilva\CacheerPhp\Stores\Support\FailClosedLock;
 use Silviooosilva\CacheerPhp\Support\CircuitBreaker;
@@ -80,16 +84,24 @@ final class ResilientStore implements
     private bool $clearPrimaryOnRecovery = false;
 
     /**
+     * Whether an outage has been reported and not yet its end, so half-open
+     * retries that fail again do not report a new outage each time.
+     */
+    private bool $outageReported = false;
+
+    /**
      * @param Store $primary
      * @param Store $fallback
      * @param ?CircuitBreaker $breaker
      * @param Clock $clock
+     * @param EventDispatcher $events Receives outage, fallback, and reconciliation events.
      */
     public function __construct(
         private readonly Store $primary,
         private readonly Store $fallback,
         ?CircuitBreaker $breaker = null,
         Clock $clock = new SystemClock(),
+        private readonly EventDispatcher $events = new NullEventDispatcher(),
     ) {
         $this->breaker = $breaker ?? new CircuitBreaker($clock);
     }
@@ -123,7 +135,7 @@ final class ResilientStore implements
      */
     public function get(Key $key): CacheEntry
     {
-        return $this->read(fn (Store $store): CacheEntry => $store->get($key));
+        return $this->read('get', fn (Store $store): CacheEntry => $store->get($key), $key);
     }
 
     /**
@@ -133,7 +145,7 @@ final class ResilientStore implements
      */
     public function set(Key $key, mixed $value, Ttl $ttl): void
     {
-        $this->write(fn (Store $store) => $store->set($key, $value, $ttl), [$key]);
+        $this->write('set', fn (Store $store) => $store->set($key, $value, $ttl), [$key]);
     }
 
     /**
@@ -142,12 +154,12 @@ final class ResilientStore implements
      */
     public function delete(Key $key): bool
     {
-        return $this->write(fn (Store $store): bool => $store->delete($key), [$key]);
+        return $this->write('delete', fn (Store $store): bool => $store->delete($key), [$key]);
     }
 
     public function clear(): void
     {
-        $this->write(fn (Store $store) => $store->clear(), clearsAll: true);
+        $this->write('clear', fn (Store $store) => $store->clear(), clearsAll: true);
     }
 
     /**
@@ -158,7 +170,7 @@ final class ResilientStore implements
     {
         $keys = $this->materialize($keys);
 
-        return $this->read(fn (Store $store): array => $this->batch($store)->getMany($keys));
+        return $this->read('getMany', fn (Store $store): array => $this->batch($store)->getMany($keys), count: count($keys));
     }
 
     /**
@@ -168,7 +180,7 @@ final class ResilientStore implements
     public function setMany(iterable $entries, Ttl $ttl): void
     {
         $entries = $this->materialize($entries);
-        $this->write(fn (Store $store) => $this->batch($store)->setMany($entries, $ttl), array_column($entries, 'key'));
+        $this->write('setMany', fn (Store $store) => $this->batch($store)->setMany($entries, $ttl), array_column($entries, 'key'));
     }
 
     /**
@@ -179,7 +191,7 @@ final class ResilientStore implements
     {
         $keys = $this->materialize($keys);
 
-        return $this->write(fn (Store $store): bool => $this->batch($store)->deleteMany($keys), $keys);
+        return $this->write('deleteMany', fn (Store $store): bool => $this->batch($store)->deleteMany($keys), $keys);
     }
 
     /**
@@ -189,7 +201,7 @@ final class ResilientStore implements
      */
     public function touch(Key $key, Ttl $ttl): bool
     {
-        return $this->write(fn (Store $store): bool => $this->touchable($store)->touch($key, $ttl), [$key]);
+        return $this->write('touch', fn (Store $store): bool => $this->touchable($store)->touch($key, $ttl), [$key]);
     }
 
     /**
@@ -197,7 +209,7 @@ final class ResilientStore implements
      */
     public function prune(): int
     {
-        return $this->write(fn (Store $store): int => $this->prunable($store)->prune());
+        return $this->write('prune', fn (Store $store): int => $this->prunable($store)->prune());
     }
 
     /**
@@ -206,7 +218,7 @@ final class ResilientStore implements
      */
     public function entries(?Scope $scope = null): iterable
     {
-        return $this->read(fn (Store $store): iterable => iterator_to_array(
+        return $this->read('entries', fn (Store $store): iterable => iterator_to_array(
             $this->inspectable($store)->entries($scope),
             false,
         ));
@@ -217,7 +229,7 @@ final class ResilientStore implements
      */
     public function clearScope(Scope $scope): void
     {
-        $this->write(fn (Store $store) => $this->scopeFlushable($store)->clearScope($scope), bulk: ['scope', $scope]);
+        $this->write('clearScope', fn (Store $store) => $this->scopeFlushable($store)->clearScope($scope), bulk: ['scope', $scope]);
     }
 
     /**
@@ -226,7 +238,7 @@ final class ResilientStore implements
      */
     public function tag(Key $key, string ...$tags): void
     {
-        $this->write(fn (Store $store) => $this->taggable($store)->tag($key, ...$tags), [$key]);
+        $this->write('tag', fn (Store $store) => $this->taggable($store)->tag($key, ...$tags), [$key]);
     }
 
     /**
@@ -235,7 +247,7 @@ final class ResilientStore implements
      */
     public function clearTag(string $tag): int
     {
-        return $this->write(fn (Store $store): int => $this->taggable($store)->clearTag($tag), bulk: ['tag', $tag]);
+        return $this->write('clearTag', fn (Store $store): int => $this->taggable($store)->clearTag($tag), bulk: ['tag', $tag]);
     }
 
     /**
@@ -274,13 +286,13 @@ final class ResilientStore implements
         }
 
         try {
-            return new FailClosedLock($this->lockable($this->primary)->lock($name, $ttl), $this->breaker);
+            return new FailClosedLock($this->lockable($this->primary)->lock($name, $ttl), $this->breaker, $this->reportOutageState(...));
         } catch (Throwable $error) {
             if (!BackendFailure::isOutage($error)) {
                 throw $error;
             }
 
-            $this->breaker->recordFailure();
+            $this->primaryFailed($error);
 
             return new FailClosedLock(null, $this->breaker);
         }
@@ -299,16 +311,19 @@ final class ResilientStore implements
 
     /**
      * @template T
+     * @param string $name
      * @param callable(Store): T $operation
+     * @param ?Key $key the key read, when there is one
+     * @param int $count how many keys the read covers
      * @return T
      */
-    private function read(callable $operation): mixed
+    private function read(string $name, callable $operation, ?Key $key = null, int $count = 1): mixed
     {
         if ($this->breaker->canAttempt()) {
             try {
                 $this->reconcile();
                 $result = $operation($this->primary);
-                $this->breaker->recordSuccess();
+                $this->primarySucceeded();
 
                 return $result;
             } catch (Throwable $error) {
@@ -316,11 +331,14 @@ final class ResilientStore implements
                     throw $error;
                 }
 
-                $this->breaker->recordFailure();
+                $this->primaryFailed($error);
             }
         }
 
-        return $operation($this->fallback);
+        $result = $operation($this->fallback);
+        $this->reportFallback($name, $key === null ? [] : [$key], $count);
+
+        return $result;
     }
 
     /**
@@ -329,13 +347,14 @@ final class ResilientStore implements
      * changed so reconcile() can invalidate it on the primary later.
      *
      * @template T
+     * @param string $name
      * @param callable(Store): T $operation
      * @param list<Key> $keys the keys this write changes
      * @param array{0: 'scope', 1: Scope}|array{0: 'tag', 1: string}|null $bulk a bulk invalidation it performs
      * @param bool $clearsAll whether it clears the whole store
      * @return T
      */
-    private function write(callable $operation, array $keys = [], ?array $bulk = null, bool $clearsAll = false): mixed
+    private function write(string $name, callable $operation, array $keys = [], ?array $bulk = null, bool $clearsAll = false): mixed
     {
         $primaryWritten = false;
         $result = null;
@@ -344,14 +363,14 @@ final class ResilientStore implements
             try {
                 $this->reconcile();
                 $result = $operation($this->primary);
-                $this->breaker->recordSuccess();
+                $this->primarySucceeded();
                 $primaryWritten = true;
             } catch (Throwable $error) {
                 if (!BackendFailure::isOutage($error)) {
                     throw $error;
                 }
 
-                $this->breaker->recordFailure();
+                $this->primaryFailed($error);
             }
         }
 
@@ -373,6 +392,7 @@ final class ResilientStore implements
         // and the write is remembered so the primary can be reconciled later.
         $result = $operation($this->fallback);
         $this->recordOutageWrite($keys, $bulk, $clearsAll);
+        $this->reportFallback($name, $keys, max(1, count($keys)), $bulk !== null && $bulk[0] === 'scope' ? $bulk[1] : null);
 
         return $result;
     }
@@ -399,13 +419,13 @@ final class ResilientStore implements
         try {
             $this->reconcile();
             $result = $operation($this->primary);
-            $this->breaker->recordSuccess();
+            $this->primarySucceeded();
         } catch (Throwable $error) {
             if (!BackendFailure::isOutage($error)) {
                 throw $error;
             }
 
-            $this->breaker->recordFailure();
+            $this->primaryFailed($error);
 
             throw new StoreOperationFailedException($name, $key, $error);
         }
@@ -459,6 +479,9 @@ final class ResilientStore implements
             return;
         }
 
+        $start = microtime(true);
+        $invalidated = $this->clearPrimaryOnRecovery ? null : count($this->outageKeys) + count($this->outageBulk);
+
         if ($this->clearPrimaryOnRecovery) {
             $this->primary->clear();
         } else {
@@ -478,6 +501,61 @@ final class ResilientStore implements
         $this->clearPrimaryOnRecovery = false;
         $this->outageKeys = [];
         $this->outageBulk = [];
+
+        SafeDispatch::to($this->events, CacheEvent::reconciled(
+            'ResilientStore',
+            (microtime(true) - $start) * 1_000_000,
+            $invalidated,
+        )->withContext(operation: $invalidated === null ? 'clear' : 'invalidate'));
+    }
+
+    private function primarySucceeded(): void
+    {
+        $this->breaker->recordSuccess();
+        $this->reportOutageState();
+    }
+
+    private function primaryFailed(Throwable $error): void
+    {
+        $this->breaker->recordFailure();
+        $this->reportOutageState($error);
+    }
+
+    /**
+     * Report the start of an outage when the circuit first opens, and its end
+     * when the primary serves again.
+     *
+     * @param ?Throwable $cause the failure just recorded, if any
+     */
+    private function reportOutageState(?Throwable $cause = null): void
+    {
+        $state = $this->breaker->state();
+
+        if (!$this->outageReported && $state === CircuitBreaker::OPEN && $cause !== null) {
+            $this->outageReported = true;
+            SafeDispatch::to($this->events, CacheEvent::circuitOpened('ResilientStore', $cause));
+        } elseif ($this->outageReported && $state === CircuitBreaker::CLOSED) {
+            $this->outageReported = false;
+            SafeDispatch::to($this->events, CacheEvent::circuitClosed('ResilientStore'));
+        }
+    }
+
+    /**
+     * @param string $name
+     * @param list<Key> $keys
+     * @param int $count
+     * @param ?Scope $scope the scope of a scoped clear, when that was the operation
+     */
+    private function reportFallback(string $name, array $keys, int $count, ?Scope $scope = null): void
+    {
+        $key = count($keys) === 1 ? $keys[0] : null;
+        $scope ??= $key?->scope();
+
+        SafeDispatch::to($this->events, CacheEvent::fallbackServed(
+            'ResilientStore',
+            $key === null ? null : (string) $key,
+            $count,
+        )->withContext($scope === null ? null : (string) $scope, operation: $name));
     }
 
     /**

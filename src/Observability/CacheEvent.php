@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Silviooosilva\CacheerPhp\Observability;
 
+use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Throwable;
 
 /**
@@ -27,6 +28,9 @@ final readonly class CacheEvent
      * @param ?Throwable $error
      * @param bool $hasValue
      * @param mixed $value
+     * @param ?string $scope The key's scope as a path ('' for the root scope); null when not reported.
+     * @param ?Ttl $ttl The lifetime written (Ttl::forever() for no expiry); null when not reported.
+     * @param ?string $operation The store operation, such as 'get', 'touch', or 'clearTag'; null when not reported.
      */
     private function __construct(
         public CacheEventType $type,
@@ -38,7 +42,37 @@ final readonly class CacheEvent
         public ?Throwable $error = null,
         public bool $hasValue = false,
         public mixed $value = null,
+        public ?string $scope = null,
+        public ?Ttl $ttl = null,
+        public ?string $operation = null,
     ) {
+    }
+
+    /**
+     * The same event, described further. Unknown context stays null, so a
+     * consumer can tell "not reported" from the root scope or a forever TTL.
+     *
+     * @param ?string $scope
+     * @param ?Ttl $ttl
+     * @param ?string $operation
+     * @return CacheEvent
+     */
+    public function withContext(?string $scope = null, ?Ttl $ttl = null, ?string $operation = null): self
+    {
+        return new self(
+            $this->type,
+            $this->store,
+            $this->key,
+            $this->durationMicros,
+            $this->bytes,
+            $this->count,
+            $this->error,
+            $this->hasValue,
+            $this->value,
+            $scope ?? $this->scope,
+            $ttl ?? $this->ttl,
+            $operation ?? $this->operation,
+        );
     }
 
     /**
@@ -48,22 +82,26 @@ final readonly class CacheEvent
      * @param ?int $bytes
      * @param bool $hasValue
      * @param mixed $value
+     * @param ?string $scope
+     * @param ?string $operation
      * @return CacheEvent
      */
-    public static function hit(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null): self
+    public static function hit(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null, ?string $scope = null, ?string $operation = null): self
     {
-        return new self(CacheEventType::Hit, $store, $key, $duration, $bytes, hasValue: $hasValue, value: $value);
+        return new self(CacheEventType::Hit, $store, $key, $duration, $bytes, hasValue: $hasValue, value: $value, scope: $scope, operation: $operation);
     }
 
     /**
      * @param string $store
      * @param string $key
      * @param float $duration
+     * @param ?string $scope
+     * @param ?string $operation
      * @return CacheEvent
      */
-    public static function miss(string $store, string $key, float $duration): self
+    public static function miss(string $store, string $key, float $duration, ?string $scope = null, ?string $operation = null): self
     {
-        return new self(CacheEventType::Miss, $store, $key, $duration);
+        return new self(CacheEventType::Miss, $store, $key, $duration, scope: $scope, operation: $operation);
     }
 
     /**
@@ -75,11 +113,14 @@ final readonly class CacheEvent
      * @param mixed $value
      * @param int|null $count Optional quantity the write carries — a counter's new
                        value after increment(), or how many tags were added.
+     * @param ?string $scope
+     * @param ?Ttl $ttl
+     * @param ?string $operation
      * @return CacheEvent
      */
-    public static function written(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null, ?int $count = null): self
+    public static function written(string $store, string $key, float $duration, ?int $bytes = null, bool $hasValue = false, mixed $value = null, ?int $count = null, ?string $scope = null, ?Ttl $ttl = null, ?string $operation = null): self
     {
-        return new self(CacheEventType::Write, $store, $key, $duration, $bytes, $count, hasValue: $hasValue, value: $value);
+        return new self(CacheEventType::Write, $store, $key, $duration, $bytes, $count, hasValue: $hasValue, value: $value, scope: $scope, ttl: $ttl, operation: $operation);
     }
 
     /**
@@ -87,11 +128,13 @@ final readonly class CacheEvent
      * @param string $key
      * @param float $duration
      * @param bool $existed
+     * @param ?string $scope
+     * @param ?string $operation
      * @return CacheEvent
      */
-    public static function deleted(string $store, string $key, float $duration, bool $existed): self
+    public static function deleted(string $store, string $key, float $duration, bool $existed, ?string $scope = null, ?string $operation = null): self
     {
-        return new self(CacheEventType::Delete, $store, $key, $duration, count: $existed ? 1 : 0);
+        return new self(CacheEventType::Delete, $store, $key, $duration, count: $existed ? 1 : 0, scope: $scope, operation: $operation);
     }
 
     /**
@@ -165,5 +208,57 @@ final readonly class CacheEvent
     public static function lockContended(string $store, string $key): self
     {
         return new self(CacheEventType::LockContended, $store, $key);
+    }
+
+    /**
+     * @param string $store
+     * @param string $key
+     * @param float $duration How long the loader ran, in microseconds.
+     * @return CacheEvent
+     */
+    public static function computed(string $store, string $key, float $duration): self
+    {
+        return new self(CacheEventType::Computed, $store, $key, $duration);
+    }
+
+    /**
+     * @param string $store
+     * @param Throwable $error The failure that opened the circuit.
+     * @return CacheEvent
+     */
+    public static function circuitOpened(string $store, Throwable $error): self
+    {
+        return new self(CacheEventType::CircuitOpened, $store, error: $error);
+    }
+
+    /**
+     * @param string $store
+     * @return CacheEvent
+     */
+    public static function circuitClosed(string $store): self
+    {
+        return new self(CacheEventType::CircuitClosed, $store);
+    }
+
+    /**
+     * @param string $store
+     * @param ?string $key The key, when the operation concerned one.
+     * @param int $count How many keys the operation covered.
+     * @return CacheEvent
+     */
+    public static function fallbackServed(string $store, ?string $key, int $count = 1): self
+    {
+        return new self(CacheEventType::FallbackServed, $store, $key, count: $count);
+    }
+
+    /**
+     * @param string $store
+     * @param float $duration
+     * @param ?int $invalidated Keys and bulk invalidations replayed; null when the primary was cleared instead.
+     * @return CacheEvent
+     */
+    public static function reconciled(string $store, float $duration, ?int $invalidated): self
+    {
+        return new self(CacheEventType::Reconciled, $store, null, $duration, count: $invalidated);
     }
 }

@@ -30,4 +30,29 @@ enum CacheEventType: string
     case Refresh = 'cache.refresh';
 
     case LockContended = 'cache.lock_contended';
+
+    /**
+     * A loader ran for a remember()/flexible() miss or refresh; carries its duration.
+     */
+    case Computed = 'cache.computed';
+
+    /**
+     * A resilient store's primary became unavailable and its circuit opened.
+     */
+    case CircuitOpened = 'cache.circuit_opened';
+
+    /**
+     * A resilient store's primary is serving again.
+     */
+    case CircuitClosed = 'cache.circuit_closed';
+
+    /**
+     * An operation was answered or applied by the fallback alone.
+     */
+    case FallbackServed = 'cache.fallback_served';
+
+    /**
+     * Writes made during an outage were invalidated on the recovered primary.
+     */
+    case Reconciled = 'cache.reconciled';
 }

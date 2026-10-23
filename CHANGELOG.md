@@ -5,6 +5,46 @@ All notable changes to CacheerPHP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Telemetry events carry their context.** `CacheEvent` has three new
+  optional properties: `scope` (the key's scope as a path, `''` for the root
+  scope), `ttl` (the `Ttl` a write set, `Ttl::forever()` for no expiry), and
+  `operation` (`get`, `set`, `touch`, `increment`, `tag`, `clearTag`,
+  `clearScope`, …). Each is `null` when not reported, so a consumer can tell
+  "unknown" from the root scope or a forever TTL. A touch, a counter, and a
+  tag still report as writes, and a tag flush as a prune; `operation` tells
+  them apart. `CacheEvent::withContext()` adds context to an event.
+- **`CacheEventType::Computed`.** Each loader run reports how long it took,
+  with `operation` set to `remember` (a `remember()`/`rememberForever()` miss)
+  or `flexible` (a `flexible()` miss or background refresh). A loader that
+  throws reports nothing.
+- **Failover is visible.** `ResilientStore` takes an optional `EventDispatcher`
+  and reports `CircuitOpened` (once per outage, with the failure that caused
+  it), `FallbackServed` (each operation answered or applied by the fallback
+  alone), `Reconciled` (outage writes invalidated on the recovered primary,
+  with their count, or `null` when the primary was cleared), and
+  `CircuitClosed`. `Cacheer::resilient()` passes the telemetry tap when it has
+  listeners, and accepts an explicit dispatcher like `Cacheer::tiered()`.
+
+Event consumers that `match` exhaustively on `CacheEventType` need a branch for
+the five new cases; `SafeDispatch` keeps a consumer's error from reaching the
+application, but its events for those cases are lost.
+
+### Fixed
+
+- **Lifecycle events name the store their hits name.** Under telemetry,
+  stale-served and lock-contended events reported the store as
+  `InstrumentedStore` while hits and misses for the same key reported the
+  wrapped store, so a dashboard could not attribute them to the same keys.
+
+### Performance
+
+- Context costs about 0.1 µs per instrumented operation (in-memory `get()`
+  1.29 → 1.39 µs with a no-op listener); uninstrumented caches are unchanged.
+
 ## [6.0.0] - 2026-10-12
 
 CacheerPHP 6.0 is a ground-up, instance-first rewrite. A small `Cacheer` kernel

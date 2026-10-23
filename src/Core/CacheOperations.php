@@ -34,6 +34,7 @@ use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Observability\CacheEvent;
 use Silviooosilva\CacheerPhp\Observability\NullEventDispatcher;
 use Silviooosilva\CacheerPhp\Observability\SafeDispatch;
+use Silviooosilva\CacheerPhp\Stores\InstrumentedStore;
 use Silviooosilva\CacheerPhp\Support\SyncDeferredExecutor;
 use Silviooosilva\CacheerPhp\Support\SystemClock;
 use Throwable;
@@ -394,6 +395,7 @@ final readonly class CacheOperations
             $callback,
             applyPolicy: false,
             accept: fn (CacheEntry $found): bool => $this->isYoungerThan($found, $stale),
+            operation: 'flexible',
         );
     }
 
@@ -729,13 +731,14 @@ final readonly class CacheOperations
         callable $callback,
         bool $applyPolicy = true,
         ?\Closure $accept = null,
+        string $operation = 'remember',
     ): mixed {
         $accept ??= static fn (CacheEntry $found): bool => $found->isHit();
 
         $lock = $this->tryLock('cacheer:sf:', $key);
 
         if ($lock === null) {
-            return $this->compute($key, $ttl, $callback, $applyPolicy);
+            return $this->compute($key, $ttl, $callback, $applyPolicy, $operation);
         }
 
         // Every caller has just read the key and found nothing usable. Taking the
@@ -751,7 +754,7 @@ final readonly class CacheOperations
 
             $entry = $this->read($key);
 
-            return $accept($entry) ? $entry->value() : $this->compute($key, $ttl, $callback, $applyPolicy);
+            return $accept($entry) ? $entry->value() : $this->compute($key, $ttl, $callback, $applyPolicy, $operation);
         }
 
         try {
@@ -762,7 +765,7 @@ final readonly class CacheOperations
                 }
             }
 
-            return $this->compute($key, $ttl, $callback, $applyPolicy);
+            return $this->compute($key, $ttl, $callback, $applyPolicy, $operation);
         } finally {
             $lock->release();
         }
@@ -780,8 +783,19 @@ final readonly class CacheOperations
         Ttl|DateInterval|int|string|null $ttl,
         callable $callback,
         bool $applyPolicy = true,
+        string $operation = 'remember',
     ): mixed {
+        $start = hrtime(true);
         $value = $callback();
+
+        // How long the loader ran is what a later hit saves; a loader that throws
+        // reports nothing, since there is no value to save.
+        SafeDispatch::to($this->events, CacheEvent::computed(
+            $this->storeName(),
+            (string) $key,
+            (hrtime(true) - $start) / 1000,
+        )->withContext((string) $key->scope(), operation: $operation));
+
         $this->put($key, $value, $applyPolicy ? $this->ttl($ttl, $value) : Ttl::from($ttl));
 
         return $value;
@@ -815,7 +829,7 @@ final readonly class CacheOperations
                         return; // refreshed since this task was queued
                     }
 
-                    $this->compute($key, Ttl::seconds($stale), $callback, applyPolicy: false);
+                    $this->compute($key, Ttl::seconds($stale), $callback, applyPolicy: false, operation: 'flexible');
                     SafeDispatch::to($this->events, CacheEvent::refreshed($this->storeName(), (string) $key));
                 } finally {
                     $lock?->release();
@@ -877,8 +891,17 @@ final readonly class CacheOperations
     /**
      * @return string
      */
+    /**
+     * The name lifecycle events report. Under telemetry the store is wrapped in
+     * InstrumentedStore; its events name the wrapped store, and these must match
+     * so a dashboard can attribute both to the same keys.
+     */
     private function storeName(): string
     {
+        if ($this->store instanceof InstrumentedStore) {
+            return $this->store->name();
+        }
+
         return (new \ReflectionClass($this->store))->getShortName();
     }
 
