@@ -43,11 +43,11 @@ final readonly class CacheEntry
     /**
      * @param Key $key
      * @param mixed $value
-     * @param int $createdAt
+     * @param ?int $createdAt Null when the backend does not record when it was written.
      * @param ?int $expiresAt
      * @return CacheEntry
      */
-    public static function hit(Key $key, mixed $value, int $createdAt, ?int $expiresAt): self
+    public static function hit(Key $key, mixed $value, ?int $createdAt, ?int $expiresAt): self
     {
         return new self($key, true, $value, $createdAt, $expiresAt);
     }

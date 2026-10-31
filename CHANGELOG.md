@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with their count, or `null` when the primary was cleared), and
   `CircuitClosed`. `Cacheer::resilient()` passes the telemetry tap when it has
   listeners, and accepts an explicit dispatcher like `Cacheer::tiered()`.
+- **Entries of unknown age.** `CacheEntry::hit()` accepts a `null` creation
+  time, for backends that do not record when an entry was written. `flexible()`
+  never treats such an entry as fresh: it recomputes rather than serving data
+  of unknown age. Built-in stores always record it, so nothing changes for them.
 
 Event consumers that `match` exhaustively on `CacheEventType` need a branch for
 the five new cases; `SafeDispatch` keeps a consumer's error from reaching the

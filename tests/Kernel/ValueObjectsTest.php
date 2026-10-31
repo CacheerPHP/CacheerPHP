@@ -89,4 +89,13 @@ final class ValueObjectsTest extends TestCase
         $this->expectException(CacheMissException::class);
         $miss->value();
     }
+
+    public function testCacheEntryCanHaveAnUnknownCreationTime(): void
+    {
+        $hit = CacheEntry::hit(Key::named('native'), 'value', null, null);
+
+        self::assertTrue($hit->isHit());
+        self::assertSame('value', $hit->value());
+        self::assertNull($hit->createdAt());
+    }
 }

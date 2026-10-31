@@ -843,7 +843,9 @@ final readonly class CacheOperations
     }
 
     /**
-     * Whether an entry is a hit created less than $seconds ago.
+     * Whether an entry is a hit created less than $seconds ago. An entry whose
+     * creation time is unknown is never young: serving it as fresh could serve
+     * it forever.
      *
      * @param CacheEntry $entry
      * @param int $seconds
@@ -851,13 +853,13 @@ final readonly class CacheOperations
      */
     private function isYoungerThan(CacheEntry $entry, int $seconds): bool
     {
-        if ($entry->isMiss()) {
+        $createdAt = $entry->createdAt();
+
+        if ($entry->isMiss() || $createdAt === null) {
             return false;
         }
 
-        $now = $this->clock->now();
-
-        return $now < ($entry->createdAt() ?? $now) + $seconds;
+        return $this->clock->now() < $createdAt + $seconds;
     }
 
     /**
