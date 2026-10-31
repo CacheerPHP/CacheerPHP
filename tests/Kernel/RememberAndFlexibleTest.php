@@ -9,6 +9,10 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Silviooosilva\CacheerPhp\Cacheer;
 use Silviooosilva\CacheerPhp\Contracts\DeferredExecutor;
+use Silviooosilva\CacheerPhp\Contracts\Store;
+use Silviooosilva\CacheerPhp\Kernel\CacheEntry;
+use Silviooosilva\CacheerPhp\Kernel\Key;
+use Silviooosilva\CacheerPhp\Kernel\Ttl;
 use Silviooosilva\CacheerPhp\Stores\ArrayStore;
 use Silviooosilva\CacheerPhp\Support\AfterResponseDeferredExecutor;
 use Tests\Support\FakeClock;
@@ -96,6 +100,53 @@ final class RememberAndFlexibleTest extends TestCase
 
         $this->clock->advance(121); // past the hard stale window -> a real miss
         self::assertSame('value-2', $this->cache->flexible('k', 30, 120, $factory));
+        self::assertSame(2, $calls);
+    }
+
+    public function testFlexibleRecomputesAnEntryOfUnknownAge(): void
+    {
+        // A backend that does not record when an entry was written cannot show
+        // that the entry is fresh, so flexible() must not serve it as fresh.
+        $store = new class () implements Store {
+            /**
+             * @var array<string, mixed>
+             */
+            private array $values = [];
+
+            public function get(Key $key): CacheEntry
+            {
+                return array_key_exists($key->identity(), $this->values)
+                    ? CacheEntry::hit($key, $this->values[$key->identity()], null, null)
+                    : CacheEntry::miss($key);
+            }
+
+            public function set(Key $key, mixed $value, Ttl $ttl): void
+            {
+                $this->values[$key->identity()] = $value;
+            }
+
+            public function delete(Key $key): bool
+            {
+                $exists = array_key_exists($key->identity(), $this->values);
+                unset($this->values[$key->identity()]);
+
+                return $exists;
+            }
+
+            public function clear(): void
+            {
+                $this->values = [];
+            }
+        };
+        $cache = new Cacheer($store, $this->clock);
+        $calls = 0;
+        $factory = static function () use (&$calls): string {
+            return 'value-' . ++$calls;
+        };
+
+        self::assertSame('value-1', $cache->flexible('k', 30, 120, $factory));
+        self::assertSame('value-2', $cache->flexible('k', 30, 120, $factory));
+        self::assertSame('value-2', $cache->remember('k', 60, $factory), 'remember() does not depend on age.');
         self::assertSame(2, $calls);
     }
 
